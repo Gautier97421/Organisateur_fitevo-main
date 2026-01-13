@@ -36,10 +36,13 @@ export function GymManager() {
 
   const loadGyms = async () => {
     try {
-      const { data, error } = await supabase.from("gyms").select("*").order("name")
-
-      if (error) throw error
-      setGyms(data || [])
+      const response = await fetch('/api/db/gyms?orderBy=name')
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement')
+      }
+      const result = await response.json()
+      const gymsData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      setGyms(gymsData)
     } catch (error) {
       console.error("Erreur lors du chargement des salles:", error)
     } finally {
@@ -58,24 +61,29 @@ export function GymManager() {
     if (!newGym.name || !newGym.location) return
 
     try {
-      const { data, error } = await supabase
-        .from("gyms")
-        .insert([
-          {
+      const response = await fetch('/api/db/gyms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
             name: newGym.name,
-            location: newGym.location,
-            description: newGym.description,
+            address: newGym.location,
             wifi_restricted: newGym.wifi_restricted,
-            wifi_ssid: newGym.wifi_ssid,
-            ip_address: newGym.ip_address,
-          },
-        ])
-        .select()
+            wifi_ssid: newGym.wifi_ssid || null,
+            ip_address: newGym.ip_address || null,
+            is_active: true
+          }
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(JSON.stringify(errorData, null, 2))
+      }
 
-      if (data) {
-        setGyms([...gyms, ...data])
+      const result = await response.json()
+      if (result.data) {
+        setGyms([...gyms, result.data])
       }
 
       setNewGym({ 
@@ -90,7 +98,7 @@ export function GymManager() {
       alert("✅ Salle ajoutée avec succès !")
     } catch (error) {
       console.error("Erreur lors de l'ajout:", error)
-      alert("Erreur lors de l'ajout de la salle")
+      alert(`Erreur lors de l'ajout de la salle:\n${error}`)
     }
   }
 
@@ -103,8 +111,14 @@ export function GymManager() {
     if (!selectedGym) return
 
     try {
-      const { error } = await supabase.from("gyms").delete().eq("id", selectedGym.id)
-      if (error) throw error
+      const response = await fetch(`/api/db/gyms/${selectedGym.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la suppression')
+      }
 
       setGyms(gyms.filter((gym) => gym.id !== selectedGym.id))
       setShowDeleteDialog(false)
@@ -112,7 +126,7 @@ export function GymManager() {
       alert("✅ Salle supprimée avec succès")
     } catch (error) {
       console.error("Erreur lors de la suppression:", error)
-      alert("Erreur lors de la suppression")
+      alert(`Erreur lors de la suppression: ${error}`)
     }
   }
 
@@ -121,13 +135,21 @@ export function GymManager() {
     if (!gym) return
 
     try {
-      const { error } = await supabase.from("gyms").update({ is_active: !gym.is_active }, { id })
+      const response = await fetch(`/api/db/gyms/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !gym.is_active })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la mise à jour')
+      }
 
       setGyms(gyms.map((g) => (g.id === id ? { ...g, is_active: !g.is_active } : g)))
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error)
+      alert(`Erreur: ${error}`)
     }
   }
 
@@ -157,8 +179,8 @@ export function GymManager() {
 
       {/* Formulaire d'ajout */}
       {isAddingGym && (
-        <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
-          <CardHeader className="bg-gradient-to-r from-red-600 to-black text-white rounded-t-xl">
+        <Card className="border-0 shadow-2xl bg-white">
+          <CardHeader className="bg-red-600 text-white rounded-t-xl">
             <CardTitle>Ajouter une nouvelle salle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
@@ -252,16 +274,16 @@ export function GymManager() {
       {/* Liste des salles */}
       <div className="grid gap-6">
         {gyms.map((gym) => (
-          <Card key={gym.id} className="border-0 shadow-xl bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
+          <Card key={gym.id} className="border-0 shadow-xl bg-white">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-4">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold shadow-lg">
+                  <div className="w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg">
                     <Building className="h-8 w-8" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-bold text-2xl">{gym.name}</h3>
+                      <h3 className="font-bold text-2xl text-gray-900">{gym.name}</h3>
                       <Badge variant={gym.is_active ? "default" : "secondary"} className={`rounded-full ${gym.is_active ? 'bg-red-600' : 'bg-gray-400'}`}>
                         {gym.is_active ? "Active" : "Inactive"}
                       </Badge>

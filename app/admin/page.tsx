@@ -9,8 +9,8 @@ import { CalendarManager } from "@/components/admin/calendar-manager"
 import { GymManager } from "@/components/admin/gym-manager"
 import { WorkScheduleManager } from "@/components/admin/work-schedule-manager"
 import { NewMemberManager } from "@/components/admin/new-member-manager"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { useRouter } from "next/navigation"
+import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, UserPlus, Shield, LogOut } from "lucide-react"
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("tasks")
@@ -31,29 +31,29 @@ export default function AdminPage() {
   }
 
   const tabs = [
-    { id: "tasks", label: "📝 Tâches", component: <TaskManager /> },
-    { id: "gyms", label: "🏢 Salles", component: <GymManager /> },
-    { id: "employees", label: "👥 Utilisateurs", component: <EmployeeManager /> },
-    { id: "schedule", label: "📅 Planning", component: <WorkScheduleManager /> },
-    { id: "calendar", label: "🗓️ Événements", component: <CalendarManager /> },
-    { id: "monitor", label: "📊 Suivi", component: <RealTimeMonitor /> },
-    { id: "newmember", label: "🆕 Nouveau Adhérent", component: <NewMemberManager /> },
+    { id: "tasks", label: "Tâches", icon: ClipboardList, component: <TaskManager /> },
+    { id: "gyms", label: "Salles", icon: Building2, component: <GymManager /> },
+    { id: "employees", label: "Utilisateurs", icon: Users, component: <EmployeeManager /> },
+    { id: "schedule", label: "Planning", icon: Calendar, component: <WorkScheduleManager /> },
+    { id: "calendar", label: "Événements", icon: CalendarDays, component: <CalendarManager /> },
+    { id: "monitor", label: "Suivi", icon: Activity, component: <RealTimeMonitor /> },
+    { id: "newmember", label: "Nouveau Adhérent", icon: UserPlus, component: <NewMemberManager /> },
   ]
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-black shadow-md border-b border-gray-200 p-4 md:p-6">
+      <div className="bg-red-600 shadow-md border-b border-gray-200 p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-7xl mx-auto gap-4">
           <div className="flex items-center space-x-3 md:space-x-4">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-lg flex items-center justify-center shadow">
-              <span className="text-xl md:text-2xl">👨‍💼</span>
+              <Shield className="w-6 h-6 md:w-7 md:h-7 text-red-600" />
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-white">
                 Administration
               </h1>
-              <p className="text-sm md:text-base text-gray-200 truncate max-w-[200px] sm:max-w-none">
+              <p className="text-sm md:text-base text-gray-100 truncate max-w-[200px] sm:max-w-none">
                 {userName} • {userEmail}
               </p>
             </div>
@@ -63,8 +63,9 @@ export default function AdminPage() {
               onClick={handleLogout}
               variant="outline"
               size="sm"
-              className="border-2 border-white hover:bg-white/10 text-white text-sm md:text-base flex-1 sm:flex-none"
+              className="border-2 border-white hover:bg-white hover:text-red-600 bg-white text-red-600 text-sm md:text-base flex-1 sm:flex-none"
             >
+              <LogOut className="mr-2 h-4 w-4" />
               Déconnexion
             </Button>
           </div>
@@ -86,6 +87,7 @@ export default function AdminPage() {
                   : "border border-gray-300 hover:bg-gray-50 bg-white text-gray-700"
               }`}
             >
+              <tab.icon className="w-4 h-4 mr-2" />
               {tab.label}
             </Button>
           ))}

@@ -29,12 +29,15 @@ export function TaskManager() {
 
   const loadGyms = async () => {
     try {
-      const { data, error } = await supabase.from("gyms").select("*").eq("is_active", true).order("name")
-
-      if (error) throw error
-      setGyms(data || [])
-      if (data && data.length > 0) {
-        setSelectedGym(data[0].id)
+      const response = await fetch('/api/db/gyms?is_active=true&orderBy=name')
+      if (!response.ok) throw new Error('Erreur chargement salles')
+      
+      const result = await response.json()
+      const gymsData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      
+      setGyms(gymsData)
+      if (gymsData && gymsData.length > 0) {
+        setSelectedGym(gymsData[0].id)
       } else {
         // Pas de salles, arrêter le chargement
         setIsLoading(false)
@@ -49,15 +52,22 @@ export function TaskManager() {
     if (!selectedGym) return
 
     try {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("gym_id", selectedGym)
-        .order("period", { ascending: true })
-        .order("order_index", { ascending: true })
-
-      if (error) throw error
-      setTasks(data || [])
+      const response = await fetch(`/api/db/tasks?gym_id=${selectedGym}&orderBy=order_index`)
+      if (!response.ok) throw new Error('Erreur chargement tâches')
+      
+      const result = await response.json()
+      const tasksData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      
+      // Trier côté client par period puis order_index
+      const sortedTasks = tasksData.sort((a: any, b: any) => {
+        const periodOrder: any = { matin: 1, aprem: 2, journee: 3 }
+        if (a.period !== b.period) {
+          return (periodOrder[a.period] || 0) - (periodOrder[b.period] || 0)
+        }
+        return a.order_index - b.order_index
+      })
+      
+      setTasks(sortedTasks)
     } catch (error) {
       console.error("Erreur lors du chargement des tâches:", error)
     } finally {
@@ -93,27 +103,41 @@ export function TaskManager() {
     try {
       const currentTasks = getCurrentTasks()
       const maxOrder = Math.max(...currentTasks.map((t) => t.order_index), 0)
+      const userId = localStorage.getItem("userId")
+      
+      if (!userId) {
+        alert("Erreur: Utilisateur non identifié. Veuillez vous reconnecter.")
+        return
+      }
 
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert([
-          {
+      const response = await fetch('/api/db/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
             title: newTask.title,
             description: newTask.description,
             type: newTask.type,
             period: activePeriod,
-            options: newTask.type === "qcm" ? newTask.options : null,
+            options: newTask.type === "qcm" ? JSON.stringify(newTask.options) : null,
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
-          },
-        ])
-        .select()
+            user_id: userId,
+            created_by: userId,
+            status: 'pending'
+          }
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(JSON.stringify(errorData, null, 2))
+      }
 
-      if (data) {
-        setTasks([...tasks, ...data])
+      const result = await response.json()
+      if (result.data) {
+        setTasks([...tasks, result.data])
       }
 
       setNewTask({
@@ -126,15 +150,17 @@ export function TaskManager() {
       setShowForm(false)
     } catch (error) {
       console.error("Erreur lors de l'ajout de la tâche:", error)
-      alert("Erreur lors de l'ajout de la tâche")
+      alert(`Erreur lors de l'ajout de la tâche:\n${error}`)
     }
   }
 
   const deleteTask = async (id: string) => {
     try {
-      const { error } = await supabase.from("tasks").delete().eq("id", id)
-
-      if (error) throw error
+      const response = await fetch(`/api/db/tasks/${id}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) throw new Error('Erreur suppression')
 
       setTasks(tasks.filter((task) => task.id !== id))
     } catch (error) {
@@ -157,8 +183,17 @@ export function TaskManager() {
 
     try {
       // Échanger les order_index
-      await supabase.from("tasks").update({ order_index: taskToSwap.order_index }).eq("id", taskToMove.id)
-      await supabase.from("tasks").update({ order_index: taskToMove.order_index }).eq("id", taskToSwap.id)
+      await fetch(`/api/db/tasks/${taskToMove.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_index: taskToSwap.order_index })
+      })
+      
+      await fetch(`/api/db/tasks/${taskToSwap.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_index: taskToMove.order_index })
+      })
 
       // Recharger les tâches
       loadTasks()
@@ -216,22 +251,22 @@ export function TaskManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h2 className="text-3xl font-bold text-gray-900">
           📝 Gestion des To-Do Lists
         </h2>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200 transform hover:scale-105"
+          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200"
         >
           ➕ Nouvelle Tâche
         </Button>
       </div>
 
       {/* Sélecteur de salle */}
-      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
+      <Card className="border-0 shadow-xl bg-white">
         <CardContent className="p-6">
           <div className="flex items-center space-x-4">
-            <Building className="h-6 w-6 text-blue-600" />
+            <Building className="h-6 w-6 text-red-600" />
             <div className="flex-1">
               <Label className="text-lg font-medium">Salle sélectionnée :</Label>
               <Select value={selectedGym} onValueChange={setSelectedGym}>
@@ -260,8 +295,8 @@ export function TaskManager() {
               onClick={() => setActivePeriod("matin")}
               className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
                 activePeriod === "matin"
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg"
-                  : "border-2 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
+                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
               🌅 Matin ({getPeriodCount("matin")} tâches)
@@ -271,8 +306,8 @@ export function TaskManager() {
               onClick={() => setActivePeriod("aprem")}
               className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
                 activePeriod === "aprem"
-                  ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg"
-                  : "border-2 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
+                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
               🌇 Après-midi ({getPeriodCount("aprem")} tâches)
@@ -282,8 +317,8 @@ export function TaskManager() {
               onClick={() => setActivePeriod("journee")}
               className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
                 activePeriod === "journee"
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                  : "border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
+                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
               🌞 Journée ({getPeriodCount("journee")} tâches)
@@ -292,8 +327,8 @@ export function TaskManager() {
 
           {/* Formulaire d'ajout */}
           {showForm && (
-            <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm dark:bg-gray-800/80">
-              <CardHeader className={`bg-gradient-to-r ${getPeriodColor(activePeriod)} text-white rounded-t-xl`}>
+            <Card className="border-0 shadow-2xl bg-white">
+              <CardHeader className="bg-red-600 text-white rounded-t-xl">
                 <CardTitle className="text-xl">
                   Ajouter une tâche à {selectedGymName} -{" "}
                   {activePeriod === "matin" ? "🌅 Matin" : activePeriod === "aprem" ? "🌇 Après-midi" : "🌞 Journée"}
@@ -360,14 +395,14 @@ export function TaskManager() {
                 <div className="flex space-x-4">
                   <Button
                     onClick={addTask}
-                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-lg px-8 py-3 rounded-xl shadow-lg"
+                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg"
                   >
                     ✅ Ajouter
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowForm(false)}
-                    className="text-lg px-8 py-3 border-2 rounded-xl"
+                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white"
                   >
                     ❌ Annuler
                   </Button>
@@ -379,7 +414,7 @@ export function TaskManager() {
           {/* Liste des tâches */}
           <div className="space-y-6">
             <h3
-              className={`text-2xl font-semibold bg-gradient-to-r ${getPeriodColor(activePeriod)} bg-clip-text text-transparent`}
+              className="text-2xl font-semibold text-gray-900"
             >
               {activePeriod === "matin"
                 ? "🌅 Tâches du Matin"
@@ -390,7 +425,7 @@ export function TaskManager() {
             </h3>
 
             {currentTasks.length === 0 ? (
-              <Card className="border-2 border-dashed border-gray-300 bg-gray-50/50 dark:bg-gray-800/50">
+              <Card className="border-2 border-dashed border-gray-300 bg-gray-50">
                 <CardContent className="p-12 text-center text-gray-500">
                   <div className="text-6xl mb-4">📝</div>
                   <p className="text-xl mb-2">Aucune tâche dans cette to-do list</p>
@@ -401,40 +436,40 @@ export function TaskManager() {
               currentTasks.map((task, index) => (
                 <Card
                   key={task.id}
-                  className="border-0 shadow-xl bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 hover:shadow-2xl transition-all duration-200"
+                  className="border-0 shadow-xl bg-white hover:shadow-2xl transition-all duration-200"
                 >
                   <CardContent className="p-8">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-4 mb-4">
                           <div
-                            className={`w-12 h-12 bg-gradient-to-r ${getPeriodColor(activePeriod)} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}
+                            className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg"
                           >
                             #{index + 1}
                           </div>
                           <div>
-                            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">{task.title}</h3>
+                            <h3 className="text-2xl font-semibold text-gray-800">{task.title}</h3>
                             <div className="flex items-center space-x-3 mt-2">
                               {task.required && (
                                 <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
                                   Obligatoire
                                 </span>
                               )}
-                              <span className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-sm">
+                              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
                                 {task.type === "checkbox" ? "☑️ Case" : task.type === "text" ? "📝 Texte" : "📋 QCM"}
                               </span>
                             </div>
                           </div>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-300 text-lg mb-4">{task.description}</p>
+                        <p className="text-gray-600 text-lg mb-4">{task.description}</p>
                         {task.options && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
-                            <strong className="text-blue-800 dark:text-blue-300">Choix disponibles :</strong>
+                          <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                            <strong className="text-red-800">Choix disponibles :</strong>
                             <div className="mt-2 flex flex-wrap gap-2">
                               {task.options.map((option, idx) => (
                                 <span
                                   key={idx}
-                                  className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm"
+                                  className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm"
                                 >
                                   {option}
                                 </span>
@@ -450,7 +485,7 @@ export function TaskManager() {
                           size="sm"
                           onClick={() => moveTask(task.id, "up")}
                           disabled={index === 0}
-                          className="border-2 rounded-xl p-2"
+                          className="border-2 rounded-xl p-2 border-gray-300 hover:bg-gray-50 bg-white"
                           title="Monter"
                         >
                           <ChevronUp className="h-4 w-4" />
@@ -460,7 +495,7 @@ export function TaskManager() {
                           size="sm"
                           onClick={() => moveTask(task.id, "down")}
                           disabled={index === currentTasks.length - 1}
-                          className="border-2 rounded-xl p-2"
+                          className="border-2 rounded-xl p-2 border-gray-300 hover:bg-gray-50 bg-white"
                           title="Descendre"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -468,7 +503,7 @@ export function TaskManager() {
                         <Button
                           variant="outline"
                           onClick={() => deleteTask(task.id)}
-                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-2 border-red-200 hover:border-red-300 rounded-xl p-2"
+                          className="text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-300 rounded-xl p-2 bg-white"
                           title="Supprimer"
                         >
                           🗑️

@@ -267,7 +267,7 @@ export function CalendarView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h2 className="text-3xl font-bold text-gray-900">
           📅 Calendrier & Planning
         </h2>
       </div>
@@ -279,8 +279,8 @@ export function CalendarView() {
           onClick={() => setActiveView("events")}
           className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
             activeView === "events"
-              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-              : "border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 bg-transparent"
+              ? "bg-red-600 text-white shadow-lg"
+              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
           }`}
         >
           <Calendar className="mr-2 h-5 w-5" />
@@ -291,8 +291,8 @@ export function CalendarView() {
           onClick={() => setActiveView("schedule")}
           className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
             activeView === "schedule"
-              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg"
-              : "border-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 bg-transparent"
+              ? "bg-red-600 text-white shadow-lg"
+              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
           }`}
         >
           <Clock className="mr-2 h-5 w-5" />
@@ -305,23 +305,23 @@ export function CalendarView() {
         <>
           {calendarView === "year" ? (
             /* Vue Année */
-            <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+            <Card className="border border-gray-200 shadow-xl bg-white">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("prev")}
-                    className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <h3 className="text-2xl font-bold text-gray-900">
                     Année {currentDate.getFullYear()}
                   </h3>
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("next")}
-                    className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -342,13 +342,13 @@ export function CalendarView() {
                           min-h-[120px] p-4 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             isPastMonth
-                              ? "bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
-                              : "bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:shadow-md"
+                              ? "bg-gray-50 text-gray-400 cursor-not-allowed opacity-50"
+                              : "bg-white hover:bg-red-50 hover:shadow-md"
                           }
-                          border-gray-200 dark:border-gray-600
+                          border-gray-200
                         `}
                       >
-                        <div className="font-semibold text-lg mb-2 text-gray-900 dark:text-gray-100">
+                        <div className="font-semibold text-lg mb-2 text-gray-900">
                           {monthNames[month.getMonth()]}
                         </div>
                         <div className="space-y-1">
@@ -362,12 +362,12 @@ export function CalendarView() {
                             </div>
                           ))}
                           {monthEvents.length > 3 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <div className="text-xs text-gray-500">
                               +{monthEvents.length - 3} autre(s)
                             </div>
                           )}
                           {monthEvents.length === 0 && !isPastMonth && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer pour voir</div>
+                            <div className="text-xs text-gray-400 italic">Cliquer pour voir</div>
                           )}
                         </div>
                       </div>
@@ -378,13 +378,13 @@ export function CalendarView() {
             </Card>
           ) : (
             /* Vue Mois */
-            <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+            <Card className="border border-gray-200 shadow-xl bg-white">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
                     onClick={backToYear}
-                    className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Retour
@@ -393,17 +393,17 @@ export function CalendarView() {
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("prev")}
-                      className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <h3 className="text-2xl font-bold text-gray-900">
                       {selectedMonth && `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
                     </h3>
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("next")}
-                      className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -415,7 +415,7 @@ export function CalendarView() {
                 {/* En-têtes des jours */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {dayNames.map((day) => (
-                    <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
+                    <div key={day} className="text-center font-semibold text-gray-600 py-2">
                       {day}
                     </div>
                   ))}
@@ -436,18 +436,18 @@ export function CalendarView() {
                           min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             dayInfo.isCurrentMonth
-                              ? "bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                              : "bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
+                              ? "bg-white hover:bg-red-50"
+                              : "bg-gray-50 text-gray-400"
                           }
                           ${
                             isToday
-                              ? "border-blue-500 bg-blue-100 dark:bg-blue-900/50 dark:border-blue-400"
-                              : "border-gray-200 dark:border-gray-600"
+                              ? "border-red-500 bg-red-100"
+                              : "border-gray-200"
                           }
                           ${isPast ? "cursor-not-allowed opacity-50" : "hover:shadow-md"}
                         `}
                       >
-                        <div className="font-semibold text-sm mb-1 text-gray-900 dark:text-gray-100">
+                        <div className="font-semibold text-sm mb-1 text-gray-900">
                           {dayInfo.date.getDate()}
                         </div>
                         <div className="space-y-1">
@@ -461,12 +461,12 @@ export function CalendarView() {
                             </div>
                           ))}
                           {dayEvents.length > 2 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <div className="text-xs text-gray-500">
                               +{dayEvents.length - 2} autre(s)
                             </div>
                           )}
                           {dayEvents.length === 0 && dayInfo.isCurrentMonth && !isPast && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer pour ajouter</div>
+                            <div className="text-xs text-gray-400 italic">Cliquer pour ajouter</div>
                           )}
                         </div>
                       </div>
@@ -478,20 +478,20 @@ export function CalendarView() {
           )}
 
           {/* Légende */}
-          <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <Card className="border border-gray-200 shadow-xl bg-white">
             <CardContent className="p-4">
               <div className="flex items-center justify-center space-x-6 text-sm">
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-green-500 rounded"></div>
-                  <span className="text-gray-700 dark:text-gray-300">Approuvé</span>
+                  <span className="text-gray-700">Approuvé</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-                  <span className="text-gray-700 dark:text-gray-300">En attente</span>
+                  <span className="text-gray-700">En attente</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-red-500 rounded"></div>
-                  <span className="text-gray-700 dark:text-gray-300">Refusé</span>
+                  <span className="text-gray-700">Refusé</span>
                 </div>
               </div>
             </CardContent>
@@ -499,13 +499,13 @@ export function CalendarView() {
 
           {/* Dialog pour ajouter un événement */}
           <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
-            <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+            <DialogContent className="sm:max-w-md bg-white">
               <DialogHeader>
-                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-                  <Plus className="h-6 w-6 text-blue-600" />
+                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+                  <Plus className="h-6 w-6 text-red-600" />
                   <span>Nouvel Événement</span>
                 </DialogTitle>
-                <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+                <DialogDescription className="text-lg text-gray-600">
                   {selectedDate && (
                     <>
                       Date sélectionnée :{" "}
@@ -526,27 +526,27 @@ export function CalendarView() {
                   placeholder="Titre de l'événement"
                   value={newEvent.title}
                   onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  className="text-lg border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="text-lg border-2 rounded-xl bg-white text-gray-900"
                 />
                 <Textarea
                   placeholder="Description (optionnelle)"
                   value={newEvent.description}
                   onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                  className="text-lg border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="text-lg border-2 rounded-xl bg-white text-gray-900"
                   rows={3}
                 />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Heure</label>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
                     <Input
                       type="time"
                       value={newEvent.event_time}
                       onChange={(e) => setNewEvent({ ...newEvent, event_time: e.target.value })}
-                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="border-2 rounded-xl bg-white text-gray-900"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
                       Durée (min)
                     </label>
                     <Input
@@ -557,7 +557,7 @@ export function CalendarView() {
                       }
                       min="15"
                       max="480"
-                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="border-2 rounded-xl bg-white text-gray-900"
                     />
                   </div>
                 </div>
@@ -569,11 +569,11 @@ export function CalendarView() {
                     setShowEventDialog(false)
                     setSelectedDate(null)
                   }}
-                  className="text-lg px-6 bg-transparent"
+                  className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white"
                 >
                   ❌ Annuler
                 </Button>
-                <Button onClick={addEvent} className="bg-blue-600 hover:bg-blue-700 text-lg px-6">
+                <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6">
                   ✅ Proposer
                 </Button>
               </DialogFooter>

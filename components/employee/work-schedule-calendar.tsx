@@ -48,16 +48,16 @@ export function WorkScheduleCalendar() {
   })
 
   const employeeColors = [
-    "bg-blue-500",
-    "bg-green-500",
-    "bg-purple-500",
-    "bg-orange-500",
-    "bg-pink-500",
-    "bg-cyan-500",
+    "bg-red-600",
+    "bg-gray-600",
     "bg-red-500",
-    "bg-yellow-500",
-    "bg-indigo-500",
-    "bg-teal-500",
+    "bg-gray-500",
+    "bg-red-700",
+    "bg-gray-700",
+    "bg-red-800",
+    "bg-gray-800",
+    "bg-red-400",
+    "bg-gray-400",
   ]
 
   useEffect(() => {
@@ -218,23 +218,23 @@ export function WorkScheduleCalendar() {
   return (
     <div className="space-y-6">
       {/* Navigation du calendrier */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      <Card className="border border-gray-200 shadow-xl bg-white">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
               onClick={() => navigateMonth("prev")}
-              className="border-2 rounded-xl bg-transparent"
+              className="border-2 border-gray-300 rounded-xl bg-white"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <h3 className="text-2xl font-bold text-gray-900">
               Planning - {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <Button
               variant="outline"
               onClick={() => navigateMonth("next")}
-              className="border-2 rounded-xl bg-transparent"
+              className="border-2 border-gray-300 rounded-xl bg-white"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -244,7 +244,7 @@ export function WorkScheduleCalendar() {
           {/* En-têtes des jours */}
           <div className="grid grid-cols-7 gap-2 mb-4">
             {dayNames.map((day) => (
-              <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
+              <div key={day} className="text-center font-semibold text-gray-600 py-2">
                 {day}
               </div>
             ))}
@@ -265,18 +265,18 @@ export function WorkScheduleCalendar() {
                     min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
-                        ? "bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                        : "bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
+                        ? "bg-white hover:bg-red-50"
+                        : "bg-gray-50 text-gray-400"
                     }
                     ${
                       isToday
-                        ? "border-blue-500 bg-blue-100 dark:bg-blue-900/50 dark:border-blue-400"
-                        : "border-gray-200 dark:border-gray-600"
+                        ? "border-red-500 bg-red-100"
+                        : "border-gray-200"
                     }
                     ${isPast ? "cursor-not-allowed opacity-50" : "hover:shadow-md"}
                   `}
                 >
-                  <div className="font-semibold text-sm mb-1 text-gray-900 dark:text-gray-100">
+                  <div className="font-semibold text-sm mb-1 text-gray-900">
                     {dayInfo.date.getDate()}
                   </div>
                   <div className="space-y-1">
@@ -290,7 +290,7 @@ export function WorkScheduleCalendar() {
                       </div>
                     ))}
                     {daySchedules.length > 3 && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="text-xs text-gray-500">
                         +{daySchedules.length - 3} autre(s)
                       </div>
                     )}
@@ -303,14 +303,14 @@ export function WorkScheduleCalendar() {
       </Card>
 
       {/* Légende des employés */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      <Card className="border border-gray-200 shadow-xl bg-white">
         <CardContent className="p-4">
-          <h4 className="font-semibold mb-3 text-gray-900 dark:text-gray-100">Légende des employés :</h4>
+          <h4 className="font-semibold mb-3 text-gray-900">Légende des employés :</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {employees.map((employee) => (
               <div key={employee.email} className="flex items-center space-x-2">
                 <div className={`w-4 h-4 ${employee.color} rounded`}></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">{employee.name}</span>
+                <span className="text-sm text-gray-700">{employee.name}</span>
               </div>
             ))}
           </div>
@@ -319,13 +319,13 @@ export function WorkScheduleCalendar() {
 
       {/* Dialog pour ajouter un horaire */}
       <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="sm:max-w-md bg-white">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-              <Clock className="h-6 w-6 text-blue-600" />
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+              <Clock className="h-6 w-6 text-red-600" />
               <span>Nouvel Horaire de Travail</span>
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+            <DialogDescription className="text-lg text-gray-600">
               {selectedDate && (
                 <>
                   Date sélectionnée :{" "}
@@ -344,29 +344,29 @@ export function WorkScheduleCalendar() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Heure de début
                 </label>
                 <Input
                   type="time"
                   value={newSchedule.start_time}
                   onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="border-2 rounded-xl bg-white text-gray-900"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Heure de fin</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de fin</label>
                 <Input
                   type="time"
                   value={newSchedule.end_time}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="border-2 rounded-xl bg-white text-gray-900"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Durée pause (min)
                 </label>
                 <Input
@@ -377,18 +377,18 @@ export function WorkScheduleCalendar() {
                   }
                   min="0"
                   max="120"
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="border-2 rounded-xl bg-white text-gray-900"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Heure pause (optionnel)
                 </label>
                 <Input
                   type="time"
                   value={newSchedule.break_start_time}
                   onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="border-2 rounded-xl bg-white text-gray-900"
                 />
               </div>
             </div>
@@ -400,11 +400,11 @@ export function WorkScheduleCalendar() {
                 setShowScheduleDialog(false)
                 setSelectedDate(null)
               }}
-              className="text-lg px-6 bg-transparent"
+              className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white"
             >
               ❌ Annuler
             </Button>
-            <Button onClick={addSchedule} className="bg-blue-600 hover:bg-blue-700 text-lg px-6">
+            <Button onClick={addSchedule} className="bg-red-600 hover:bg-red-700 text-lg px-6">
               ✅ Ajouter
             </Button>
           </DialogFooter>

@@ -58,7 +58,7 @@ export function NewMemberInstructionsDialog({
       <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg md:text-xl font-semibold text-gray-900">
-            <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+            <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
             Instructions - Nouveau Adhérent
           </DialogTitle>
           {totalCount > 0 && (
@@ -81,7 +81,7 @@ export function NewMemberInstructionsDialog({
                 className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
                   checkedItems.has(item.id)
                     ? "bg-green-50 border-green-200"
-                    : "bg-white border-gray-200 hover:border-blue-300"
+                    : "bg-white border-gray-200 hover:border-red-300"
                 }`}
               >
                 <Checkbox
@@ -95,7 +95,7 @@ export function NewMemberInstructionsDialog({
                   className="flex-1 cursor-pointer"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                    <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
                       {index + 1}
                     </div>
                     <h3

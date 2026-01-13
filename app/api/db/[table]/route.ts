@@ -9,6 +9,7 @@ const tableMapping: { [key: string]: string } = {
   tasks: 'task',
   work_schedules: 'workSchedule',
   allowed_networks: 'allowedNetwork',
+  users: 'user',
   admins: 'user',
   employees: 'user',
   new_member_instruction_items: 'newMemberInstructionItem',
@@ -241,9 +242,13 @@ export async function POST(
           if (camelKey === 'ipAddress') camelKey = 'ipAddress'
         }
         
-        // Mapper is_active -> active pour certains modèles, mais pas pour new_member_instruction_items qui utilise isActive
-        if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config') {
-          camelKey = 'active'
+        // Mapper is_active -> active pour users (employees/admins), mais isActive pour gyms et autres tables
+        if (camelKey === 'isActive') {
+          if (table === 'users' || table === 'employees' || table === 'admins') {
+            camelKey = 'active'
+          } else {
+            camelKey = 'isActive' // gyms, allowed_networks, etc.
+          }
         }
         
         // Mapper work_date -> date pour work_schedules
@@ -290,13 +295,35 @@ export async function POST(
         if (user) converted.userId = user.id
       }
       
+      // Nettoyer createdBy s'il est vide
+      if (converted.createdBy === '') {
+        delete converted.createdBy
+      }
+      
       return converted
     }))
     
     // Insérer dans Prisma
     const results = []
     for (const item of convertedItems) {
-      const result = await (prisma as any)[prismaModel].create({ data: item })
+      // Pour les tables avec relations obligatoires (tasks, work_schedules), 
+      // convertir userId en relation connect
+      const data = { ...item }
+      
+      if ((table === 'tasks' || table === 'work_schedules') && data.userId) {
+        const userId = data.userId
+        delete data.userId
+        data.user = { connect: { id: userId } }
+      }
+      
+      // De même pour gymId dans tasks
+      if (table === 'tasks' && data.gymId) {
+        const gymId = data.gymId
+        delete data.gymId
+        data.gym = { connect: { id: gymId } }
+      }
+      
+      const result = await (prisma as any)[prismaModel].create({ data })
       results.push(result)
     }
     

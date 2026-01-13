@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Clock, CheckCircle, Coffee, Loader2 } from "lucide-react"
-import { supabase } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
 interface EmployeeStatus {
   id: string
   name: string
-  currentPeriod: "matin" | "aprem" | "journee"
+  email: string
+  currentPeriod: "matin" | "aprem" | "journee" | null
   tasksCompleted: number
   totalTasks: number
   isOnBreak: boolean
@@ -25,50 +25,76 @@ export function RealTimeMonitor() {
 
   const loadEmployeeData = async () => {
     try {
-      // Charger tous les employés actifs
-      const { data: employees, error: empError } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("is_active", true)
+      // Charger tous les utilisateurs avec rôle employee
+      const responseEmployees = await fetch('/api/db/users')
+      if (!responseEmployees.ok) {
+        console.error('Erreur chargement employés:', responseEmployees.status)
+        setEmployeeStatuses([])
+        setIsLoading(false)
+        return
+      }
+      
+      const employeesData = await responseEmployees.json()
+      const allUsers = employeesData.data || []
+      
+      // Filtrer pour garder uniquement les employés actifs
+      const employees = allUsers.filter((u: any) => u.role === 'employee' && u.active === true)
 
-      if (empError) throw empError
-
-      if (!employees || employees.length === 0) {
+      if (employees.length === 0) {
         setEmployeeStatuses([])
         setIsLoading(false)
         return
       }
 
-      // Charger les tâches de chaque employé pour aujourd'hui
+      // Charger les données de chaque employé
       const today = new Date().toISOString().split('T')[0]
-      const statusPromises = employees.map(async (emp) => {
+      
+      const statusPromises = employees.map(async (emp: any) => {
+        // Charger le planning du jour
+        const responseSchedule = await fetch(`/api/db/work_schedules?user_id=${emp.id}&work_date=${today}&single=true`)
+        let schedule = null
+        if (responseSchedule.ok) {
+          const scheduleData = await responseSchedule.json()
+          schedule = scheduleData.data
+        }
+
         // Charger les tâches de l'employé
-        const { data: tasks } = await supabase
-          .from("tasks")
-          .select("*")
-          .eq("user_id", emp.id)
+        const responseTasks = await fetch(`/api/db/tasks?user_id=${emp.id}`)
+        let tasks = []
+        if (responseTasks.ok) {
+          const tasksData = await responseTasks.json()
+          tasks = tasksData.data || []
+        }
 
-        // Charger les pauses de l'employé pour aujourd'hui
-        const { data: breaks } = await supabase
-          .from("work_schedules")
-          .select("*")
-          .eq("user_id", emp.id)
-          .eq("work_date", today)
-          .single()
+        // Filtrer les tâches selon la période
+        let periodTasks = tasks
+        if (schedule?.type === 'work') {
+          // Déterminer la période depuis le localStorage de l'employé (simulation)
+          // En production, vous devriez stocker ça dans la DB
+          const period = localStorage.getItem(`employee_${emp.id}_period`) as "matin" | "aprem" | "journee" | null
+          
+          if (period === 'matin') {
+            periodTasks = tasks.filter((t: any) => !t.period || t.period === 'matin' || t.period === 'journee')
+          } else if (period === 'aprem') {
+            periodTasks = tasks.filter((t: any) => !t.period || t.period === 'aprem' || t.period === 'journee')
+          }
+        }
 
-        const completedTasks = tasks?.filter(t => t.is_completed).length || 0
-        const totalTasks = tasks?.length || 0
+        const completedTasks = periodTasks.filter((t: any) => t.status === 'completed').length
+        const totalTasks = periodTasks.length
 
-        // Déterminer si l'employé est en pause (basé sur le schedule)
-        const isOnBreak = breaks?.period === "matin" || breaks?.period === "aprem" ? false : false
+        // Déterminer si en pause (type = 'break' dans work_schedules)
+        const isOnBreak = schedule?.type === 'break'
 
         return {
           id: emp.id,
           name: emp.name,
-          currentPeriod: (breaks?.period as "matin" | "aprem" | "journee") || "journee",
+          email: emp.email,
+          currentPeriod: schedule?.type === 'work' ? (localStorage.getItem(`employee_${emp.id}_period`) as "matin" | "aprem" | "journee" | null) : null,
           tasksCompleted: completedTasks,
           totalTasks: totalTasks,
           isOnBreak: isOnBreak,
+          breakStartTime: isOnBreak && schedule?.start_time ? schedule.start_time : undefined,
           lastUpdate: new Date().toLocaleTimeString("fr-FR", {
             hour: "2-digit",
             minute: "2-digit",
@@ -92,7 +118,8 @@ export function RealTimeMonitor() {
   // Rafraîchissement automatique toutes les 30 secondes
   useAutoRefresh(loadEmployeeData, 30000)
 
-  const getPeriodLabel = (period: string) => {
+  const getPeriodLabel = (period: string | null) => {
+    if (!period) return "Non démarré"
     switch (period) {
       case "matin":
         return "Matin"
@@ -105,17 +132,10 @@ export function RealTimeMonitor() {
     }
   }
 
-  const getProgressColor = (completed: number, total: number) => {
-    const percentage = (completed / total) * 100
-    if (percentage >= 80) return "bg-green-500"
-    if (percentage >= 50) return "bg-yellow-500"
-    return "bg-red-500"
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Suivi Temps Réel</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Suivi Temps Réel</h2>
         <div className="flex items-center space-x-2 text-sm text-gray-600">
           <Clock className="h-4 w-4" />
           <span>Dernière mise à jour : {new Date().toLocaleTimeString("fr-FR")}</span>
@@ -136,14 +156,19 @@ export function RealTimeMonitor() {
       ) : (
         <div className="grid gap-4">
           {employeeStatuses.map((employee) => (
-          <Card key={employee.id}>
+          <Card key={employee.id} className="border border-gray-200">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{employee.name}</CardTitle>
+                <div>
+                  <CardTitle className="text-lg text-gray-900">{employee.name}</CardTitle>
+                  <p className="text-sm text-gray-500 mt-1">{employee.email}</p>
+                </div>
                 <div className="flex items-center space-x-2">
-                  <Badge variant="outline">{getPeriodLabel(employee.currentPeriod)}</Badge>
+                  <Badge variant="outline" className="border-red-200 text-red-700">
+                    {getPeriodLabel(employee.currentPeriod)}
+                  </Badge>
                   {employee.isOnBreak && (
-                    <Badge variant="secondary" className="flex items-center space-x-1">
+                    <Badge variant="secondary" className="flex items-center space-x-1 bg-red-50 text-red-700">
                       <Coffee className="h-3 w-3" />
                       <span>En pause</span>
                     </Badge>
@@ -154,33 +179,42 @@ export function RealTimeMonitor() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Progression des tâches</span>
-                  <span>
+                  <span className="text-gray-600">Progression des tâches</span>
+                  <span className="font-medium text-gray-900">
                     {employee.tasksCompleted}/{employee.totalTasks}
                   </span>
                 </div>
-                <Progress value={(employee.tasksCompleted / employee.totalTasks) * 100} className="h-2" />
+                {employee.totalTasks > 0 ? (
+                  <Progress value={(employee.tasksCompleted / employee.totalTasks) * 100} className="h-2" />
+                ) : (
+                  <div className="text-xs text-gray-500 italic">Aucune tâche assignée</div>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-sm text-gray-600">
                 <div className="flex items-center space-x-4">
                   {employee.isOnBreak ? (
-                    <div className="flex items-center space-x-1 text-orange-600">
+                    <div className="flex items-center space-x-1 text-red-600">
                       <Coffee className="h-4 w-4" />
                       <span>Pause depuis {employee.breakStartTime}</span>
                     </div>
-                  ) : (
+                  ) : employee.currentPeriod ? (
                     <div className="flex items-center space-x-1 text-green-600">
                       <CheckCircle className="h-4 w-4" />
                       <span>En activité</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1 text-gray-500">
+                      <Clock className="h-4 w-4" />
+                      <span>Pas encore commencé</span>
                     </div>
                   )}
                 </div>
                 <span>Dernière activité : {employee.lastUpdate}</span>
               </div>
 
-              {employee.tasksCompleted === employee.totalTasks && (
-                <div className="flex items-center space-x-2 text-green-600 bg-green-50 p-2 rounded">
+              {employee.totalTasks > 0 && employee.tasksCompleted === employee.totalTasks && (
+                <div className="flex items-center space-x-2 text-green-600 bg-green-50 p-2 rounded border border-green-200">
                   <CheckCircle className="h-4 w-4" />
                   <span className="text-sm font-medium">Toutes les tâches terminées !</span>
                 </div>
@@ -192,27 +226,29 @@ export function RealTimeMonitor() {
       )}
 
       {!isLoading && employeeStatuses.length > 0 && (
-        <Card>
+        <Card className="border border-gray-200">
           <CardHeader>
-            <CardTitle>Statistiques du jour</CardTitle>
+            <CardTitle className="text-gray-900">Statistiques du jour</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-green-600">
-                  {Math.round((employeeStatuses.reduce((sum, emp) => sum + emp.tasksCompleted, 0) / 
-                    Math.max(1, employeeStatuses.reduce((sum, emp) => sum + emp.totalTasks, 0))) * 100)}%
+                <div className="text-2xl font-bold text-red-600">
+                  {employeeStatuses.reduce((sum, emp) => sum + emp.totalTasks, 0) > 0
+                    ? Math.round((employeeStatuses.reduce((sum, emp) => sum + emp.tasksCompleted, 0) / 
+                      employeeStatuses.reduce((sum, emp) => sum + emp.totalTasks, 0)) * 100)
+                    : 0}%
                 </div>
                 <div className="text-sm text-gray-600">Tâches complétées</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {employeeStatuses.filter(emp => !emp.isOnBreak).length}
+                <div className="text-2xl font-bold text-gray-900">
+                  {employeeStatuses.filter(emp => !emp.isOnBreak && emp.currentPeriod).length}
                 </div>
                 <div className="text-sm text-gray-600">Employés actifs</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-orange-600">
+                <div className="text-2xl font-bold text-red-600">
                   {employeeStatuses.filter(emp => emp.isOnBreak).length}
                 </div>
                 <div className="text-sm text-gray-600">En pause</div>

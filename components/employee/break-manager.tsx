@@ -74,36 +74,36 @@ export function BreakManager({
 
   if (isOnBreak) {
     return (
-      <Card className="border-2 border-orange-300 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-600">
+      <Card className="border-2 border-red-300 bg-red-50">
         <CardContent className="p-4">
           <div className="text-center">
             <div className="text-3xl mb-2">☕</div>
-            <p className="font-bold text-orange-800 dark:text-orange-300 text-lg">Pause en cours</p>
-            <p className="text-orange-700 dark:text-orange-400">Session actuelle : {currentBreakDuration} min</p>
-            <p className="text-orange-700 dark:text-orange-400">
+            <p className="font-bold text-red-800 text-lg">Pause en cours</p>
+            <p className="text-red-700">Session actuelle : {currentBreakDuration} min</p>
+            <p className="text-red-700">
               Total : {totalBreakTime} / {REQUIRED_BREAK_MINUTES} minutes
             </p>
             <div className="mt-3 space-y-2">
               <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
                 <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">⏸️ Reprendre le travail</Button>
+                  <Button className="bg-red-600 hover:bg-red-700 text-white">⏸️ Reprendre le travail</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+                <DialogContent className="sm:max-w-md bg-white">
                   <DialogHeader>
-                    <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+                    <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
                       <span className="text-2xl">⏸️</span>
                       <span>Reprendre le travail</span>
                     </DialogTitle>
-                    <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+                    <DialogDescription className="text-lg text-gray-600">
                       {isBreakComplete ? (
-                        <span className="text-green-600 dark:text-green-400">
+                        <span className="text-green-600">
                           ✅ Votre pause de {REQUIRED_BREAK_MINUTES} minutes est terminée !
                         </span>
                       ) : (
                         <>
                           Vous avez pris {totalBreakTime} minutes de pause sur les {REQUIRED_BREAK_MINUTES} requises.
                           <br />
-                          <span className="text-amber-600 dark:text-amber-400 font-medium">
+                          <span className="text-red-600 font-medium">
                             Il vous reste {remainingBreakTime} minutes à prendre plus tard.
                           </span>
                         </>
@@ -112,11 +112,11 @@ export function BreakManager({
                   </DialogHeader>
                   <DialogFooter className="flex space-x-3">
                     <DialogTrigger asChild>
-                      <Button variant="outline" className="text-lg px-6 bg-transparent">
+                      <Button variant="outline" className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white">
                         ❌ Continuer la pause
                       </Button>
                     </DialogTrigger>
-                    <Button onClick={handleResumeWork} className="bg-blue-600 hover:bg-blue-700 text-lg px-6">
+                    <Button onClick={handleResumeWork} className="bg-red-600 hover:bg-red-700 text-lg px-6">
                       ▶️ Reprendre le travail
                     </Button>
                   </DialogFooter>
@@ -134,10 +134,10 @@ export function BreakManager({
       {accumulatedBreakTime > 0 && !isBreakComplete ? (
         // Reprendre une pause en cours
         <div className="space-y-2">
-          <Button onClick={handleResumeBreak} className="text-lg px-6 py-3 h-auto bg-orange-600 hover:bg-orange-700">
+          <Button onClick={handleResumeBreak} className="text-lg px-6 py-3 h-auto bg-red-600 hover:bg-red-700">
             ☕ Reprendre la pause
           </Button>
-          <p className="text-xs text-amber-600 dark:text-amber-400">
+          <p className="text-xs text-red-600">
             ⏰ {remainingBreakTime} min restantes ({accumulatedBreakTime} min déjà prises)
           </p>
         </div>
@@ -154,17 +154,17 @@ export function BreakManager({
         <div className="space-y-2">
           <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="text-lg px-6 py-3 h-auto bg-transparent">
+              <Button variant="outline" className="text-lg px-6 py-3 h-auto border border-gray-300 hover:bg-gray-50 bg-white">
                 ☕ Prendre une pause
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+            <DialogContent className="sm:max-w-md bg-white">
               <DialogHeader>
-                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
                   <span className="text-2xl">☕</span>
                   <span>Confirmer la pause</span>
                 </DialogTitle>
-                <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+                <DialogDescription className="text-lg text-gray-600">
                   Vous allez commencer votre pause obligatoire de {REQUIRED_BREAK_MINUTES} minutes.
                   <br />
                   <strong>Vous pourrez reprendre le travail à tout moment et continuer votre pause plus tard.</strong>
@@ -172,17 +172,17 @@ export function BreakManager({
               </DialogHeader>
               <DialogFooter className="flex space-x-3">
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="text-lg px-6 bg-transparent">
+                  <Button variant="outline" className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white">
                     ❌ Annuler
                   </Button>
                 </DialogTrigger>
-                <Button onClick={handleStartBreak} className="bg-orange-600 hover:bg-orange-700 text-lg px-6">
+                <Button onClick={handleStartBreak} className="bg-red-600 hover:bg-red-700 text-lg px-6">
                   ☕ Commencer la pause
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          <p className="text-xs text-red-600 mt-1">
             ⚠️ Pause de {REQUIRED_BREAK_MINUTES} min obligatoire
           </p>
         </div>

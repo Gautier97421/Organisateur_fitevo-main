@@ -265,11 +265,11 @@ export function WorkScheduleManager() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h2 className="text-3xl font-bold text-gray-900">
           📅 Gestion des Plannings
         </h2>
         {conflicts.length > 0 && (
-          <Badge className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 text-lg px-4 py-2">
+          <Badge className="bg-red-100 text-red-800 text-lg px-4 py-2">
             <AlertTriangle className="h-4 w-4 mr-1" />
             {conflicts.length} conflit{conflicts.length > 1 ? "s" : ""}
           </Badge>
@@ -277,23 +277,23 @@ export function WorkScheduleManager() {
       </div>
 
       {/* Navigation du calendrier */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      <Card className="border-0 shadow-xl bg-white">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
               onClick={() => navigateMonth("prev")}
-              className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <h3 className="text-2xl font-bold text-gray-900">
               Planning - {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <Button
               variant="outline"
               onClick={() => navigateMonth("next")}
-              className="border-2 rounded-xl bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -303,7 +303,7 @@ export function WorkScheduleManager() {
           {/* En-têtes des jours */}
           <div className="grid grid-cols-7 gap-2 mb-4">
             {dayNames.map((day) => (
-              <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
+              <div key={day} className="text-center font-semibold text-gray-600 py-2">
                 {day}
               </div>
             ))}
@@ -323,22 +323,22 @@ export function WorkScheduleManager() {
                     min-h-[120px] p-2 border rounded-xl transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
-                        ? "bg-white dark:bg-gray-700"
-                        : "bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
+                        ? "bg-white"
+                        : "bg-gray-50 text-gray-400"
                     }
                     ${
                       isToday
-                        ? "border-blue-500 bg-blue-100 dark:bg-blue-900/50 dark:border-blue-400"
-                        : "border-gray-200 dark:border-gray-600"
+                        ? "border-red-600 bg-red-50"
+                        : "border-gray-200"
                     }
-                    ${hasConflict ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/20" : ""}
+                    ${hasConflict ? "border-red-600 bg-red-50" : ""}
                   `}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                    <div className="font-semibold text-sm text-gray-900">
                       {dayInfo.date.getDate()}
                     </div>
-                    {hasConflict && <AlertTriangle className="h-3 w-3 text-red-500 dark:text-red-400" />}
+                    {hasConflict && <AlertTriangle className="h-3 w-3 text-red-600" />}
                   </div>
                   <div className="space-y-1">
                     {daySchedules.slice(0, 3).map((schedule) => (
@@ -368,14 +368,14 @@ export function WorkScheduleManager() {
       </Card>
 
       {/* Légende des employés */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      <Card className="border-0 shadow-xl bg-white">
         <CardContent className="p-4">
-          <h4 className="font-semibold mb-3 text-gray-900 dark:text-gray-100">Légende des employés :</h4>
+          <h4 className="font-semibold mb-3 text-gray-900">Légende des employés :</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {employees.map((employee) => (
               <div key={employee.email} className="flex items-center space-x-2">
                 <div className={`w-4 h-4 ${employee.color} rounded`}></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">{employee.name}</span>
+                <span className="text-sm text-gray-700">{employee.name}</span>
               </div>
             ))}
           </div>
@@ -383,24 +383,24 @@ export function WorkScheduleManager() {
       </Card>
 
       {/* Légende des statuts */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      <Card className="border-0 shadow-xl bg-white">
         <CardContent className="p-4">
           <div className="flex items-center justify-center space-x-6 text-sm">
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-yellow-500 dark:bg-yellow-600 rounded"></div>
-              <span className="text-gray-700 dark:text-gray-300">Programmé</span>
+              <div className="w-4 h-4 bg-amber-500 rounded"></div>
+              <span className="text-gray-700">Programmé</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-green-500 dark:bg-green-600 rounded"></div>
-              <span className="text-gray-700 dark:text-gray-300">Confirmé</span>
+              <div className="w-4 h-4 bg-green-600 rounded"></div>
+              <span className="text-gray-700">Confirmé</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-blue-500 dark:bg-blue-600 rounded"></div>
-              <span className="text-gray-700 dark:text-gray-300">Terminé</span>
+              <div className="w-4 h-4 bg-red-600 rounded"></div>
+              <span className="text-gray-700">Terminé</span>
             </div>
             <div className="flex items-center space-x-2">
-              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
-              <span className="text-gray-700 dark:text-gray-300">Conflit d'horaires</span>
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <span className="text-gray-700">Conflit d'horaires</span>
             </div>
           </div>
         </CardContent>
@@ -408,14 +408,14 @@ export function WorkScheduleManager() {
 
       {/* Dialog de détails */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="sm:max-w-md bg-white">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-              <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+              <User className="h-6 w-6 text-red-600" />
               <span>Détails du Planning</span>
             </DialogTitle>
             {selectedSchedule && (
-              <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+              <DialogDescription className="text-lg text-gray-600">
                 <div className="space-y-2 mt-4">
                   <p>
                     <strong>Employé :</strong> {selectedSchedule.employee_name}
@@ -435,10 +435,10 @@ export function WorkScheduleManager() {
                     <Badge
                       className={`ml-2 ${
                         selectedSchedule.status === "confirmed"
-                          ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"
+                          ? "bg-green-100 text-green-800"
                           : selectedSchedule.status === "completed"
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400"
-                            : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-amber-100 text-amber-800"
                       }`}
                     >
                       {selectedSchedule.status === "confirmed"
@@ -456,14 +456,14 @@ export function WorkScheduleManager() {
             <Button
               variant="outline"
               onClick={() => setShowDetailsDialog(false)}
-              className="text-lg px-6 bg-transparent"
+              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50"
             >
               Fermer
             </Button>
             {selectedSchedule && selectedSchedule.status === "scheduled" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "confirmed")}
-                className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 text-lg px-6"
+                className="bg-green-600 hover:bg-green-700 text-white text-lg px-6"
               >
                 ✅ Confirmer
               </Button>
@@ -471,7 +471,7 @@ export function WorkScheduleManager() {
             {selectedSchedule && selectedSchedule.status === "confirmed" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "completed")}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-lg px-6"
+                className="bg-red-600 hover:bg-red-700 text-white text-lg px-6"
               >
                 🏁 Marquer terminé
               </Button>
@@ -480,7 +480,7 @@ export function WorkScheduleManager() {
               <Button
                 onClick={() => deleteSchedule(selectedSchedule.id)}
                 variant="outline"
-                className="border-2 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-lg px-6"
+                className="border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-lg px-6"
               >
                 🗑️ Supprimer
               </Button>

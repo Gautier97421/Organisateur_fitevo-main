@@ -127,22 +127,22 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl bg-white dark:bg-gray-800 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+          <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
             <span className="text-3xl">💰</span>
             <span>Fiche de Caisse - {getPeriodText()}</span>
           </DialogTitle>
-          <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
+          <DialogDescription className="text-lg text-gray-600">
             Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Détail des pièces et billets */}
-          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <Card className="bg-red-50 border-red-200">
             <CardHeader>
-              <CardTitle className="text-lg text-gray-900 dark:text-gray-100">
+              <CardTitle className="text-lg text-gray-900">
                 💰 Détail des pièces et billets
               </CardTitle>
             </CardHeader>
@@ -150,20 +150,20 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
               <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
                 {Object.entries(coinLabels).map(([value, label]) => (
                   <div key={value} className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</Label>
+                    <Label className="text-sm font-medium text-gray-700">{label}</Label>
                     <Input
                       type="number"
                       min="0"
                       value={coinCounts[value as keyof typeof coinCounts]}
                       onChange={(e) => updateCoinCount(value, Number.parseInt(e.target.value) || 0)}
-                      className="text-center border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="text-center border-2 rounded-xl bg-white text-gray-900"
                     />
                   </div>
                 ))}
               </div>
-              <div className="mt-4 p-4 bg-green-100 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+              <div className="mt-4 p-4 bg-green-100 rounded-xl border border-green-200">
                 <div className="text-center">
-                  <span className="text-lg font-bold text-green-800 dark:text-green-400">
+                  <span className="text-lg font-bold text-green-800">
                     Total calculé : {total.toFixed(2)} €
                   </span>
                 </div>
@@ -174,7 +174,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
           {/* Montant total de la caisse */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label className="text-lg font-medium text-gray-900 dark:text-gray-100">💵 Total de la caisse</Label>
+              <Label className="text-lg font-medium text-gray-900">💵 Total de la caisse</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -183,23 +183,23 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
                   setFormData((prev) => ({ ...prev, total_register: Number.parseFloat(e.target.value) || 0 }))
                 }
                 placeholder="0.00"
-                className="text-lg border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className="text-lg border-2 rounded-xl bg-white text-gray-900"
               />
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600">
                 Montant total présent dans la caisse (incluant les ventes)
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-lg font-medium text-gray-900 dark:text-gray-100">💸 Montant liquide compté</Label>
+              <Label className="text-lg font-medium text-gray-900">💸 Montant liquide compté</Label>
               <Input
                 type="number"
                 step="0.01"
                 value={total.toFixed(2)}
                 readOnly
-                className="text-lg border-2 rounded-xl bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                className="text-lg border-2 rounded-xl bg-gray-100 text-gray-900"
               />
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600">
                 Calculé automatiquement à partir du détail ci-dessus
               </p>
             </div>
@@ -208,17 +208,17 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
           {/* Différence */}
           {formData.total_register > 0 && (
             <Card
-              className={`${Math.abs(total - formData.total_register) > 0.01 ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"}`}
+              className={`${Math.abs(total - formData.total_register) > 0.01 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}
             >
               <CardContent className="p-4">
                 <div className="text-center">
                   <span
-                    className={`text-lg font-bold ${Math.abs(total - formData.total_register) > 0.01 ? "text-red-800 dark:text-red-400" : "text-green-800 dark:text-green-400"}`}
+                    className={`text-lg font-bold ${Math.abs(total - formData.total_register) > 0.01 ? "text-red-800" : "text-green-800"}`}
                   >
                     Différence : {(total - formData.total_register).toFixed(2)} €
                   </span>
                   {Math.abs(total - formData.total_register) > 0.01 && (
-                    <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    <p className="text-sm text-red-600 mt-1">
                       ⚠️ Il y a une différence entre le montant compté et le total de la caisse
                     </p>
                   )}
@@ -229,19 +229,19 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label className="text-lg font-medium text-gray-900 dark:text-gray-100">📝 Notes (optionnel)</Label>
+            <Label className="text-lg font-medium text-gray-900">📝 Notes (optionnel)</Label>
             <Textarea
               value={formData.notes}
               onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
               placeholder="Remarques, incidents, observations..."
-              className="text-lg border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="text-lg border-2 rounded-xl bg-white text-gray-900"
               rows={3}
             />
           </div>
         </div>
 
         <DialogFooter className="flex space-x-3">
-          <Button variant="outline" onClick={onClose} className="text-lg px-6 bg-transparent">
+          <Button variant="outline" onClick={onClose} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white">
             ❌ Annuler
           </Button>
           <Button
