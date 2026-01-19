@@ -38,6 +38,7 @@ export function LoginForm() {
       }
 
       // Stocker les informations de l'utilisateur
+      localStorage.setItem("userId", data.user.id)
       localStorage.setItem("userEmail", data.user.email)
       localStorage.setItem("userName", data.user.name)
       localStorage.setItem("userRole", data.user.role)

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronUp, ChevronDown, Building, AlertCircle } from "lucide-react"
-import { supabase, type Task, type Gym } from "@/lib/api-client"
+import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
 export function TaskManager() {
@@ -19,11 +19,17 @@ export function TaskManager() {
   const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
   const [showForm, setShowForm] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [newTask, setNewTask] = useState({
+  const [newTask, setNewTask] = useState<{
+    title: string
+    description: string
+    type: "checkbox" | "text" | "qcm"
+    options: string[]
+    required: boolean
+  }>({
     title: "",
     description: "",
-    type: "checkbox" as const,
-    options: [] as string[],
+    type: "checkbox",
+    options: [],
     required: true,
   })
 
@@ -85,13 +91,13 @@ export function TaskManager() {
     }
   }, [selectedGym])
 
-  // Rafraîchissement automatique toutes les 5 secondes
+  // Rafraîchissement automatique toutes les 15 secondes
   useAutoRefresh(() => {
     loadGyms()
     if (selectedGym) {
       loadTasks()
     }
-  }, 5000, [selectedGym])
+  }, 15000, [selectedGym])
 
   const getCurrentTasks = () => {
     return tasks.filter((task) => task.period === activePeriod)
@@ -102,7 +108,9 @@ export function TaskManager() {
 
     try {
       const currentTasks = getCurrentTasks()
-      const maxOrder = Math.max(...currentTasks.map((t) => t.order_index), 0)
+      const maxOrder = currentTasks.length > 0 
+        ? Math.max(...currentTasks.map((t) => t.order_index || 0)) 
+        : 0
       const userId = localStorage.getItem("userId")
       
       if (!userId) {
@@ -299,7 +307,7 @@ export function TaskManager() {
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
-              🌅 Matin ({getPeriodCount("matin")} tâches)
+              Matin ({getPeriodCount("matin")} tâches)
             </Button>
             <Button
               variant={activePeriod === "aprem" ? "default" : "outline"}
@@ -310,7 +318,7 @@ export function TaskManager() {
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
-              🌇 Après-midi ({getPeriodCount("aprem")} tâches)
+              Après-midi ({getPeriodCount("aprem")} tâches)
             </Button>
             <Button
               variant={activePeriod === "journee" ? "default" : "outline"}
@@ -321,7 +329,7 @@ export function TaskManager() {
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white"
               }`}
             >
-              🌞 Journée ({getPeriodCount("journee")} tâches)
+              Journée ({getPeriodCount("journee")} tâches)
             </Button>
           </div>
 
@@ -331,7 +339,7 @@ export function TaskManager() {
               <CardHeader className="bg-red-600 text-white rounded-t-xl">
                 <CardTitle className="text-xl">
                   Ajouter une tâche à {selectedGymName} -{" "}
-                  {activePeriod === "matin" ? "🌅 Matin" : activePeriod === "aprem" ? "🌇 Après-midi" : "🌞 Journée"}
+                  {activePeriod === "matin" ? "Matin" : activePeriod === "aprem" ? "Après-midi" : "Journée"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 p-8">
@@ -417,10 +425,10 @@ export function TaskManager() {
               className="text-2xl font-semibold text-gray-900"
             >
               {activePeriod === "matin"
-                ? "🌅 Tâches du Matin"
+                ? "Tâches du Matin"
                 : activePeriod === "aprem"
-                  ? "🌇 Tâches de l'Après-midi"
-                  : "🌞 Tâches de la Journée"}{" "}
+                  ? "Tâches de l'Après-midi"
+                  : "Tâches de la Journée"}{" "}
               - {selectedGymName}
             </h3>
 

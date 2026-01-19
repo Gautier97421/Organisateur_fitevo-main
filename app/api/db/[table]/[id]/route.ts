@@ -133,7 +133,7 @@ export async function PUT(
     
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
-    console.error(`Erreur PUT /${table}/${id}:`, error)
+    console.error('Erreur PUT:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
@@ -155,7 +155,7 @@ export async function DELETE(
     
     return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
   } catch (error: any) {
-    console.error(`Erreur DELETE /${table}/${id}:`, error)
+    console.error('Erreur DELETE:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

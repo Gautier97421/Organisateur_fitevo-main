@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Trash2, Check, GripVertical } from "lucide-react"
+import { Trash2, Check, GripVertical, X } from "lucide-react"
 
 interface InstructionItem {
   id: number

@@ -87,35 +87,34 @@ export function EmployeeManager() {
     loadData()
   }, [])
 
-  // Rafraîchissement automatique toutes les 5 secondes
-  useAutoRefresh(loadData, 5000)
+  // Rafraîchissement automatique toutes les 15 secondes
+  useAutoRefresh(loadData, 15000)
 
   const addEmployee = async () => {
     if (!newEmployee.name || !newEmployee.email) return
 
     try {
-      const { data, error } = await supabase
-        .from("employees")
-        .insert([
-          {
+      const response = await fetch('/api/db/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
             name: newEmployee.name,
             email: newEmployee.email,
+            password: 'temppass123', // Mot de passe temporaire
+            role: 'employee',
             remote_work_enabled: newEmployee.remoteWork,
-          },
-        ])
-        .select()
+            active: true
+          }
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error('Erreur lors de l\'ajout')
 
-      if (data && data[0] && newEmployee.gymIds.length > 0) {
-        // Assigner les salles
-        const gymAssignments = newEmployee.gymIds.map((gymId) => ({
-          employee_id: data[0].id,
-          gym_id: gymId,
-        }))
-
-        await supabase.from("employee_gyms").insert(gymAssignments)
-      }
+      const result = await response.json()
+      
+      // TODO: Gérer les assignations de salles si nécessaire
+      // if (result.data && newEmployee.gymIds.length > 0) { ... }
 
       await loadData() // Recharger pour avoir les relations
       setNewEmployee({ name: "", email: "", gymIds: [], remoteWork: false })
@@ -136,21 +135,11 @@ export function EmployeeManager() {
     if (!selectedUser) return
 
     try {
-      let table = ""
-      switch (selectedUser.type) {
-        case "employee":
-          table = "employees"
-          break
-        case "admin":
-          table = "admins"
-          break
-        case "network":
-          table = "allowed_networks"
-          break
-      }
+      const response = await fetch(`/api/db/users/${selectedUser.id}`, {
+        method: 'DELETE'
+      })
 
-      const { error } = await supabase.from(table).delete().eq("id", selectedUser.id)
-      if (error) throw error
+      if (!response.ok) throw new Error('Erreur lors de la suppression')
 
       if (selectedUser.type === "employee") {
         setEmployees(employees.filter((emp) => emp.id !== selectedUser.id))

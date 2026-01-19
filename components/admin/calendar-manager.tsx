@@ -108,14 +108,14 @@ export function CalendarManager() {
     }
   }, [currentDate, calendarView, selectedMonth])
 
-  // Rafraîchissement automatique toutes les 5 secondes
+  // Rafraîchissement automatique toutes les 15 secondes
   useAutoRefresh(() => {
     if (calendarView === "year") {
       loadEvents()
     } else if (selectedMonth) {
       loadMonthEvents()
     }
-  }, 5000, [calendarView, selectedMonth])
+  }, 15000, [calendarView, selectedMonth])
 
   const addEvent = async () => {
     if (!newEvent.title || !selectedDate) return
@@ -124,18 +124,21 @@ export function CalendarManager() {
       const userEmail = localStorage.getItem("userEmail") || ""
       const userName = localStorage.getItem("userName") || ""
 
+      const userId = localStorage.getItem("userId")
+      
       const { data, error } = await supabase
         .from("calendar_events")
         .insert([
           {
             title: newEvent.title,
             description: newEvent.description,
-            event_date: selectedDate.toISOString().split("T")[0],
+            event_date: selectedDate.toISOString(), // DateTime ISO-8601 complet
             event_time: newEvent.event_time || null,
             duration_minutes: newEvent.duration_minutes,
             created_by_email: userEmail,
             created_by_name: userName,
-            status: "approved", // Les admins créent des événements directement approuvés
+            status: "approved",
+            user_id: userId,
           },
         ])
         .select()

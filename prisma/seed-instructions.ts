@@ -6,7 +6,7 @@ async function main() {
   console.log('🌱 Création des instructions de nouveau adhérent...')
 
   // Vérifier si des instructions existent déjà
-  const existing = await prisma.newMemberInstructions.findFirst()
+  const existing = await prisma.newMemberInstructionItem.findFirst()
   
   if (existing) {
     console.log('ℹ️  Les instructions existent déjà')
@@ -14,9 +14,10 @@ async function main() {
   }
 
   // Créer les instructions par défaut
-  await prisma.newMemberInstructions.create({
+  await prisma.newMemberInstructionItem.create({
     data: {
-      instructions: `Étapes pour accueillir un nouveau adhérent :
+      title: 'Accueillir un nouveau adhérent',
+      description: `Étapes pour accueillir un nouveau adhérent :
 
 1. 📝 INSCRIPTION
    - Demander une pièce d'identité
@@ -51,8 +52,8 @@ async function main() {
    - Présenter le personnel disponible en cas de problème
 
 N'hésitez pas à poser des questions si vous avez oublié une étape !`,
-      whatsappLink: '',
-      updatedBy: 'Système'
+      orderIndex: 1,
+      isActive: true
     }
   })
 
