@@ -1,15 +1,16 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, MapPin, Building, Trash2 } from "lucide-react"
+import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download } from "lucide-react"
 import { supabase, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { QRCodeDisplay } from "./qr-code-display"
 import {
   Dialog,
   DialogContent,
@@ -21,18 +22,32 @@ import {
 
 export function GymManager() {
   const [gyms, setGyms] = useState<Gym[]>([])
+  const [siteUrl, setSiteUrl] = useState("")
   const [newGym, setNewGym] = useState({ 
     name: "", 
     location: "", 
     description: "",
     wifi_restricted: false,
     wifi_ssid: "",
-    ip_address: ""
+    ip_address: "",
+    qr_code_enabled: false
   })
   const [isAddingGym, setIsAddingGym] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedGym, setSelectedGym] = useState<{ id: string; name: string } | null>(null)
+  const [isEditingGym, setIsEditingGym] = useState(false)
+  const [editGym, setEditGym] = useState<{
+    id: string
+    name: string
+    location: string
+    description?: string
+    wifi_restricted: boolean
+    wifi_ssid: string
+    ip_address: string
+    is_active: boolean
+    qr_code_enabled: boolean
+  } | null>(null)
 
   const loadGyms = async () => {
     try {
@@ -43,22 +58,39 @@ export function GymManager() {
       const result = await response.json()
       const gymsData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
       setGyms(gymsData)
-    } catch (error) {
-      console.error("Erreur lors du chargement des salles:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  const loadSiteUrl = async () => {
+    try {
+      const response = await fetch('/api/db/app_config?key=site_url')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.data && result.data.length > 0) {
+          setSiteUrl(result.data[0].value || "")
+        }
+      }
+    } catch (error) {
+      // Erreur silencieuse
+    }
+  }
+
   useEffect(() => {
     loadGyms()
+    loadSiteUrl()
   }, [])
 
-  // Rafraîchissement automatique toutes les 5 secondes
-  useAutoRefresh(loadGyms, 5000)
+  // Rafraîchir manuellement après les modifications (désactiver auto-refresh: 0)
+  useAutoRefresh(loadGyms, 0)
 
   const addGym = async () => {
     if (!newGym.name || !newGym.location) return
+    if (newGym.wifi_restricted && (!newGym.wifi_ssid || !newGym.ip_address)) {
+      alert("Veuillez renseigner le SSID et l'adresse IP pour un réseau restreint.")
+      return
+    }
 
     try {
       const response = await fetch('/api/db/gyms', {
@@ -71,6 +103,7 @@ export function GymManager() {
             wifi_restricted: newGym.wifi_restricted,
             wifi_ssid: newGym.wifi_ssid || null,
             ip_address: newGym.ip_address || null,
+            qr_code_enabled: newGym.qr_code_enabled,
             is_active: true
           }
         })
@@ -92,12 +125,12 @@ export function GymManager() {
         description: "",
         wifi_restricted: false,
         wifi_ssid: "",
-        ip_address: ""
+        ip_address: "",
+        qr_code_enabled: false
       })
       setIsAddingGym(false)
       alert("✅ Salle ajoutée avec succès !")
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
       alert(`Erreur lors de l'ajout de la salle:\n${error}`)
     }
   }
@@ -105,6 +138,61 @@ export function GymManager() {
   const confirmDelete = (id: string, name: string) => {
     setSelectedGym({ id, name })
     setShowDeleteDialog(true)
+  }
+
+  const openEditGym = (gym: Gym) => {
+    setEditGym({
+      id: gym.id,
+      name: gym.name,
+      location: gym.location || "",
+      description: gym.description || "",
+      wifi_restricted: !!gym.wifi_restricted,
+      wifi_ssid: gym.wifi_ssid || "",
+      ip_address: gym.ip_address || "",
+      is_active: !!gym.is_active,
+      qr_code_enabled: !!gym.qr_code_enabled,
+    })
+    setIsEditingGym(true)
+  }
+
+  const updateGym = async () => {
+    if (!editGym) return
+    if (!editGym.name || !editGym.location) return
+    if (editGym.wifi_restricted && (!editGym.wifi_ssid || !editGym.ip_address)) {
+      alert("Veuillez renseigner le SSID et l'adresse IP pour un réseau restreint.")
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/db/gyms/${editGym.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editGym.name,
+          location: editGym.location,
+          wifi_restricted: editGym.wifi_restricted,
+          wifi_ssid: editGym.wifi_ssid || null,
+          ip_address: editGym.ip_address || null,
+          qr_code_enabled: editGym.qr_code_enabled,
+          is_active: editGym.is_active,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors de la mise à jour")
+      }
+
+      const result = await response.json()
+      if (result.data) {
+        setGyms(gyms.map((g) => (g.id === editGym.id ? result.data : g)))
+      }
+      setIsEditingGym(false)
+      setEditGym(null)
+      alert("✅ Salle modifiée avec succès !")
+    } catch (error) {
+      alert(`Erreur lors de la modification: ${error}`)
+    }
   }
 
   const executeDelete = async () => {
@@ -125,7 +213,6 @@ export function GymManager() {
       setSelectedGym(null)
       alert("✅ Salle supprimée avec succès")
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
       alert(`Erreur lors de la suppression: ${error}`)
     }
   }
@@ -148,7 +235,6 @@ export function GymManager() {
 
       setGyms(gyms.map((g) => (g.id === id ? { ...g, is_active: !g.is_active } : g)))
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
       alert(`Erreur: ${error}`)
     }
   }
@@ -235,7 +321,19 @@ export function GymManager() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="gym-ip">Adresse IP</Label>
+                    <Label htmlFor="gym-ip" className="flex items-center gap-2">
+                      Adresse IP
+                      <a
+                       
+                        href="https://whatismyipaddress.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Trouver votre adresse IP"
+                      > Lien pour trouver votre IP
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Label>
                     <Input
                       id="gym-ip"
                       value={newGym.ip_address}
@@ -248,25 +346,48 @@ export function GymManager() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="gym-description">Description (optionnelle)</Label>
-              <Textarea
-                id="gym-description"
-                value={newGym.description}
-                onChange={(e) => setNewGym({ ...newGym, description: e.target.value })}
-                placeholder="Description de la salle, équipements, spécialités..."
-                className="border-2 rounded-xl"
-                rows={3}
-              />
+            <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newGym.qr_code_enabled}
+                  onChange={(e) => setNewGym({ ...newGym, qr_code_enabled: e.target.checked })}
+                  className="w-5 h-5 rounded border-2"
+                />
+                <span className="font-semibold text-gray-700 flex items-center gap-2">
+                  <QrCode className="h-5 w-5" />
+                  Générer un QR Code pour cette salle
+                </span>
+              </label>
+              {newGym.qr_code_enabled && (
+                <p className="text-sm text-gray-600 ml-8">
+                  Le QR Code sera généré automatiquement après la création de la salle.
+                  Le super admin configure l'URL globale du site.
+                </p>
+              )}
             </div>
+
             <div className="flex space-x-2">
-              <Button onClick={addGym} className="bg-red-600 hover:bg-red-700 rounded-xl">
+              <Button
+                onClick={addGym}
+                className="bg-red-600 hover:bg-red-700 rounded-xl"
+                disabled={
+                  !newGym.name ||
+                  !newGym.location ||
+                  (newGym.wifi_restricted && (!newGym.wifi_ssid || !newGym.ip_address))
+                }
+              >
                 Ajouter
               </Button>
               <Button variant="outline" onClick={() => setIsAddingGym(false)} className="border-2 rounded-xl">
                 Annuler
               </Button>
             </div>
+            {newGym.wifi_restricted && (!newGym.wifi_ssid || !newGym.ip_address) && (
+              <p className="text-sm text-red-600">
+                Le SSID et l'adresse IP sont obligatoires si le réseau est restreint.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -320,6 +441,14 @@ export function GymManager() {
                     </div>
                   </div>
                 </div>
+                
+                {/* Affichage du QR Code si activé */}
+                {gym.qr_code_enabled && (
+                  <div className="mt-4">
+                    <QRCodeDisplay gymId={gym.id} gymName={gym.name} siteUrl={siteUrl} />
+                  </div>
+                )}
+                
                 <div className="flex space-x-2">
                   <Button
                     variant="outline"
@@ -328,6 +457,15 @@ export function GymManager() {
                     className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
                   >
                     {gym.is_active ? "Désactiver" : "Activer"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditGym(gym)}
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Modifier
                   </Button>
                   <Button
                     variant="outline"
@@ -343,6 +481,127 @@ export function GymManager() {
           </Card>
         ))}
       </div>
+
+      {/* Dialog de modification */}
+      <Dialog open={isEditingGym} onOpenChange={setIsEditingGym}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Modifier la salle</DialogTitle>
+            <DialogDescription>Mettre à jour les informations de la salle.</DialogDescription>
+          </DialogHeader>
+          {editGym && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nom de la salle *</Label>
+                  <Input
+                    value={editGym.name}
+                    onChange={(e) => setEditGym({ ...editGym, name: e.target.value })}
+                    className="border-2 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Adresse *</Label>
+                  <Input
+                    value={editGym.location}
+                    onChange={(e) => setEditGym({ ...editGym, location: e.target.value })}
+                    className="border-2 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-2 pt-2 border-t-2 border-gray-200">
+                <div className="flex items-center space-x-3 mb-4">
+                  <input
+                    type="checkbox"
+                    checked={editGym.wifi_restricted}
+                    onChange={(e) => setEditGym({ ...editGym, wifi_restricted: e.target.checked })}
+                    className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                  />
+                  <Label className="text-lg font-semibold text-gray-900 cursor-pointer">
+                    📶 Restreindre l'accès à cette salle via WiFi
+                  </Label>
+                </div>
+
+                {editGym.wifi_restricted && (
+                  <div className="grid grid-cols-2 gap-4 ml-7">
+                    <div className="space-y-2">
+                      <Label>Nom du réseau (SSID)</Label>
+                      <Input
+                        value={editGym.wifi_ssid}
+                        onChange={(e) => setEditGym({ ...editGym, wifi_ssid: e.target.value })}
+                        className="border-2 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Adresse IP
+                        <a
+                          href="https://whatismyipaddress.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Trouver votre adresse IP"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Label>
+                      <Input
+                        value={editGym.ip_address}
+                        onChange={(e) => setEditGym({ ...editGym, ip_address: e.target.value })}
+                        className="border-2 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {editGym.wifi_restricted && (!editGym.wifi_ssid || !editGym.ip_address) && (
+                <p className="text-sm text-red-600">
+                  Le SSID et l'adresse IP sont obligatoires si le réseau est restreint.
+                </p>
+              )}
+
+              <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editGym.qr_code_enabled}
+                    onChange={(e) => setEditGym({ ...editGym, qr_code_enabled: e.target.checked })}
+                    className="w-5 h-5 rounded border-2"
+                  />
+                  <span className="font-semibold text-gray-700 flex items-center gap-2">
+                    <QrCode className="h-5 w-5" />
+                    Générer un QR Code pour cette salle
+                  </span>
+                </label>
+                {editGym.qr_code_enabled && (
+                  <p className="text-sm text-gray-600 ml-8">
+                    Le QR Code est généré automatiquement avec l'URL configurée par le super admin.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditingGym(false)} className="border-2 rounded-xl">
+              Annuler
+            </Button>
+            <Button
+              onClick={updateGym}
+              className="bg-red-600 hover:bg-red-700 rounded-xl"
+              disabled={
+                !editGym ||
+                !editGym.name ||
+                !editGym.location ||
+                (editGym.wifi_restricted && (!editGym.wifi_ssid || !editGym.ip_address))
+              }
+            >
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de confirmation de suppression */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

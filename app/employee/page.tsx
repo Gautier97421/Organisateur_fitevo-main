@@ -91,7 +91,7 @@ export default function EmployeePage() {
           setCurrentView('tasks')
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification de la session:', error)
+        // Erreur silencieuse
       }
     }
 
@@ -130,7 +130,7 @@ export default function EmployeePage() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des instructions:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -221,7 +221,7 @@ export default function EmployeePage() {
         localStorage.setItem(`employee_${userId}_period`, pendingPeriod)
         localStorage.setItem(`employee_${userId}_sessionDate`, today)
       } catch (error) {
-        console.error('Erreur sauvegarde période:', error)
+        // Erreur silencieuse
       }
       
       setPendingPeriod(null)

@@ -34,6 +34,10 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.location = mapped.address
       delete mapped.address
     }
+    if (mapped.isActive !== undefined) {
+      mapped.is_active = mapped.isActive
+      delete mapped.isActive
+    }
     // Mapper les champs WiFi de camelCase vers snake_case pour le client
     if (mapped.wifiRestricted !== undefined) {
       mapped.wifi_restricted = mapped.wifiRestricted
@@ -46,6 +50,11 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.ipAddress !== undefined) {
       mapped.ip_address = mapped.ipAddress
       delete mapped.ipAddress
+    }
+    // Mapper qrCodeEnabled de camelCase vers snake_case
+    if (mapped.qrCodeEnabled !== undefined) {
+      mapped.qr_code_enabled = mapped.qrCodeEnabled
+      delete mapped.qrCodeEnabled
     }
   }
   
@@ -240,6 +249,7 @@ export async function POST(
           if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
           if (camelKey === 'wifiSsid') camelKey = 'wifiSsid'
           if (camelKey === 'ipAddress') camelKey = 'ipAddress'
+          if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
         }
         
         // Mapper is_active -> active pour users (employees/admins), mais isActive pour gyms et autres tables
@@ -357,15 +367,16 @@ export async function PUT(
         camelKey = 'address'
       }
       
-      // Mapper les champs WiFi pour les gyms
+      // Mapper les champs WiFi et QR pour les gyms
       if (table === 'gyms') {
         if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
         if (camelKey === 'wifiSsid') camelKey = 'wifiSsid'
         if (camelKey === 'ipAddress') camelKey = 'ipAddress'
+        if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
       }
       
-      // Mapper is_active → isActive pour new_member_instruction_items
-      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config') {
+      // Mapper is_active → isActive pour new_member_instruction_items, ou → active pour users
+      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config' && table !== 'gyms') {
         camelKey = 'active'
       }
       
@@ -411,7 +422,7 @@ export async function PUT(
   }
 }
 
-// PATCH - Mettre à jour un seul enregistrement par ID
+// PATCH - Mettre à jour un seul enregistrement par ID ou email
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
@@ -423,16 +434,25 @@ export async function PATCH(
     const body = await request.json()
     const prismaModel = tableMapping[table] || table
     
-    if (!id) {
+    // Accepter email dans le body pour les users
+    const email = body.email
+    
+    if (!id && !email) {
       return NextResponse.json(
-        { data: null, error: { message: 'ID manquant' } },
+        { data: null, error: { message: 'ID ou email manquant' } },
         { status: 400 }
       )
     }
     
+    // Construire le where selon ce qui est fourni
+    const where: any = id ? { id: parseInt(id) } : { email }
+    
     // Convertir snake_case vers camelCase
     const converted: any = {}
     for (const [key, value] of Object.entries(body)) {
+      // Ignorer l'email dans les données à updater
+      if (key === 'email') continue
+      
       let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
       
       // Mapper location → address pour les gyms
@@ -440,15 +460,16 @@ export async function PATCH(
         camelKey = 'address'
       }
       
-      // Mapper les champs WiFi pour les gyms
+      // Mapper les champs WiFi et QR pour les gyms
       if (table === 'gyms') {
         if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
         if (camelKey === 'wifiSsid') camelKey = 'wifiSsid'
         if (camelKey === 'ipAddress') camelKey = 'ipAddress'
+        if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
       }
       
-      // Mapper is_active → isActive pour new_member_instruction_items
-      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config') {
+      // Mapper is_active → isActive pour new_member_instruction_items, ou → active pour users
+      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config' && table !== 'gyms') {
         camelKey = 'active'
       }
       
@@ -474,7 +495,7 @@ export async function PATCH(
     }
     
     const result = await (prisma as any)[prismaModel].update({
-      where: { id: parseInt(id) },
+      where,
       data: converted,
     })
     

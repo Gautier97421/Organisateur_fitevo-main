@@ -30,6 +30,7 @@ export interface Gym {
   wifi_restricted?: boolean;
   wifi_ssid?: string;
   ip_address?: string;
+  qr_code_enabled?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -118,39 +119,30 @@ const createQueryBuilder = (table: string) => {
   return builder;
 };
 
-// Client API qui remplace Supabase
-export const supabase = {
+// Client API pour PostgreSQL via API routes
+export const apiClient = {
   from: (table: string) => ({
     select: (columns?: string) => createQueryBuilder(table),
     
-    insert: (data: any) => {
-      const insertPromise = (async () => {
-        try {
-          const response = await fetch(`/api/db/${table}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data }),
-          });
-          
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || `HTTP ${response.status}`);
-          }
-          
-          const result = await response.json();
-          return result;
-        } catch (error: any) {
-          console.error(`Erreur insert API sur ${table}:`, error);
-          return { data: null, error: { message: error.message } };
+    insert: async (data: any) => {
+      try {
+        const response = await fetch(`/api/db/${table}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data }),
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error?.message || `HTTP ${response.status}`);
         }
-      })();
-      
-      return {
-        select: () => ({
-          then: (resolve: any) => insertPromise.then(resolve),
-        }),
-        then: (resolve: any) => insertPromise.then(resolve),
-      };
+        
+        const result = await response.json();
+        return result;
+      } catch (error: any) {
+        console.error(`Erreur insert API sur ${table}:`, error);
+        return { data: null, error: { message: error.message } };
+      }
     },
     
     update: (data: any) => ({
@@ -215,3 +207,6 @@ export const supabase = {
       }),
   },
 };
+
+// Alias pour compatibilité (à supprimer progressivement)
+export const supabase = apiClient;

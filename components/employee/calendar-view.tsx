@@ -80,7 +80,7 @@ export function CalendarView() {
       if (error) throw error
       setEvents(data || [])
     } catch (error) {
-      console.error("Erreur lors du chargement des événements du mois:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -125,7 +125,6 @@ export function CalendarView() {
             created_by_name: userName,
           },
         ])
-        .select()
 
       if (error) throw error
 

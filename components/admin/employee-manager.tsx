@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save } from "lucide-react"
+import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode } from "lucide-react"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -28,14 +28,17 @@ export function EmployeeManager() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
   const [whatsappLink, setWhatsappLink] = useState("")
+  const [siteUrl, setSiteUrl] = useState("")
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false)
+  const [isSavingSiteUrl, setIsSavingSiteUrl] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState<{
     id: string
     name: string
-    type: "employee" | "admin"
+    type: "employee" | "admin" | "network"
     isSuperAdmin?: boolean
   } | null>(null)
 
@@ -43,31 +46,19 @@ export function EmployeeManager() {
     try {
       // Charger les employés
       const { data: employeesData, error: employeesError } = await supabase.from("employees").select("*").order("name")
-
-      if (employeesError) {
-        console.error("Erreur employés:", employeesError)
-      } else {
-        console.log("Employés chargés:", employeesData)
+      if (!employeesError) {
         setEmployees(employeesData || [])
       }
 
       // Charger les admins
       const { data: adminsData, error: adminsError } = await supabase.from("admins").select("*").order("name")
-
-      if (adminsError) {
-        console.error("Erreur admins:", adminsError)
-      } else {
-        console.log("Admins chargés:", adminsData)
+      if (!adminsError) {
         setAdmins(adminsData || [])
       }
 
       // Charger les salles
       const { data: gymsData, error: gymsError } = await supabase.from("gyms").select("*").order("name")
-
-      if (gymsError) {
-        console.error("Erreur salles:", gymsError)
-      } else {
-        console.log("Salles chargées:", gymsData)
+      if (!gymsError) {
         setGyms(gymsData || [])
       }
 
@@ -76,8 +67,12 @@ export function EmployeeManager() {
       if (whatsappData) {
         setWhatsappLink(whatsappData.value || "")
       }
-    } catch (error) {
-      console.error("Erreur lors du chargement:", error)
+
+      // Charger l'URL du site
+      const { data: siteUrlData } = await supabase.from("app_config").select("*").eq("key", "site_url").single()
+      if (siteUrlData) {
+        setSiteUrl(siteUrlData.value || "")
+      }
     } finally {
       setIsLoading(false)
     }
@@ -85,10 +80,14 @@ export function EmployeeManager() {
 
   useEffect(() => {
     loadData()
+    // Vérifier si l'utilisateur est super admin
+    const userRole = localStorage.getItem("userRole")
+    const isSuperAdminFlag = localStorage.getItem("isSuperAdmin") === "true"
+    setIsSuperAdmin(userRole === "superadmin" || isSuperAdminFlag)
   }, [])
 
-  // Rafraîchissement automatique toutes les 5 secondes
-  useAutoRefresh(loadData, 5000)
+  // Désactiver auto-refresh pour améliorer les performances (interval = 0)
+  useAutoRefresh(loadData, 0)
 
   const addEmployee = async () => {
     if (!newEmployee.name || !newEmployee.email) return
@@ -103,7 +102,6 @@ export function EmployeeManager() {
             remote_work_enabled: newEmployee.remoteWork,
           },
         ])
-        .select()
 
       if (error) throw error
 
@@ -122,7 +120,6 @@ export function EmployeeManager() {
       setIsAddingEmployee(false)
       alert("✅ Employé ajouté avec succès !")
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
       alert("Erreur lors de l'ajout de l'employé")
     }
   }
@@ -164,7 +161,6 @@ export function EmployeeManager() {
         `✅ ${selectedUser.type === "employee" ? "Employé" : "Administrateur"} supprimé avec succès`,
       )
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
       alert("Erreur lors de la suppression")
     }
   }
@@ -206,7 +202,6 @@ export function EmployeeManager() {
       setShowStatusDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
       alert("Erreur lors de la mise à jour")
     }
   }
@@ -226,10 +221,47 @@ export function EmployeeManager() {
 
       alert("Lien WhatsApp enregistré avec succès !")
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
       alert("Erreur lors de la sauvegarde")
     } finally {
       setIsSavingWhatsapp(false)
+    }
+  }
+
+  const saveSiteUrl = async () => {
+    setIsSavingSiteUrl(true)
+    try {
+      const userName = localStorage.getItem("userName") || "Admin"
+      
+      // Vérifier si la config existe déjà
+      const { data: existing } = await supabase
+        .from("app_config")
+        .select("*")
+        .eq("key", "site_url")
+        .single()
+
+      if (existing) {
+        await supabase
+          .from("app_config")
+          .update({
+            value: siteUrl,
+            updated_by: userName
+          })
+          .eq("key", "site_url")
+      } else {
+        await supabase
+          .from("app_config")
+          .insert({
+            key: "site_url",
+            value: siteUrl,
+            updated_by: userName
+          })
+      }
+
+      alert("URL du site enregistrée avec succès !")
+    } catch (error) {
+      alert("Erreur lors de la sauvegarde")
+    } finally {
+      setIsSavingSiteUrl(false)
     }
   }
 
@@ -322,6 +354,48 @@ export function EmployeeManager() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Section URL du site (Super Admin uniquement) */}
+      {isSuperAdmin && (
+        <Card className="border border-blue-200 bg-white">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-blue-600">
+                <QrCode className="w-5 h-5" />
+                <span className="font-medium">URL du site (pour QR Codes)</span>
+              </div>
+              <div className="flex-1 flex gap-2">
+                <Input
+                  value={siteUrl}
+                  onChange={(e) => setSiteUrl(e.target.value)}
+                  placeholder="https://votre-site.com"
+                  className="flex-1 border-gray-300 focus:border-blue-600 bg-white"
+                />
+                <Button
+                  onClick={saveSiteUrl}
+                  disabled={isSavingSiteUrl}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {isSavingSiteUrl ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Enregistrer
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-2 ml-7">
+              Cette URL sera utilisée pour générer tous les QR Codes des salles (pour le pointage des employés)
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Section Employés */}
       {activeTab === "employees" && (

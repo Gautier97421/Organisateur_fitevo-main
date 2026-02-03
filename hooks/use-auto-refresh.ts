@@ -3,16 +3,16 @@ import { useEffect, useRef, useCallback } from "react"
 /**
  * Hook pour rafraîchir automatiquement les données toutes les X secondes
  * @param callback - Fonction à appeler pour rafraîchir les données
- * @param interval - Intervalle en millisecondes (défaut: 5000ms = 5s)
+ * @param interval - Intervalle en millisecondes (défaut: 30000ms = 30s, 0 = désactivé)
  * @param dependencies - Dépendances qui déclenchent un rechargement immédiat
  */
 export function useAutoRefresh(
   callback: () => void | Promise<void>,
-  interval: number = 5000,
+  interval: number = 30000,
   dependencies: any[] = []
 ) {
-  const savedCallback = useRef<() => void | Promise<void>>()
-  const intervalId = useRef<NodeJS.Timeout>()
+  const savedCallback = useRef<() => void | Promise<void>>(callback)
+  const intervalId = useRef<NodeJS.Timeout | undefined>(undefined)
 
   // Sauvegarder la dernière callback
   useEffect(() => {
@@ -31,8 +31,10 @@ export function useAutoRefresh(
     // Appeler immédiatement au montage et quand les dépendances changent
     tick()
 
-    // Configurer l'intervalle
-    intervalId.current = setInterval(tick, interval)
+    // Configurer l'intervalle seulement si interval > 0
+    if (interval > 0) {
+      intervalId.current = setInterval(tick, interval)
+    }
 
     // Nettoyer l'intervalle au démontage
     return () => {

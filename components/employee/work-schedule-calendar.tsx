@@ -97,7 +97,7 @@ export function WorkScheduleCalendar() {
 
       setEmployees(employeesWithColors)
     } catch (error) {
-      console.error("Erreur lors du chargement des employés:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -122,7 +122,6 @@ export function WorkScheduleCalendar() {
             status: "scheduled",
           },
         ])
-        .select()
 
       if (error) throw error
 

@@ -9,11 +9,26 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronUp, ChevronDown, Building, AlertCircle } from "lucide-react"
-import { supabase, type Task, type Gym } from "@/lib/api-client"
+import { supabase, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
+// Type local pour les tâches avec tous les champs nécessaires
+interface TaskItem {
+  id: string
+  title: string
+  description?: string
+  status: string
+  period: "matin" | "aprem" | "journee"
+  order_index: number
+  gym_id: string
+  type?: string
+  options?: string[]
+  required?: boolean
+  created_at: string
+}
+
 export function TaskManager() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState<TaskItem[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [selectedGym, setSelectedGym] = useState<string>("")
   const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
@@ -22,7 +37,7 @@ export function TaskManager() {
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
-    type: "checkbox" as const,
+    type: "checkbox" as "checkbox" | "qcm" | "text",
     options: [] as string[],
     required: true,
   })
@@ -39,11 +54,9 @@ export function TaskManager() {
       if (gymsData && gymsData.length > 0) {
         setSelectedGym(gymsData[0].id)
       } else {
-        // Pas de salles, arrêter le chargement
         setIsLoading(false)
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des salles:", error)
       setIsLoading(false)
     }
   }
@@ -69,7 +82,7 @@ export function TaskManager() {
       
       setTasks(sortedTasks)
     } catch (error) {
-      console.error("Erreur lors du chargement des tâches:", error)
+      // Erreur silencieuse pour ne pas surcharger la console
     } finally {
       setIsLoading(false)
     }
@@ -85,13 +98,13 @@ export function TaskManager() {
     }
   }, [selectedGym])
 
-  // Rafraîchissement automatique toutes les 5 secondes
+  // Désactiver auto-refresh pour améliorer les performances
+  // Les données se rechargent après chaque modification
   useAutoRefresh(() => {
-    loadGyms()
     if (selectedGym) {
       loadTasks()
     }
-  }, 5000, [selectedGym])
+  }, 0, [selectedGym])
 
   const getCurrentTasks = () => {
     return tasks.filter((task) => task.period === activePeriod)
@@ -103,8 +116,22 @@ export function TaskManager() {
     try {
       const currentTasks = getCurrentTasks()
       const maxOrder = Math.max(...currentTasks.map((t) => t.order_index), 0)
-      const userId = localStorage.getItem("userId")
+      let userId = localStorage.getItem("userId")
       
+      if (!userId) {
+        const userEmail = localStorage.getItem("userEmail")
+        if (userEmail) {
+          const userResponse = await fetch(`/api/db/users?email=${encodeURIComponent(userEmail)}&single=true`)
+          if (userResponse.ok) {
+            const userResult = await userResponse.json()
+            if (userResult?.data?.id) {
+              userId = userResult.data.id
+              localStorage.setItem("userId", userId)
+            }
+          }
+        }
+      }
+
       if (!userId) {
         alert("Erreur: Utilisateur non identifié. Veuillez vous reconnecter.")
         return
@@ -149,7 +176,6 @@ export function TaskManager() {
       })
       setShowForm(false)
     } catch (error) {
-      console.error("Erreur lors de l'ajout de la tâche:", error)
       alert(`Erreur lors de l'ajout de la tâche:\n${error}`)
     }
   }
@@ -164,7 +190,6 @@ export function TaskManager() {
 
       setTasks(tasks.filter((task) => task.id !== id))
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
       alert("Erreur lors de la suppression")
     }
   }
@@ -198,7 +223,6 @@ export function TaskManager() {
       // Recharger les tâches
       loadTasks()
     } catch (error) {
-      console.error("Erreur lors du déplacement:", error)
       alert("Erreur lors du déplacement de la tâche")
     }
   }

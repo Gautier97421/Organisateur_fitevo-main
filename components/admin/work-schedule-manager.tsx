@@ -63,8 +63,6 @@ export function WorkScheduleManager() {
   const loadData = async () => {
     try {
       await Promise.all([loadSchedules(), loadEmployees()])
-    } catch (error) {
-      console.error("Erreur lors du chargement:", error)
     } finally {
       setIsLoading(false)
     }
@@ -86,7 +84,7 @@ export function WorkScheduleManager() {
       setSchedules(data || [])
       detectConflicts(data || [])
     } catch (error) {
-      console.error("Erreur lors du chargement des plannings:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -103,7 +101,7 @@ export function WorkScheduleManager() {
 
       setEmployees(employeesWithColors)
     } catch (error) {
-      console.error("Erreur lors du chargement des employés:", error)
+      // Erreur silencieuse
     }
   }
 

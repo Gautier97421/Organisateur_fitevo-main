@@ -43,6 +43,10 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.isActive = mapped.is_active
       delete mapped.is_active
     }
+    if (mapped.qr_code_enabled !== undefined) {
+      mapped.qrCodeEnabled = mapped.qr_code_enabled
+      delete mapped.qr_code_enabled
+    }
   }
   
   if (table === 'work_schedules') {
@@ -94,6 +98,10 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.is_active = mapped.isActive
       delete mapped.isActive
     }
+    if (mapped.qrCodeEnabled !== undefined) {
+      mapped.qr_code_enabled = mapped.qrCodeEnabled
+      delete mapped.qrCodeEnabled
+    }
   }
   
   if (mapped.createdAt !== undefined) {
@@ -113,8 +121,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  const { table, id } = await params
   try {
-    const { table, id } = await params
     const body = await request.json()
     
     const prismaModel = tableMapping[table] || table
@@ -143,9 +151,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  const { table, id } = await params
   try {
-    const { table, id } = await params
-    
     const prismaModel = tableMapping[table] || table
     
     // @ts-ignore - Accès dynamique au modèle Prisma

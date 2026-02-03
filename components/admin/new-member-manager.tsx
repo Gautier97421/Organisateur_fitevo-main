@@ -53,7 +53,7 @@ export function NewMemberManager() {
         setInstructions(result.data || [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des instructions:", error)
+      // Erreur silencieuse
     } finally {
       setIsLoading(false)
     }
@@ -94,7 +94,7 @@ export function NewMemberManager() {
         await loadInstructions()
       }
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
+      // Erreur silencieuse
     } finally {
       setIsSaving(false)
     }
@@ -123,7 +123,7 @@ export function NewMemberManager() {
         await loadInstructions()
       }
     } catch (error) {
-      console.error("Erreur lors de la modification:", error)
+      // Erreur silencieuse
     } finally {
       setIsSaving(false)
     }
@@ -142,7 +142,7 @@ export function NewMemberManager() {
         await loadInstructions()
       }
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
+      // Erreur silencieuse
     } finally {
       setIsSaving(false)
     }
@@ -161,7 +161,7 @@ export function NewMemberManager() {
         await loadInstructions()
       }
     } catch (error) {
-      console.error("Erreur lors du changement de statut:", error)
+      // Erreur silencieuse
     } finally {
       setIsSaving(false)
     }
@@ -200,7 +200,6 @@ export function NewMemberManager() {
       await Promise.all(updates)
       await loadInstructions()
     } catch (error) {
-      console.error("Erreur lors de la réorganisation:", error)
       await loadInstructions() // Recharger en cas d'erreur
     } finally {
       setIsSaving(false)

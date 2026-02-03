@@ -17,6 +17,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Si l'utilisateur n'a pas encore de mot de passe, rediriger vers la page de création
+    if (!user.password) {
+      return NextResponse.json(
+        { 
+          needPasswordSetup: true,
+          userId: user.id 
+        },
+        { status: 200 }
+      )
+    }
+
     // Vérification simple du mot de passe (en production, utiliser bcrypt)
     if (user.password !== password) {
       return NextResponse.json(

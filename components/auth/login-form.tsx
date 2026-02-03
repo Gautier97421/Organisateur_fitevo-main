@@ -37,7 +37,14 @@ export function LoginForm() {
         return
       }
 
+      // Si l'utilisateur doit créer son mot de passe
+      if (data.needPasswordSetup) {
+        router.push(`/create-password?email=${encodeURIComponent(email)}`)
+        return
+      }
+
       // Stocker les informations de l'utilisateur
+      localStorage.setItem("userId", data.user.id)
       localStorage.setItem("userEmail", data.user.email)
       localStorage.setItem("userName", data.user.name)
       localStorage.setItem("userRole", data.user.role)
@@ -77,8 +84,8 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mot de passe"
               className="h-12 text-base border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 bg-white text-gray-900"
-              required
             />
+            <p className="text-xs text-gray-500 mt-1">Laissez vide si première connexion</p>
           </div>
 
           {error && (

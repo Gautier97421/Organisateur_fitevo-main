@@ -73,7 +73,7 @@ export function CalendarManager() {
       if (error) throw error
       setEvents(data || [])
     } catch (error) {
-      console.error("Erreur lors du chargement des événements:", error)
+      // Erreur silencieuse
     } finally {
       setIsLoading(false)
     }
@@ -96,7 +96,7 @@ export function CalendarManager() {
       if (error) throw error
       setEvents(data || [])
     } catch (error) {
-      console.error("Erreur lors du chargement des événements du mois:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -108,14 +108,14 @@ export function CalendarManager() {
     }
   }, [currentDate, calendarView, selectedMonth])
 
-  // Rafraîchissement automatique toutes les 5 secondes
+  // Rafraîchissement toutes les 30 secondes (au lieu de 5s)
   useAutoRefresh(() => {
     if (calendarView === "year") {
       loadEvents()
     } else if (selectedMonth) {
       loadMonthEvents()
     }
-  }, 5000, [calendarView, selectedMonth])
+  }, 30000, [calendarView, selectedMonth])
 
   const addEvent = async () => {
     if (!newEvent.title || !selectedDate) return
@@ -138,7 +138,6 @@ export function CalendarManager() {
             status: "approved", // Les admins créent des événements directement approuvés
           },
         ])
-        .select()
 
       if (error) throw error
 
