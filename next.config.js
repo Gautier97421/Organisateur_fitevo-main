@@ -12,9 +12,6 @@ const nextConfig = {
     remotePatterns: [],
   },
   
-  // Optimisation du build
-  swcMinify: true,
-  
   // Désactiver les fonctionnalités non utilisées
   modularizeImports: {
     'lucide-react': {
