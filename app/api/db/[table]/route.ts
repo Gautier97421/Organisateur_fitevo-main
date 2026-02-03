@@ -290,6 +290,14 @@ export async function POST(
         converted.role = item.is_super_admin ? 'superadmin' : 'admin'
       }
       
+      // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
+      if (table === 'calendar_events' && converted.eventDate) {
+        // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
+        if (!converted.eventDate.includes('T')) {
+          converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+        }
+      }
+      
       // Ajouter userId si nécessaire
       if (!converted.userId && table === 'calendar_events') {
         const user = await prisma.user.findUnique({ where: { email: converted.createdByEmail } })
@@ -331,6 +339,11 @@ export async function POST(
         const gymId = data.gymId
         delete data.gymId
         data.gym = { connect: { id: gymId } }
+      }
+      
+      // Nettoyer createdBy s'il est vide (doit être fait après la copie de convertedItems)
+      if (data.createdBy === '') {
+        delete data.createdBy
       }
       
       const result = await (prisma as any)[prismaModel].create({ data })

@@ -82,8 +82,8 @@ export function GymManager() {
     loadSiteUrl()
   }, [])
 
-  // Rafraîchir manuellement après les modifications (désactiver auto-refresh: 0)
-  useAutoRefresh(loadGyms, 0)
+  // Rafraîchissement automatique toutes les 15 secondes
+  useAutoRefresh(loadGyms, 15000)
 
   const addGym = async () => {
     if (!newGym.name || !newGym.location) return
@@ -421,13 +421,13 @@ export function GymManager() {
                         <p className="text-sm font-semibold text-gray-700 mb-2">📶 Accès restreint au WiFi</p>
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           {gym.wifi_ssid && (
-                            <div>
+                            <div key="ssid">
                               <span className="text-gray-500">SSID: </span>
                               <span className="font-medium text-gray-900">{gym.wifi_ssid}</span>
                             </div>
                           )}
                           {gym.ip_address && (
-                            <div>
+                            <div key="ip">
                               <span className="text-gray-500">IP: </span>
                               <span className="font-medium text-gray-900">{gym.ip_address}</span>
                             </div>

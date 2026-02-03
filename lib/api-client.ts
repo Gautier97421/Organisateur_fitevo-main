@@ -36,6 +36,11 @@ export interface Gym {
 }
 
 export interface Task {
+  period: string;
+  order_index: any;
+  options: any;
+  type: string;
+  required: any;
   id: string;
   title: string;
   description?: string;
