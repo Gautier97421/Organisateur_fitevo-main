@@ -9,7 +9,7 @@ import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -417,14 +417,14 @@ export default function EmployeePage() {
               </div>
             </div>
             <DialogFooter className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto">
-                ❌ Annuler
+              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto flex items-center justify-center gap-2">
+                <XCircle className="h-5 w-5" /> Annuler
               </Button>
               <Button
                 onClick={confirmPeriodSelection}
-                className="text-base md:text-lg px-4 md:px-6 bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                className="text-base md:text-lg px-4 md:px-6 bg-red-600 hover:bg-red-700 w-full sm:w-auto flex items-center justify-center gap-2"
               >
-                ✅ Commencer
+                <CheckCircle className="h-5 w-5" /> Commencer
               </Button>
             </DialogFooter>
           </DialogContent>

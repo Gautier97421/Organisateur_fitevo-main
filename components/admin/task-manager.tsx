@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronUp, ChevronDown, Building, AlertCircle } from "lucide-react"
+import { ChevronUp, ChevronDown, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2 } from "lucide-react"
 import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
@@ -268,14 +268,16 @@ export function TaskManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900">
-          📝 Gestion des To-Do Lists
-        </h2>
+          <div className="flex items-center space-x-3">
+          <ListTodo className="h-8 w-8 text-red-600" />
+          <h2 className="text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
+        </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200"
+          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2"
         >
-          ➕ Nouvelle Tâche
+          <Plus className="h-5 w-5" />
+          Nouvelle Tâche
         </Button>
       </div>
 
@@ -293,7 +295,7 @@ export function TaskManager() {
                 <SelectContent>
                   {gyms.map((gym) => (
                     <SelectItem key={gym.id} value={gym.id}>
-                      🏢 {gym.name} - {gym.location}
+                      {gym.name} - {gym.location}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -375,9 +377,9 @@ export function TaskManager() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="checkbox">☑️ Case à cocher</SelectItem>
-                      <SelectItem value="text">📝 Texte libre</SelectItem>
-                      <SelectItem value="qcm">📋 Choix multiple</SelectItem>
+                      <SelectItem value="checkbox">Case à cocher</SelectItem>
+                      <SelectItem value="text">Texte libre</SelectItem>
+                      <SelectItem value="qcm">Choix multiple</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -412,16 +414,18 @@ export function TaskManager() {
                 <div className="flex space-x-4">
                   <Button
                     onClick={addTask}
-                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg"
+                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg flex items-center gap-2"
                   >
-                    ✅ Ajouter
+                    <CheckCircle className="h-5 w-5" />
+                    Ajouter
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowForm(false)}
-                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white"
+                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
                   >
-                    ❌ Annuler
+                    <XCircle className="h-5 w-5" />
+                    Annuler
                   </Button>
                 </div>
               </CardContent>
@@ -444,7 +448,9 @@ export function TaskManager() {
             {currentTasks.length === 0 ? (
               <Card className="border-2 border-dashed border-gray-300 bg-gray-50">
                 <CardContent className="p-12 text-center text-gray-500">
-                  <div className="text-6xl mb-4">📝</div>
+                  <div className="flex justify-center mb-4">
+                    <ListTodo className="h-16 w-16 text-gray-400" />
+                  </div>
                   <p className="text-xl mb-2">Aucune tâche dans cette to-do list</p>
                   <p className="text-lg">Cliquez sur "Nouvelle Tâche" pour en ajouter une</p>
                 </CardContent>
@@ -472,8 +478,8 @@ export function TaskManager() {
                                   Obligatoire
                                 </span>
                               )}
-                              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                                {task.type === "checkbox" ? "☑️ Case" : task.type === "text" ? "📝 Texte" : "📋 QCM"}
+                              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                                {task.type === "checkbox" ? <><CheckSquare2 className="h-4 w-4" />Case</> : task.type === "text" ? <><FileText className="h-4 w-4" />Texte</> : <><List className="h-4 w-4" />QCM</>}
                               </span>
                             </div>
                           </div>
@@ -523,7 +529,7 @@ export function TaskManager() {
                           className="text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-300 rounded-xl p-2 bg-white"
                           title="Supprimer"
                         >
-                          🗑️
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, User, AlertTriangle } from "lucide-react"
+import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -153,7 +153,7 @@ export function WorkScheduleManager() {
 
       setSchedules(schedules.map((s) => (s.id === scheduleId ? { ...s, status: newStatus } : s)))
 
-      alert(`✅ Statut mis à jour : ${newStatus === "confirmed" ? "Confirmé" : "Terminé"}`)
+      alert(`Statut mis à jour : ${newStatus === "confirmed" ? "Confirmé" : "Terminé"}`)
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error)
       alert("Erreur lors de la mise à jour")
@@ -170,7 +170,7 @@ export function WorkScheduleManager() {
 
       setSchedules(schedules.filter((s) => s.id !== scheduleId))
       setShowDetailsDialog(false)
-      alert("✅ Planning supprimé")
+      alert("Planning supprimé")
     } catch (error) {
       console.error("Erreur lors de la suppression:", error)
       alert("Erreur lors de la suppression")
@@ -461,26 +461,26 @@ export function WorkScheduleManager() {
             {selectedSchedule && selectedSchedule.status === "scheduled" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "confirmed")}
-                className="bg-green-600 hover:bg-green-700 text-white text-lg px-6"
+                className="bg-green-600 hover:bg-green-700 text-white text-lg px-6 flex items-center gap-2"
               >
-                ✅ Confirmer
+                <CheckCircle className="h-5 w-5" /> Confirmer
               </Button>
             )}
             {selectedSchedule && selectedSchedule.status === "confirmed" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "completed")}
-                className="bg-red-600 hover:bg-red-700 text-white text-lg px-6"
+                className="bg-red-600 hover:bg-red-700 text-white text-lg px-6 flex items-center gap-2"
               >
-                🏁 Marquer terminé
+                <CheckCircle className="h-5 w-5" /> Marquer terminé
               </Button>
             )}
             {selectedSchedule && (
               <Button
                 onClick={() => deleteSchedule(selectedSchedule.id)}
                 variant="outline"
-                className="border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-lg px-6"
+                className="border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-lg px-6 flex items-center gap-2"
               >
-                🗑️ Supprimer
+                <Trash2 className="h-5 w-5" /> Supprimer
               </Button>
             )}
           </DialogFooter>

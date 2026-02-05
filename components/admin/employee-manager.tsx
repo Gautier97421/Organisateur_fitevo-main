@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode } from "lucide-react"
+import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle } from "lucide-react"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -118,7 +118,7 @@ export function EmployeeManager() {
       await loadData() // Recharger pour avoir les relations
       setNewEmployee({ name: "", email: "", gymIds: [], remoteWork: false })
       setIsAddingEmployee(false)
-      alert("✅ Employé ajouté avec succès !")
+      alert("Employé ajouté avec succès !")
     } catch (error) {
       alert("Erreur lors de l'ajout de l'employé")
     }
@@ -148,7 +148,7 @@ export function EmployeeManager() {
       setShowDeleteDialog(false)
       setSelectedUser(null)
       alert(
-        `✅ ${selectedUser.type === "employee" ? "Employé" : "Administrateur"} supprimé avec succès`,
+        `${selectedUser.type === "employee" ? "Employé" : "Administrateur"} supprimé avec succès`,
       )
     } catch (error) {
       alert("Erreur lors de la suppression")
@@ -157,7 +157,7 @@ export function EmployeeManager() {
 
   const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isSuperAdmin = false) => {
     if (type === "admin" && isSuperAdmin) {
-      alert("❌ Impossible de désactiver un Super Administrateur")
+      alert("Impossible de désactiver un Super Administrateur")
       return
     }
     setSelectedUser({ id, name, type, isSuperAdmin })
