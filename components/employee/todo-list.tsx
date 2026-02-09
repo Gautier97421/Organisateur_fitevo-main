@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Lock } from "lucide-react"
+import { Lock, CheckCircle, XCircle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { CashRegisterForm } from "./cash-register-form"
 import {
@@ -36,6 +36,7 @@ interface Task {
 interface TodoListProps {
   period: "matin" | "aprem" | "journee"
   isBlocked: boolean
+  gymId?: string // ID de la salle sélectionnée
   onSessionEnd?: () => void
 }
 
@@ -56,7 +57,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
-export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
+export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListProps) {
   const [showValidationDialog, setShowValidationDialog] = useState(false)
   const [showCashRegisterForm, setShowCashRegisterForm] = useState(false)
   const [taskToValidate, setTaskToValidate] = useState<Task | null>(null)
@@ -395,7 +396,7 @@ export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
 
       setShowValidationDialog(false)
       setTaskToValidate(null)
-      alert("✅ Tâche validée ! Elle ne peut plus être modifiée.")
+      alert("Tâche validée ! Elle ne peut plus être modifiée.")
     } catch (error) {
       console.error("Erreur lors de la validation:", error)
       alert("Erreur lors de la validation")
@@ -449,7 +450,7 @@ export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
       localStorage.removeItem(`employee_${userId}_sessionDate`)
 
       setShowCashRegisterForm(false)
-      alert("✅ To-do list et fiche de caisse envoyées avec succès ! Votre session de travail est terminée.")
+      alert("To-do list et fiche de caisse envoyées avec succès ! Votre session de travail est terminée.")
       
       // Appeler le callback pour réinitialiser la vue
       if (onSessionEnd) {
@@ -552,7 +553,7 @@ export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
                   <div className="flex-1">
                     <CardTitle className="text-xl flex items-center space-x-2 text-gray-900">
                       <span>{task.title}</span>
-                      {task.completed && <span className="text-green-600">✅</span>}
+                      {task.completed && <CheckCircle className="h-5 w-5 text-green-600" />}
                       {task.validated && <Lock className="h-5 w-5 text-red-600" />}
                     </CardTitle>
                     <div className="flex items-center space-x-2 mt-2">
@@ -588,8 +589,8 @@ export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
                     disabled={isBlocked || task.validated}
                     className="w-6 h-6"
                   />
-                  <Label htmlFor={task.id} className="text-lg cursor-pointer text-gray-900">
-                    ✅ Marquer comme terminé
+                  <Label htmlFor={task.id} className="text-lg cursor-pointer text-gray-900 flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5" /> Marquer comme terminé
                   </Label>
                 </div>
               )}
@@ -695,8 +696,8 @@ export function TodoList({ period, isBlocked, onSessionEnd }: TodoListProps) {
             )}
           </div>
           <DialogFooter className="flex space-x-3">
-            <Button variant="outline" onClick={cancelValidation} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white">
-              ❌ Annuler
+            <Button variant="outline" onClick={cancelValidation} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2">
+              <XCircle className="h-5 w-5" /> Annuler
             </Button>
             <Button onClick={confirmValidation} className="bg-red-600 hover:bg-red-700 text-lg px-6">
               <Lock className="mr-2 h-4 w-4" />

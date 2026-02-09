@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download } from "lucide-react"
+import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle } from "lucide-react"
 import { supabase, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { QRCodeDisplay } from "./qr-code-display"
@@ -129,7 +129,7 @@ export function GymManager() {
         qr_code_enabled: false
       })
       setIsAddingGym(false)
-      alert("✅ Salle ajoutée avec succès !")
+      alert("Salle ajoutée avec succès !")
     } catch (error) {
       alert(`Erreur lors de l'ajout de la salle:\n${error}`)
     }
@@ -189,7 +189,7 @@ export function GymManager() {
       }
       setIsEditingGym(false)
       setEditGym(null)
-      alert("✅ Salle modifiée avec succès !")
+      alert("Salle modifiée avec succès !")
     } catch (error) {
       alert(`Erreur lors de la modification: ${error}`)
     }
@@ -211,7 +211,7 @@ export function GymManager() {
       setGyms(gyms.filter((gym) => gym.id !== selectedGym.id))
       setShowDeleteDialog(false)
       setSelectedGym(null)
-      alert("✅ Salle supprimée avec succès")
+      alert("Salle supprimée avec succès")
     } catch (error) {
       alert(`Erreur lors de la suppression: ${error}`)
     }
@@ -251,12 +251,13 @@ export function GymManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          🏢 Gestion des Salles
-        </h2>
+        <div className="flex items-center space-x-3">
+          <Building className="h-8 w-8 text-red-600" />
+          <h2 className="text-3xl font-bold text-gray-900">Gestion des Salles</h2>
+        </div>
         <Button
           onClick={() => setIsAddingGym(!isAddingGym)}
-          className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg"
+          className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg flex items-center gap-2"
         >
           <Plus className="mr-2 h-4 w-4" />
           Nouvelle Salle
@@ -632,9 +633,10 @@ export function GymManager() {
             <Button
               variant="outline"
               onClick={() => setShowDeleteDialog(false)}
-              className="text-lg px-6 bg-white border-2 border-gray-300 hover:bg-gray-50 text-gray-900"
+              className="text-lg px-6 bg-white border-2 border-gray-300 hover:bg-gray-50 text-gray-900 flex items-center gap-2"
             >
-              ❌ Annuler
+              <XCircle className="h-4 w-4" />
+              Annuler
             </Button>
             <Button onClick={executeDelete} className="bg-red-600 hover:bg-red-700 text-white text-lg px-6">
               <Trash2 className="mr-2 h-4 w-4" />

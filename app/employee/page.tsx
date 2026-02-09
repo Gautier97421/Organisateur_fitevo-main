@@ -9,7 +9,7 @@ import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,9 @@ export default function EmployeePage() {
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false)
   const [instructions, setInstructions] = useState<any[]>([])
   const [whatsappLink, setWhatsappLink] = useState("")
+  const [assignedGyms, setAssignedGyms] = useState<any[]>([])
+  const [selectedGym, setSelectedGym] = useState<any | null>(null)
+  const [showGymSelectionDialog, setShowGymSelectionDialog] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -97,6 +100,9 @@ export default function EmployeePage() {
 
     checkExistingSession()
 
+    // Charger les salles assignées à l'employé
+    loadAssignedGyms(email)
+
     // Restaurer l'état des pauses si existant
     const savedBreakState = localStorage.getItem("employeeBreakState")
     if (savedBreakState) {
@@ -111,6 +117,27 @@ export default function EmployeePage() {
     // Charger les instructions de nouveau adhérent
     loadInstructions()
   }, [])
+
+  const loadAssignedGyms = async (email: string) => {
+    try {
+      const response = await fetch(`/api/employee-gyms?employeeEmail=${email}`)
+      if (response.ok) {
+        const { data } = await response.json()
+        setAssignedGyms(data || [])
+        
+        // Si salle déjà sélectionnée dans localStorage, la restaurer
+        const savedGymId = localStorage.getItem(`employee_${email}_selectedGym`)
+        if (savedGymId && data) {
+          const gym = data.find((g: any) => g.id === savedGymId)
+          if (gym) {
+            setSelectedGym(gym)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des salles assignées:", error)
+    }
+  }
 
   const loadInstructions = async () => {
     try {
@@ -186,7 +213,34 @@ export default function EmployeePage() {
   }
 
   const requestPeriodSelection = (period: "matin" | "aprem" | "journee") => {
+    // Vérifier si l'employé a des salles assignées
+    if (assignedGyms.length === 0) {
+      alert("Aucune salle ne vous est assignée. Contactez un administrateur.")
+      return
+    }
+
+    // Si une seule salle et pas encore sélectionnée, la sélectionner automatiquement
+    if (assignedGyms.length === 1 && !selectedGym) {
+      setSelectedGym(assignedGyms[0])
+      localStorage.setItem(`employee_${userEmail}_selectedGym`, assignedGyms[0].id)
+    }
+
+    // Si plusieurs salles et pas de salle sélectionnée, demander de choisir
+    if (assignedGyms.length > 1 && !selectedGym) {
+      setPendingPeriod(period)
+      setShowGymSelectionDialog(true)
+      return
+    }
+
+    // Sinon, procéder normalement
     setPendingPeriod(period)
+    setShowConfirmDialog(true)
+  }
+
+  const selectGymAndContinue = (gym: any) => {
+    setSelectedGym(gym)
+    localStorage.setItem(`employee_${userEmail}_selectedGym`, gym.id)
+    setShowGymSelectionDialog(false)
     setShowConfirmDialog(true)
   }
 
@@ -395,6 +449,37 @@ export default function EmployeePage() {
           </Card>
         </div>
 
+        {/* Dialog de sélection de salle */}
+        <Dialog open={showGymSelectionDialog} onOpenChange={setShowGymSelectionDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl text-gray-900">
+                Choisissez votre salle de travail
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+              <p className="text-sm md:text-base text-gray-600">
+                Vous devez sélectionner dans quelle salle vous allez travailler pour cette session :
+              </p>
+              <div className="grid gap-3">
+                {assignedGyms.map((gym) => (
+                  <Button
+                    key={gym.id}
+                    onClick={() => selectGymAndContinue(gym)}
+                    variant="outline"
+                    className="h-auto p-4 justify-start text-left border-2 hover:border-red-600 hover:bg-red-50"
+                  >
+                    <div>
+                      <div className="font-bold text-base">{gym.name}</div>
+                      {gym.address && <div className="text-sm text-gray-600">{gym.address}</div>}
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Dialog de confirmation pour le travail */}
         <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
@@ -406,27 +491,71 @@ export default function EmployeePage() {
             </DialogHeader>
             <div className="text-base md:text-lg space-y-2 text-gray-600 px-3 md:px-6 py-3 md:py-4">
               <div>
-                Vous avez sélectionné :{" "}
-                <strong>
-                  {pendingPeriod && getPeriodEmoji(pendingPeriod)} {pendingPeriod && getPeriodText(pendingPeriod)}
-                </strong>
+                <strong>Période :</strong>{" "}
+                {pendingPeriod && getPeriodEmoji(pendingPeriod)} {pendingPeriod && getPeriodText(pendingPeriod)}
               </div>
+              {selectedGym && (
+                <div>
+                  <strong>Salle :</strong> {selectedGym.name}
+                  {selectedGym.address && <span className="text-sm"> - {selectedGym.address}</span>}
+                </div>
+              )}
               <div className="text-sm md:text-base text-red-700 bg-red-50 p-2 md:p-3 rounded-lg border border-red-200">
                 <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de période jusqu'à la fin
                 de votre session de travail.
               </div>
             </div>
             <DialogFooter className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto">
-                ❌ Annuler
+              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto flex items-center justify-center gap-2">
+                <XCircle className="h-5 w-5" /> Annuler
               </Button>
               <Button
                 onClick={confirmPeriodSelection}
-                className="text-base md:text-lg px-4 md:px-6 bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                className="text-base md:text-lg px-4 md:px-6 bg-red-600 hover:bg-red-700 w-full sm:w-auto flex items-center justify-center gap-2"
               >
-                ✅ Commencer
+                <CheckCircle className="h-5 w-5" /> Commencer
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de sélection de salle */}
+        <Dialog open={showGymSelectionDialog} onOpenChange={setShowGymSelectionDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <Building className="h-6 w-6 text-red-600" />
+                <span>Choisissez votre salle</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-gray-600 mb-4">
+                Plusieurs salles vous sont assignées. Sélectionnez celle où vous travaillez aujourd'hui :
+              </p>
+              <div className="space-y-2">
+                {assignedGyms.map((gym) => (
+                  <Button
+                    key={gym.id}
+                    onClick={() => selectGymAndContinue(gym)}
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto py-3 px-4 hover:bg-red-50 hover:border-red-600"
+                  >
+                    <div className="flex items-start gap-3 w-full">
+                      <Building className="h-5 w-5 mt-0.5 text-red-600" />
+                      <div className="flex-1">
+                        <div className="font-semibold text-gray-900">{gym.name}</div>
+                        {gym.address && (
+                          <div className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3" />
+                            {gym.address}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -527,6 +656,11 @@ export default function EmployeePage() {
                   To-Do List du {selectedPeriod && getPeriodText(selectedPeriod)}
                 </span>
               </h2>
+              {selectedGym && (
+                <p className="text-gray-700 mt-1 text-sm md:text-base font-medium">
+                  📍 {selectedGym.name}
+                </p>
+              )}
               <p className="text-gray-600 mt-2 text-sm md:text-base lg:text-lg">
                 Complétez et validez chaque tâche individuellement
               </p>
@@ -556,7 +690,7 @@ export default function EmployeePage() {
           </div>
         </div>
 
-        {selectedPeriod && <TodoList period={selectedPeriod} isBlocked={isOnBreak} onSessionEnd={handleSessionEnd} />}
+        {selectedPeriod && <TodoList period={selectedPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} onSessionEnd={handleSessionEnd} />}
       </div>
 
       {/* Dialog pour afficher les instructions */}

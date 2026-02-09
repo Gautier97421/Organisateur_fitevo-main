@@ -12,6 +12,7 @@ const tableMapping: { [key: string]: string } = {
   users: 'user',
   admins: 'user',
   employees: 'user',
+  user_gyms: 'userGym',
   new_member_instruction_items: 'newMemberInstructionItem',
   app_config: 'appConfig',
 }

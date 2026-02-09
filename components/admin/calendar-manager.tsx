@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell } from "lucide-react"
+import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   Dialog,
@@ -157,7 +157,7 @@ export function CalendarManager() {
       setShowAddEventDialog(false)
       setSelectedDate(null)
 
-      alert("✅ Événement créé avec succès !")
+      alert("Événement créé avec succès !")
     } catch (error) {
       console.error("Erreur lors de l'ajout:", error)
       alert("Erreur lors de l'ajout de l'événement")
@@ -182,7 +182,7 @@ export function CalendarManager() {
 
       setEvents(events.map((event) => (event.id === eventId ? { ...event, status: "approved" as const } : event)))
 
-      alert("✅ Événement approuvé avec succès !")
+      alert("Événement approuvé avec succès !")
     } catch (error) {
       console.error("Erreur lors de l'approbation:", error)
       alert("Erreur lors de l'approbation")
@@ -215,7 +215,7 @@ export function CalendarManager() {
       setRejectionReason("")
       setSelectedEventId(null)
       setShowRejectionDialog(false)
-      alert("❌ Événement refusé")
+      alert("Événement refusé")
     } catch (error) {
       console.error("Erreur lors du refus:", error)
       alert("Erreur lors du refus")
@@ -248,7 +248,7 @@ export function CalendarManager() {
         recipient_type: "all",
         custom_message: "",
       })
-      alert("✅ Rappel programmé avec succès !")
+      alert("Rappel programmé avec succès !")
     } catch (error) {
       console.error("Erreur lors de l'ajout du rappel:", error)
       alert("Erreur lors de l'ajout du rappel")
@@ -349,16 +349,16 @@ export function CalendarManager() {
     switch (status) {
       case "approved":
         return (
-          <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">✅ Approuvé</Badge>
+          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"><CheckCircle className="h-4 w-4" /> Approuvé</Badge>
         )
       case "pending":
         return (
-          <Badge className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
-            ⏳ En attente
+          <Badge className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
+            <Clock className="h-4 w-4" /> En attente
           </Badge>
         )
       case "rejected":
-        return <Badge className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400">❌ Refusé</Badge>
+        return <Badge className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><XCircle className="h-4 w-4" /> Refusé</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -789,12 +789,12 @@ export function CalendarManager() {
                 setShowAddEventDialog(false)
                 setSelectedDate(null)
               }}
-              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50"
+              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
             >
-              ❌ Annuler
+              <XCircle className="h-5 w-5" /> Annuler
             </Button>
-            <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6">
-              ✅ Créer
+            <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
+              <CheckCircle className="h-5 w-5" /> Créer
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -827,9 +827,9 @@ export function CalendarManager() {
                 setRejectionReason("")
                 setSelectedEventId(null)
               }}
-              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50"
+              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
             >
-              ❌ Annuler
+              <XCircle className="h-5 w-5" /> Annuler
             </Button>
             <Button
               onClick={() => selectedEventId && rejectEvent(selectedEventId, rejectionReason)}
@@ -923,9 +923,9 @@ export function CalendarManager() {
                 })
                 setSelectedEventId(null)
               }}
-              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50"
+              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
             >
-              ❌ Annuler
+              <XCircle className="h-5 w-5" /> Annuler
             </Button>
             <Button
               onClick={() => selectedEventId && addReminder(selectedEventId)}

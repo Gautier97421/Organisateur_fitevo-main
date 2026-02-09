@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   Dialog,
@@ -141,7 +141,7 @@ export function CalendarView() {
       setShowEventDialog(false)
       setSelectedDate(null)
 
-      alert("✅ Événement proposé ! Il sera visible une fois approuvé par un administrateur.")
+      alert("Événement proposé ! Il sera visible une fois approuvé par un administrateur.")
     } catch (error) {
       console.error("Erreur lors de l'ajout:", error)
       alert("Erreur lors de l'ajout de l'événement")
@@ -568,12 +568,12 @@ export function CalendarView() {
                     setShowEventDialog(false)
                     setSelectedDate(null)
                   }}
-                  className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white"
+                  className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
                 >
-                  ❌ Annuler
+                  <XCircle className="h-5 w-5" /> Annuler
                 </Button>
-                <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6">
-                  ✅ Proposer
+                <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" /> Proposer
                 </Button>
               </DialogFooter>
             </DialogContent>

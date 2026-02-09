@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle } from "lucide-react"
+import { ChevronUp, ChevronDown, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2 } from "lucide-react"
 import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -377,14 +377,16 @@ export function TaskManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          📝 Gestion des To-Do Lists
-        </h2>
+          <div className="flex items-center space-x-3">
+          <ListTodo className="h-8 w-8 text-red-600" />
+          <h2 className="text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
+        </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200"
+          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2"
         >
-          ➕ Nouvelle Tâche
+          <Plus className="h-5 w-5" />
+          Nouvelle Tâche
         </Button>
       </div>
 
@@ -402,7 +404,7 @@ export function TaskManager() {
                 <SelectContent>
                   {gyms.map((gym) => (
                     <SelectItem key={gym.id} value={gym.id}>
-                      🏢 {gym.name} - {gym.location}
+                      {gym.name} - {gym.location}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -484,9 +486,9 @@ export function TaskManager() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="checkbox">☑️ Case à cocher</SelectItem>
-                      <SelectItem value="text">📝 Texte libre</SelectItem>
-                      <SelectItem value="qcm">📋 Choix multiple</SelectItem>
+                      <SelectItem value="checkbox">Case à cocher</SelectItem>
+                      <SelectItem value="text">Texte libre</SelectItem>
+                      <SelectItem value="qcm">Choix multiple</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -521,16 +523,18 @@ export function TaskManager() {
                 <div className="flex space-x-4">
                   <Button
                     onClick={addTask}
-                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg"
+                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg flex items-center gap-2"
                   >
-                    ✅ Ajouter
+                    <CheckCircle className="h-5 w-5" />
+                    Ajouter
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowForm(false)}
-                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white"
+                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
                   >
-                    ❌ Annuler
+                    <XCircle className="h-5 w-5" />
+                    Annuler
                   </Button>
                 </div>
               </CardContent>
@@ -551,35 +555,96 @@ export function TaskManager() {
             </h3>
 
             {currentTasks.length === 0 ? (
-              <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
-                <CardContent className="p-8 text-center text-gray-500 dark:text-gray-400">
-                  <div className="text-4xl mb-3">📝</div>
-                  <p className="text-lg mb-2 dark:text-gray-300">Aucune tâche dans cette to-do list</p>
-                  <p>Cliquez sur "Nouvelle Tâche" pour en ajouter une</p>
+              <Card className="border-2 border-dashed border-gray-300 bg-gray-50">
+                <CardContent className="p-12 text-center text-gray-500">
+                  <div className="flex justify-center mb-4">
+                    <ListTodo className="h-16 w-16 text-gray-400" />
+                  </div>
+                  <p className="text-xl mb-2">Aucune tâche dans cette to-do list</p>
+                  <p className="text-lg">Cliquez sur "Nouvelle Tâche" pour en ajouter une</p>
                 </CardContent>
               </Card>
             ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={currentTasks.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
+              currentTasks.map((task, index) => (
+                <Card
+                  key={task.id}
+                  className="border-0 shadow-xl bg-white hover:shadow-2xl transition-all duration-200"
                 >
-                  <div className="space-y-3">
-                    {currentTasks.map((task, index) => (
-                      <SortableTaskItem
-                        key={task.id}
-                        task={task}
-                        index={index}
-                        onDelete={deleteTask}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+                  <CardContent className="p-8">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-4 mb-4">
+                          <div
+                            className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg"
+                          >
+                            #{index + 1}
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-semibold text-gray-800">{task.title}</h3>
+                            <div className="flex items-center space-x-3 mt-2">
+                              {task.required && (
+                                <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
+                                  Obligatoire
+                                </span>
+                              )}
+                              <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                                {task.type === "checkbox" ? <><CheckSquare2 className="h-4 w-4" />Case</> : task.type === "text" ? <><FileText className="h-4 w-4" />Texte</> : <><List className="h-4 w-4" />QCM</>}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-lg mb-4">{task.description}</p>
+                        {task.options && (
+                          <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                            <strong className="text-red-800">Choix disponibles :</strong>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {task.options.map((option, idx) => (
+                                <span
+                                  key={idx}
+                                  className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm"
+                                >
+                                  {option}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col space-y-2 ml-4">
+                        {/* Boutons de réorganisation */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveTask(task.id, "up")}
+                          disabled={index === 0}
+                          className="border-2 rounded-xl p-2 border-gray-300 hover:bg-gray-50 bg-white"
+                          title="Monter"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveTask(task.id, "down")}
+                          disabled={index === currentTasks.length - 1}
+                          className="border-2 rounded-xl p-2 border-gray-300 hover:bg-gray-50 bg-white"
+                          title="Descendre"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => deleteTask(task.id)}
+                          className="text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-300 rounded-xl p-2 bg-white"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
           </div>
         </>

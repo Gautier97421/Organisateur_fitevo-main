@@ -25,6 +25,7 @@ model User {
   calendarEvents    CalendarEvent[]
   tasks             Task[]
   workSchedules     WorkSchedule[]
+  userGyms          UserGym[]
   
   @@map("users")
 }
@@ -129,18 +130,19 @@ model EventReminder {
 }
 
 model Gym {
-  id                String   @id @default(cuid())
+  id                String     @id @default(cuid())
   name              String
   address           String?
-  isActive          Boolean  @default(true) @map("is_active")
-  wifiRestricted    Boolean  @default(false) @map("wifi_restricted")
-  wifiSsid          String?  @map("wifi_ssid")
-  ipAddress         String?  @map("ip_address")
-  qrCodeEnabled     Boolean  @default(false) @map("qr_code_enabled")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  isActive          Boolean    @default(true) @map("is_active")
+  wifiRestricted    Boolean    @default(false) @map("wifi_restricted")
+  wifiSsid          String?    @map("wifi_ssid")
+  ipAddress         String?    @map("ip_address")
+  qrCodeEnabled     Boolean    @default(false) @map("qr_code_enabled")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
   
-  tasks Task[]
+  tasks       Task[]
+  userGyms    UserGym[]
   
   @@map("gyms")
 }
@@ -217,4 +219,17 @@ model NewMemberInstructionItem {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("new_member_instruction_items")
+}
+
+model UserGym {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  gymId     String   @map("gym_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gym  Gym  @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, gymId])
+  @@map("user_gyms")
 }
