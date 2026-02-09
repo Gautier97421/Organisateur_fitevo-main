@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 // GET - Récupérer tous les rôles
 export async function GET() {
   try {
-    const roles = await prisma.role.findMany({
+    const roles = await (prisma as any).role.findMany({
       orderBy: { createdAt: 'asc' }
     })
     
@@ -31,13 +31,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Vérifier si le rôle existe déjà
-    const existing = await prisma.role.findUnique({ where: { name } })
+    const existing = await (prisma as any).role.findUnique({ where: { name } })
     if (existing) {
       return NextResponse.json({ data: existing })
     }
     
     // Créer le rôle
-    const role = await prisma.role.create({
+    const role = await (prisma as any).role.create({
       data: { name, color }
     })
     
