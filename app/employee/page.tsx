@@ -7,6 +7,8 @@ import { TodoList } from "@/components/employee/todo-list"
 import { BreakManager } from "@/components/employee/break-manager"
 import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
+import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
+import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { useRouter } from "next/navigation"
 import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin } from "lucide-react"
@@ -21,7 +23,8 @@ import {
 export default function EmployeePage() {
   const [userEmail, setUserEmail] = useState("")
   const [userName, setUserName] = useState("")
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar">("menu")
+  const [hasWorkScheduleAccess, setHasWorkScheduleAccess] = useState(true)
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
   const [breakStartTime, setBreakStartTime] = useState<Date | null>(null)
@@ -56,6 +59,9 @@ export default function EmployeePage() {
     
     setUserEmail(email)
     setUserName(name)
+
+    // Charger les permissions de l'employé
+    loadUserPermissions(email)
 
     // Vérifier si une session existe pour aujourd'hui
     const checkExistingSession = async () => {
@@ -117,7 +123,19 @@ export default function EmployeePage() {
     // Charger les instructions de nouveau adhérent
     loadInstructions()
   }, [])
-
+  const loadUserPermissions = async (email: string) => {
+    try {
+      const response = await fetch(`/api/db/users?email=${email}&single=true`)
+      if (response.ok) {
+        const { data } = await response.json()
+        if (data) {
+          setHasWorkScheduleAccess(data.has_work_schedule_access !== false)
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des permissions:", error)
+    }
+  }
   const loadAssignedGyms = async (email: string) => {
     try {
       const response = await fetch(`/api/employee-gyms?employeeEmail=${email}`)
@@ -392,6 +410,22 @@ export default function EmployeePage() {
                   </div>
                 </Button>
 
+                {/* Bouton Planning / Pointage */}
+                <Button
+                  onClick={() => setCurrentView("schedule")}
+                  className="h-20 md:h-24 text-lg md:text-xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                >
+                  <span className="text-3xl md:text-4xl">⏰</span>
+                  <div className="text-left">
+                    <div className="font-bold text-base md:text-xl">
+                      {hasWorkScheduleAccess ? "Planning de Travail" : "Pointage Simple"}
+                    </div>
+                    <div className="text-xs md:text-sm opacity-90">
+                      {hasWorkScheduleAccess ? "Gérer vos horaires" : "Pointer votre présence"}
+                    </div>
+                  </div>
+                </Button>
+
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
                   <Button
@@ -605,6 +639,54 @@ export default function EmployeePage() {
 
         <div className="max-w-4xl mx-auto p-6">
           <CalendarView />
+        </div>
+      </div>
+    )
+  }
+
+  // Vue Planning de Travail / Pointage Simple
+  if (currentView === "schedule") {
+    return (
+      <div className="min-h-screen bg-white">
+        {/* Header */}
+        <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
+            <div className="flex items-center space-x-3 md:space-x-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-xl md:text-2xl">⏰</span>
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+                  {hasWorkScheduleAccess ? "Planning de Travail" : "Pointage Simple"}
+                </h1>
+                <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
+                  {userName} • {userEmail}
+                </p>
+              </div>
+            </div>
+            <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto">
+              <Button
+                onClick={() => setCurrentView("menu")}
+                variant="outline"
+                size="sm"
+                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
+              >
+                🏠 Menu
+              </Button>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
+              >
+                Déconnexion
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-4xl mx-auto p-6">
+          {hasWorkScheduleAccess ? <WorkScheduleCalendar /> : <SimpleTimeTracker />}
         </div>
       </div>
     )

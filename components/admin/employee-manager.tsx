@@ -7,6 +7,13 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
@@ -19,14 +26,54 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+// Couleurs prédéfinies pour les rôles
+const ROLE_COLORS = [
+  { name: "Rouge", value: "rouge", hex: "#ef4444" },
+  { name: "Bleu", value: "bleu", hex: "#3b82f6" },
+  { name: "Orange", value: "orange", hex: "#f97316" },
+  { name: "Jaune", value: "jaune", hex: "#eab308" },
+  { name: "Noir", value: "noir", hex: "#1f2937" },
+  { name: "Mauve", value: "mauve", hex: "#a855f7" },
+]
+
+interface Role {
+  id: string
+  name: string
+  color: string
+}
+
 export function EmployeeManager() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [admins, setAdmins] = useState<Admin[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
-  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", gymIds: [] as string[], remoteWork: false })
+  const [roles, setRoles] = useState<Role[]>([])
+  const [newEmployee, setNewEmployee] = useState({ 
+    name: "", 
+    email: "", 
+    gymIds: [] as string[], 
+    remoteWork: false, 
+    roleId: "",
+    newRoleName: "",
+    newRoleColor: "bleu",
+    hasCalendarAccess: true,
+    hasEventProposalAccess: true,
+    hasWorkScheduleAccess: true
+  })
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
-  const [editEmployee, setEditEmployee] = useState<{ id: string; name: string; email: string; gymIds: string[]; remoteWork: boolean } | null>(null)
+  const [editEmployee, setEditEmployee] = useState<{ 
+    id: string; 
+    name: string; 
+    email: string; 
+    gymIds: string[]; 
+    remoteWork: boolean;
+    roleId: string;
+    newRoleName: string;
+    newRoleColor: string;
+    hasCalendarAccess: boolean;
+    hasEventProposalAccess: boolean;
+    hasWorkScheduleAccess: boolean;
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
   const [whatsappLink, setWhatsappLink] = useState("")
@@ -90,8 +137,23 @@ export function EmployeeManager() {
       if (siteUrlData) {
         setSiteUrl(siteUrlData.value || "")
       }
+
+      // Charger les rôles
+      await loadRoles()
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadRoles = async () => {
+    try {
+      const response = await fetch("/api/roles")
+      if (response.ok) {
+        const { data } = await response.json()
+        setRoles(data || [])
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des rôles:", error)
     }
   }
 
@@ -110,6 +172,35 @@ export function EmployeeManager() {
     if (!newEmployee.name || !newEmployee.email) return
 
     try {
+      // Gérer le rôle (existant ou nouveau)
+      let roleId = newEmployee.roleId
+      let roleName = ""
+      let roleColor = ""
+
+      if (roleId === "new" && newEmployee.newRoleName) {
+        // Créer un nouveau rôle
+        const colorHex = ROLE_COLORS.find(c => c.value === newEmployee.newRoleColor)?.hex || "#3b82f6"
+        const roleResponse = await fetch('/api/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newEmployee.newRoleName,
+            color: colorHex
+          })
+        })
+        if (roleResponse.ok) {
+          const roleResult = await roleResponse.json()
+          roleId = roleResult.data.id
+          roleName = roleResult.data.name
+          roleColor = roleResult.data.color
+          await loadRoles()
+        }
+      } else if (roleId && roleId !== "new") {
+        const selectedRole = roles.find(r => r.id === roleId)
+        roleName = selectedRole?.name || ""
+        roleColor = selectedRole?.color || ""
+      }
+
       const response = await fetch('/api/db/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,6 +211,10 @@ export function EmployeeManager() {
             password: 'temppass123', // Mot de passe temporaire
             role: 'employee',
             remote_work_enabled: newEmployee.remoteWork,
+            role_id: roleId && roleId !== "new" ? roleId : null,
+            has_calendar_access: newEmployee.hasCalendarAccess,
+            has_event_proposal_access: newEmployee.hasEventProposalAccess,
+            has_work_schedule_access: newEmployee.hasWorkScheduleAccess,
             active: true
           }
         })
@@ -142,7 +237,18 @@ export function EmployeeManager() {
       }
 
       await loadData() // Recharger pour avoir les relations
-      setNewEmployee({ name: "", email: "", gymIds: [], remoteWork: false })
+      setNewEmployee({ 
+        name: "", 
+        email: "", 
+        gymIds: [], 
+        remoteWork: false,
+        roleId: "",
+        newRoleName: "",
+        newRoleColor: "bleu",
+        hasCalendarAccess: true,
+        hasEventProposalAccess: true,
+        hasWorkScheduleAccess: true
+      })
       setIsAddingEmployee(false)
       alert("Employé ajouté avec succès !")
     } catch (error) {
@@ -151,12 +257,26 @@ export function EmployeeManager() {
   }
 
   const openEditEmployee = (employee: Employee) => {
+    // Trouver le roleId à partir du role_id ou employee_role
+    let roleId = employee.role_id || ""
+    
+    // Si employee_role est un objet (relation chargée), utiliser son id
+    if (employee.employee_role && typeof employee.employee_role === 'object') {
+      roleId = employee.employee_role.id
+    }
+
     setEditEmployee({
       id: employee.id,
       name: employee.name,
       email: employee.email,
       gymIds: employee.gym_ids || [],
-      remoteWork: employee.remote_work_enabled || false
+      remoteWork: employee.remote_work_enabled || false,
+      roleId: roleId,
+      newRoleName: "",
+      newRoleColor: "bleu",
+      hasCalendarAccess: employee.has_calendar_access !== false,
+      hasEventProposalAccess: employee.has_event_proposal_access !== false,
+      hasWorkScheduleAccess: employee.has_work_schedule_access !== false
     })
     setIsEditingEmployee(true)
   }
@@ -165,15 +285,46 @@ export function EmployeeManager() {
     if (!editEmployee) return
     
     try {
+      // Gérer le rôle (existant ou nouveau)
+      let roleId = editEmployee.roleId
+      let roleName = ""
+      let roleColor = ""
+
+      if (roleId === "new" && editEmployee.newRoleName) {
+        // Créer un nouveau rôle
+        const colorHex = ROLE_COLORS.find(c => c.value === editEmployee.newRoleColor)?.hex || "#3b82f6"
+        const roleResponse = await fetch('/api/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: editEmployee.newRoleName,
+            color: colorHex
+          })
+        })
+        if (roleResponse.ok) {
+          const roleResult = await roleResponse.json()
+          roleId = roleResult.data.id
+          roleName = roleResult.data.name
+          roleColor = roleResult.data.color
+          await loadRoles()
+        }
+      } else if (roleId && roleId !== "new") {
+        const selectedRole = roles.find(r => r.id === roleId)
+        roleName = selectedRole?.name || ""
+        roleColor = selectedRole?.color || ""
+      }
+
       // Mettre à jour les informations de base de l'employé
       const response = await fetch(`/api/db/users/${editEmployee.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          data: {
-            name: editEmployee.name,
-            remote_work_enabled: editEmployee.remoteWork
-          }
+          name: editEmployee.name,
+          remote_work_enabled: editEmployee.remoteWork,
+          role_id: roleId && roleId !== "new" ? roleId : null,
+          has_calendar_access: editEmployee.hasCalendarAccess,
+          has_event_proposal_access: editEmployee.hasEventProposalAccess,
+          has_work_schedule_access: editEmployee.hasWorkScheduleAccess
         })
       })
 
@@ -534,6 +685,109 @@ export function EmployeeManager() {
                   </div>
                 </div>
 
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="emp-role">Rôle</Label>
+                    <Select
+                      value={newEmployee.roleId}
+                      onValueChange={(value) => setNewEmployee({ ...newEmployee, roleId: value })}
+                    >
+                      <SelectTrigger id="emp-role" className="border border-gray-300">
+                        <SelectValue placeholder="Sélectionner un rôle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: role.color }}
+                              />
+                              {role.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="new">+ Nouveau rôle</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {newEmployee.roleId === "new" && (
+                    <div className="space-y-3 p-3 bg-gray-50 rounded border border-gray-200">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-role-name">Nom du nouveau rôle</Label>
+                        <Input
+                          id="new-role-name"
+                          value={newEmployee.newRoleName}
+                          onChange={(e) => setNewEmployee({ ...newEmployee, newRoleName: e.target.value })}
+                          placeholder="Ex: Coach, Formateur..."
+                          className="border border-gray-300"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Couleur du rôle</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {ROLE_COLORS.map((color) => (
+                            <button
+                              key={color.value}
+                              type="button"
+                              onClick={() => setNewEmployee({ ...newEmployee, newRoleColor: color.value })}
+                              className={`w-8 h-8 rounded-full border-2 transition-all ${
+                                newEmployee.newRoleColor === color.value 
+                                  ? 'border-gray-900 scale-110' 
+                                  : 'border-gray-300 hover:scale-105'
+                              }`}
+                              style={{ backgroundColor: color.hex }}
+                              title={color.name}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 p-3 border border-gray-200 rounded">
+                  <Label className="text-sm font-semibold">Permissions d'accès</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="perm-calendar"
+                        checked={newEmployee.hasCalendarAccess}
+                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasCalendarAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="perm-calendar" className="text-sm text-gray-700">
+                        Accès au calendrier
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="perm-events"
+                        checked={newEmployee.hasEventProposalAccess}
+                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasEventProposalAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="perm-events" className="text-sm text-gray-700">
+                        Proposition d'événements
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="perm-schedule"
+                        checked={newEmployee.hasWorkScheduleAccess}
+                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasWorkScheduleAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="perm-schedule" className="text-sm text-gray-700">
+                        Accès au planning de travail complet
+                      </Label>
+                    </div>
+                    <div className="ml-6 text-xs text-gray-500">
+                      {newEmployee.hasWorkScheduleAccess 
+                        ? "L'employé aura accès au planning de travail complet" 
+                        : "L'employé aura uniquement accès au pointage simple (scan QR code)"}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
                   <Checkbox
                     id="remote-work"
@@ -627,6 +881,109 @@ export function EmployeeManager() {
                   </div>
                 </div>
 
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-role">Rôle</Label>
+                    <Select
+                      value={editEmployee.roleId}
+                      onValueChange={(value) => setEditEmployee({ ...editEmployee, roleId: value })}
+                    >
+                      <SelectTrigger id="edit-role" className="border border-gray-300">
+                        <SelectValue placeholder="Sélectionner un rôle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: role.color }}
+                              />
+                              {role.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="new">+ Nouveau rôle</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {editEmployee.roleId === "new" && (
+                    <div className="space-y-3 p-3 bg-gray-50 rounded border border-gray-200">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-new-role-name">Nom du nouveau rôle</Label>
+                        <Input
+                          id="edit-new-role-name"
+                          value={editEmployee.newRoleName}
+                          onChange={(e) => setEditEmployee({ ...editEmployee, newRoleName: e.target.value })}
+                          placeholder="Ex: Coach, Formateur..."
+                          className="border border-gray-300"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Couleur du rôle</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {ROLE_COLORS.map((color) => (
+                            <button
+                              key={color.value}
+                              type="button"
+                              onClick={() => setEditEmployee({ ...editEmployee, newRoleColor: color.value })}
+                              className={`w-8 h-8 rounded-full border-2 transition-all ${
+                                editEmployee.newRoleColor === color.value 
+                                  ? 'border-gray-900 scale-110' 
+                                  : 'border-gray-300 hover:scale-105'
+                              }`}
+                              style={{ backgroundColor: color.hex }}
+                              title={color.name}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 p-3 border border-gray-200 rounded">
+                  <Label className="text-sm font-semibold">Permissions d'accès</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-perm-calendar"
+                        checked={editEmployee.hasCalendarAccess}
+                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasCalendarAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="edit-perm-calendar" className="text-sm text-gray-700">
+                        Accès au calendrier
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-perm-events"
+                        checked={editEmployee.hasEventProposalAccess}
+                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasEventProposalAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="edit-perm-events" className="text-sm text-gray-700">
+                        Proposition d'événements
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-perm-schedule"
+                        checked={editEmployee.hasWorkScheduleAccess}
+                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasWorkScheduleAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="edit-perm-schedule" className="text-sm text-gray-700">
+                        Accès au planning de travail complet
+                      </Label>
+                    </div>
+                    <div className="ml-6 text-xs text-gray-500">
+                      {editEmployee.hasWorkScheduleAccess 
+                        ? "L'employé aura accès au planning de travail complet" 
+                        : "L'employé aura uniquement accès au pointage simple (scan QR code)"}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
                   <Checkbox
                     id="edit-remote-work"
@@ -684,6 +1041,17 @@ export function EmployeeManager() {
                             <Badge variant={employee.is_active ? "default" : "secondary"} className="text-xs px-2 py-0">
                               {employee.is_active ? "Actif" : "Inactif"}
                             </Badge>
+                            {employee.employee_role && (
+                              <Badge 
+                                className="text-xs px-2 py-0" 
+                                style={{ 
+                                  backgroundColor: employee.employee_role.color, 
+                                  color: '#fff'
+                                }}
+                              >
+                                {employee.employee_role.name}
+                              </Badge>
+                            )}
                             {employee.remote_work_enabled && (
                               <Badge className="bg-gray-100 text-gray-600 text-xs px-2 py-0">
                                 Télétravail

@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Lock, CheckCircle, XCircle } from "lucide-react"
+import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { CashRegisterForm } from "./cash-register-form"
 import {
@@ -502,7 +502,7 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
         <Card className="border-2 border-red-300 bg-red-50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3 text-red-700">
-              <span className="text-2xl">⏸️</span>
+              <Pause className="h-8 w-8" />
               <div>
                 <p className="font-bold text-lg">Pause en cours</p>
                 <p>Vous ne pouvez pas modifier les tâches pendant la pause</p>
@@ -516,7 +516,9 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
       <Card className="bg-red-50 border-2 border-red-200">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-900">📊 Progression</h3>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <BarChart3 className="h-6 w-6" /> Progression
+            </h3>
             <div className="text-right">
               <div className="text-2xl font-bold text-red-600">
                 {completedTasks}/{totalTasks}
@@ -597,7 +599,9 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
 
               {task.type === "text" && (
                 <div className="space-y-3">
-                  <Label className="text-lg font-medium text-gray-900">📝 Votre réponse :</Label>
+                  <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                    <FileText className="h-5 w-5" /> Votre réponse :
+                  </Label>
                   <Textarea
                     value={textValues[task.id] ?? task.value ?? ""}
                     onChange={(e) => handleTextChange(task.id, e.target.value)}

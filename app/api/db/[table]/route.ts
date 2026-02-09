@@ -71,6 +71,34 @@ function mapFieldsToClient(table: string, data: any): any {
     delete mapped.isFirstLogin
   }
   
+  // Mapper employeeRole -> employee_role pour users/employees/admins
+  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.employeeRole !== undefined) {
+    mapped.employee_role = mapped.employeeRole
+    delete mapped.employeeRole
+  }
+  
+  // Mapper remoteWorkEnabled -> remote_work_enabled pour users
+  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.remoteWorkEnabled !== undefined) {
+    mapped.remote_work_enabled = mapped.remoteWorkEnabled
+    delete mapped.remoteWorkEnabled
+  }
+  
+  // Mapper hasCalendarAccess, hasEventProposalAccess, hasWorkScheduleAccess
+  if ((table === 'users' || table === 'employees' || table === 'admins')) {
+    if (mapped.hasCalendarAccess !== undefined) {
+      mapped.has_calendar_access = mapped.hasCalendarAccess
+      delete mapped.hasCalendarAccess
+    }
+    if (mapped.hasEventProposalAccess !== undefined) {
+      mapped.has_event_proposal_access = mapped.hasEventProposalAccess
+      delete mapped.hasEventProposalAccess
+    }
+    if (mapped.hasWorkScheduleAccess !== undefined) {
+      mapped.has_work_schedule_access = mapped.hasWorkScheduleAccess
+      delete mapped.hasWorkScheduleAccess
+    }
+  }
+  
   // Mapper date -> work_date pour work_schedules
   if (table === 'work_schedules' && mapped.date !== undefined) {
     mapped.work_date = mapped.date
@@ -193,9 +221,19 @@ export async function GET(
       orderBy = { [field]: orderByDir || 'asc' }
     }
     
+    // Préparer l'include pour les relations
+    const include: any = {}
+    if (table === 'employees' || table === 'admins' || table === 'users') {
+      include.employeeRole = true
+    }
+    
     // Exécuter la requête
     if (isSingle) {
-      const data = await (prisma as any)[prismaModel].findFirst({ where, orderBy })
+      const data = await (prisma as any)[prismaModel].findFirst({ 
+        where, 
+        orderBy,
+        include: Object.keys(include).length > 0 ? include : undefined 
+      })
       
       // Mapper les champs du schéma vers les noms attendus par le client
       const mappedData = data ? mapFieldsToClient(table, data) : null
@@ -205,7 +243,11 @@ export async function GET(
         error: !data ? { code: 'PGRST116' } : null 
       })
     } else {
-      const data = await (prisma as any)[prismaModel].findMany({ where, orderBy })
+      const data = await (prisma as any)[prismaModel].findMany({ 
+        where, 
+        orderBy,
+        include: Object.keys(include).length > 0 ? include : undefined
+      })
       
       // Mapper les champs du schéma vers les noms attendus par le client (gère automatiquement les tableaux)
       const mappedData = mapFieldsToClient(table, data)
@@ -284,6 +326,11 @@ export async function POST(
         }
         if (camelKey === 'isSuperAdmin') {
           continue // géré via role
+        }
+        // Ignorer employeeRole et roleColor car ils sont gérés via la relation roleId
+        if ((table === 'users' || table === 'employees' || table === 'admins') && 
+            (camelKey === 'employeeRole' || camelKey === 'roleColor')) {
+          continue
         }
         
         converted[camelKey] = value

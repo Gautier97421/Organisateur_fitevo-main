@@ -2,12 +2,24 @@
 // Ce fichier peut être utilisé côté client (navigateur)
 
 // Types exportés pour compatibilité
+export interface Role {
+  id: string;
+  name: string;
+  color: string;
+  created_at?: string;
+}
+
 export interface Employee {
   id: string;
   name: string;
   email: string;
   is_active: boolean;
   remote_work_enabled?: boolean;
+  role_id?: string;
+  employee_role?: Role; // Relation complète vers le rôle
+  has_calendar_access?: boolean;
+  has_event_proposal_access?: boolean;
+  has_work_schedule_access?: boolean;
   gym_ids?: string[]; // IDs des salles assignées
   gyms?: Gym[]; // Salles complètes (optionnel)
   created_at: string;

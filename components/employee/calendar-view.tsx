@@ -169,7 +169,10 @@ export function CalendarView() {
 
   const getEventsForDate = (date: Date) => {
     const dateString = date.toISOString().split("T")[0]
-    return events.filter((event) => event.event_date === dateString)
+    return events.filter((event) => {
+      const eventDate = new Date(event.event_date).toISOString().split("T")[0]
+      return eventDate === dateString
+    })
   }
 
   const navigateYear = (direction: "prev" | "next") => {
@@ -267,7 +270,8 @@ export function CalendarView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold text-gray-900">
-          📅 Calendrier & Planning
+          <Calendar className="h-5 w-5 inline-block mr-2" />
+          Calendrier & Planning
         </h2>
       </div>
 

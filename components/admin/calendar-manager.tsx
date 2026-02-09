@@ -36,7 +36,7 @@ interface CalendarEvent {
 export function CalendarManager() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeView, setActiveView] = useState<"calendar" | "list">("calendar")
+  const [activeView, setActiveView] = useState<"calendar" | "list" | "pending">("calendar")
   const [calendarView, setCalendarView] = useState<"year" | "month">("year")
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedMonth, setSelectedMonth] = useState<Date | null>(null)
@@ -276,7 +276,10 @@ export function CalendarManager() {
 
   const getEventsForDate = (date: Date) => {
     const dateString = date.toISOString().split("T")[0]
-    return events.filter((event) => event.event_date === dateString)
+    return events.filter((event) => {
+      const eventDate = new Date(event.event_date).toISOString().split("T")[0]
+      return eventDate === dateString
+    })
   }
 
   const getDaysInMonth = () => {
@@ -461,6 +464,23 @@ export function CalendarManager() {
           <Clock className="mr-2 h-5 w-5" />
           Liste des Événements
         </Button>
+        <Button
+          variant={activeView === "pending" ? "default" : "outline"}
+          onClick={() => setActiveView("pending")}
+          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 relative ${
+            activeView === "pending"
+              ? "bg-orange-600 text-white shadow-lg hover:bg-orange-700"
+              : "border-2 hover:bg-gray-50 bg-white border-gray-300"
+          }`}
+        >
+          <Bell className="mr-2 h-5 w-5" />
+          Événements en attente
+          {pendingCount > 0 && (
+            <Badge className="ml-2 bg-orange-500 text-white">
+              {pendingCount}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {activeView === "calendar" ? (
@@ -625,7 +645,7 @@ export function CalendarManager() {
             </Card>
           )}
         </>
-      ) : (
+      ) : activeView === "list" ? (
         /* Vue Liste */
         <div className="space-y-6">
           {events.length === 0 ? (
@@ -710,6 +730,74 @@ export function CalendarManager() {
                           Rappel
                         </Button>
                       )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      ) : (
+        /* Vue Événements en attente */
+        <div className="space-y-6">
+          {pendingEvents.length === 0 ? (
+            <Card className="border-2 border-dashed border-orange-300 bg-orange-50">
+              <CardContent className="p-12 text-center text-orange-600">
+                <Bell className="h-16 w-16 mx-auto mb-4" />
+                <p className="text-xl mb-2">Aucun événement en attente</p>
+                <p className="text-lg">Tous les événements proposés ont été traités</p>
+              </CardContent>
+            </Card>
+          ) : (
+            pendingEvents.map((event) => (
+              <Card key={event.id} className="border-2 border-orange-200 shadow-xl bg-white">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-xl font-bold text-gray-900">{event.title}</h3>
+                        <Badge className="bg-orange-500 text-white">EN ATTENTE</Badge>
+                      </div>
+                      <div className="space-y-2 text-gray-600">
+                        <p className="flex items-center space-x-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>{formatDate(event.event_date)}</span>
+                        </p>
+                        <p className="flex items-center space-x-2">
+                          <Clock className="h-4 w-4" />
+                          <span>
+                            {formatTime(event.event_time)} • {event.duration_minutes} minutes
+                          </span>
+                        </p>
+                        {event.description && (
+                          <p className="text-gray-700 mt-2">{event.description}</p>
+                        )}
+                        <p className="text-sm text-gray-500">
+                          Proposé par {event.created_by_name} ({event.created_by_email})
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col space-y-2 ml-4">
+                      <Button
+                        onClick={() => approveEvent(event.id)}
+                        className="bg-green-600 hover:bg-green-700 rounded-xl"
+                        size="sm"
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        Approuver
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setSelectedEventId(event.id)
+                          setShowRejectionDialog(true)
+                        }}
+                        variant="outline"
+                        className="border-2 text-red-600 hover:bg-red-50 rounded-xl bg-white border-red-600"
+                        size="sm"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Refuser
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

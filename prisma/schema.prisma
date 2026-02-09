@@ -7,24 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  username          String?  @unique // Pseudo choisi lors de la première connexion
-  password          String?  // Optionnel - défini lors de la première connexion
-  name              String
-  role              String   @default("employee") // "employee", "admin", "superadmin"
-  active            Boolean  @default(true)
-  isFirstLogin      Boolean  @default(true) @map("is_first_login")
-  remoteWorkEnabled Boolean  @default(false) @map("remote_work_enabled")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   // rouge, bleu, vert, jaune, orange, mauve
+  createdAt DateTime @default(now()) @map("created_at")
   
+  users     User[]
+  
+  @@map("roles")
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  username              String?  @unique // Pseudo choisi lors de la première connexion
+  password              String?  // Optionnel - défini lors de la première connexion
+  name                  String
+  role                  String   @default("employee") // "employee", "admin", "superadmin"
+  roleId                String?  @map("role_id") // Référence vers le rôle personnalisé
+  active                Boolean  @default(true)
+  isFirstLogin          Boolean  @default(true) @map("is_first_login")
+  remoteWorkEnabled     Boolean  @default(false) @map("remote_work_enabled")
+  hasCalendarAccess     Boolean  @default(true) @map("has_calendar_access")
+  hasEventProposalAccess Boolean @default(true) @map("has_event_proposal_access")
+  hasWorkScheduleAccess Boolean  @default(true) @map("has_work_schedule_access")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  
+  employeeRole      Role?          @relation(fields: [roleId], references: [id])
   events            Event[]
   registrations     Registration[]
   calendarEvents    CalendarEvent[]
   tasks             Task[]
   workSchedules     WorkSchedule[]
+  timeEntries       TimeEntry[]
   userGyms          UserGym[]
   
   @@map("users")
@@ -142,6 +159,7 @@ model Gym {
   updatedAt         DateTime   @updatedAt @map("updated_at")
   
   tasks       Task[]
+  timeEntries TimeEntry[]
   userGyms    UserGym[]
   
   @@map("gyms")
@@ -173,15 +191,18 @@ model Task {
 }
 
 model WorkSchedule {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  date      DateTime
-  startTime String   @map("start_time")
-  endTime   String   @map("end_time")
-  type      String   @default("work") // work, break, absence
-  notes     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  employeeEmail    String   @map("employee_email")
+  employeeName     String   @map("employee_name")
+  date             DateTime @map("work_date")
+  startTime        String   @map("start_time")
+  endTime          String   @map("end_time")
+  type             String   @default("work") // work, break, absence
+  status           String   @default("scheduled") // scheduled, confirmed, completed
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
   
   user User @relation(fields: [userId], references: [id])
   
@@ -219,6 +240,21 @@ model NewMemberInstructionItem {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("new_member_instruction_items")
+}
+
+model TimeEntry {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  gymId         String   @map("gym_id")
+  employeeName  String   @map("employee_name")
+  employeeEmail String   @map("employee_email")
+  checkInTime   DateTime @map("check_in_time")
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gym  Gym  @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  
+  @@map("time_entries")
 }
 
 model UserGym {

@@ -87,7 +87,9 @@ export function BreakManager({
             <div className="mt-3 space-y-2">
               <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
                 <DialogTrigger asChild>
-                  <Button className="bg-red-600 hover:bg-red-700 text-white">⏸️ Reprendre le travail</Button>
+                  <Button className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2">
+                    <Play className="h-4 w-4" /> Reprendre le travail
+                  </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md bg-white">
                   <DialogHeader>

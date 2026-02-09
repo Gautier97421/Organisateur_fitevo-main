@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { AlertTriangle, FileText, XCircle, CheckCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -219,7 +220,8 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
                   </span>
                   {Math.abs(total - formData.total_register) > 0.01 && (
                     <p className="text-sm text-red-600 mt-1">
-                      ⚠️ Il y a une différence entre le montant compté et le total de la caisse
+                      <AlertTriangle className="h-4 w-4 inline-block mr-1" />
+                      Il y a une différence entre le montant compté et le total de la caisse
                     </p>
                   )}
                 </div>
@@ -229,7 +231,9 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label className="text-lg font-medium text-gray-900">📝 Notes (optionnel)</Label>
+            <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
+              <FileText className="h-5 w-5" /> Notes (optionnel)
+            </Label>
             <Textarea
               value={formData.notes}
               onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
@@ -241,15 +245,15 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
         </div>
 
         <DialogFooter className="flex space-x-3">
-          <Button variant="outline" onClick={onClose} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white">
-            ❌ Annuler
+          <Button variant="outline" onClick={onClose} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2">
+            <XCircle className="h-5 w-5" /> Annuler
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={formData.total_register <= 0}
-            className="bg-green-600 hover:bg-green-700 text-lg px-6"
+            className="bg-green-600 hover:bg-green-700 text-lg px-6 flex items-center gap-2"
           >
-            ✅ Valider et Envoyer
+            <CheckCircle className="h-5 w-5" /> Valider et Envoyer
           </Button>
         </DialogFooter>
       </DialogContent>

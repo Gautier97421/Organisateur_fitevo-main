@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle } from "lucide-react"
 import {
   Dialog,
@@ -40,11 +41,10 @@ export function WorkScheduleCalendar() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  const [selectedEmployee, setSelectedEmployee] = useState<{ email: string; name: string } | null>(null)
   const [newSchedule, setNewSchedule] = useState({
     start_time: "",
     end_time: "",
-    break_duration: 15,
-    break_start_time: "",
   })
 
   const employeeColors = [
@@ -102,39 +102,36 @@ export function WorkScheduleCalendar() {
   }
 
   const addSchedule = async () => {
-    if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate) return
+    if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate || !selectedEmployee) return
 
     try {
-      const userEmail = localStorage.getItem("userEmail") || ""
-      const userName = localStorage.getItem("userName") || ""
-
-      const { data, error } = await supabase
-        .from("work_schedules")
-        .insert([
-          {
-            employee_email: userEmail,
-            employee_name: userName,
+      const response = await fetch('/api/db/work_schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{
+            employee_email: selectedEmployee.email,
+            employee_name: selectedEmployee.name,
             work_date: selectedDate.toISOString().split("T")[0],
             start_time: newSchedule.start_time,
             end_time: newSchedule.end_time,
-            break_duration: newSchedule.break_duration,
-            break_start_time: newSchedule.break_start_time || null,
             status: "scheduled",
-          },
-        ])
+          }]
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error('Erreur lors de l\'ajout')
 
-      if (data) {
-        setSchedules([...schedules, ...data])
+      const result = await response.json()
+      if (result.data) {
+        setSchedules([...schedules, ...result.data])
       }
 
       setNewSchedule({
         start_time: "",
         end_time: "",
-        break_duration: 15,
-        break_start_time: "",
       })
+      setSelectedEmployee(null)
       setShowScheduleDialog(false)
       setSelectedDate(null)
 
@@ -341,6 +338,29 @@ export function WorkScheduleCalendar() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Employé
+              </label>
+              <Select
+                value={selectedEmployee?.email || ""}
+                onValueChange={(email) => {
+                  const emp = employees.find(e => e.email === email)
+                  if (emp) setSelectedEmployee({ email: emp.email, name: emp.name })
+                }}
+              >
+                <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                  <SelectValue placeholder="Sélectionner un employé" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.email} value={employee.email}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -363,34 +383,6 @@ export function WorkScheduleCalendar() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Durée pause (min)
-                </label>
-                <Input
-                  type="number"
-                  value={newSchedule.break_duration}
-                  onChange={(e) =>
-                    setNewSchedule({ ...newSchedule, break_duration: Number.parseInt(e.target.value) || 15 })
-                  }
-                  min="0"
-                  max="120"
-                  className="border-2 rounded-xl bg-white text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure pause (optionnel)
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.break_start_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white text-gray-900"
-                />
-              </div>
-            </div>
           </div>
           <DialogFooter className="flex space-x-3">
             <Button
@@ -398,6 +390,7 @@ export function WorkScheduleCalendar() {
               onClick={() => {
                 setShowScheduleDialog(false)
                 setSelectedDate(null)
+                setSelectedEmployee(null)
               }}
               className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
             >
