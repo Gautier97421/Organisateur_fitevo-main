@@ -20,6 +20,7 @@ export interface Employee {
   has_calendar_access?: boolean;
   has_event_proposal_access?: boolean;
   has_work_schedule_access?: boolean;
+  has_work_period_access?: boolean;
   gym_ids?: string[]; // IDs des salles assignées
   gyms?: Gym[]; // Salles complètes (optionnel)
   created_at: string;

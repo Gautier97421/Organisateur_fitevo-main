@@ -11,7 +11,7 @@ import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, HardHat, AlertTriangle, Home, Lock, Sunrise, Sunset, Sun, Calendar } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,10 @@ import {
 export default function EmployeePage() {
   const [userEmail, setUserEmail] = useState("")
   const [userName, setUserName] = useState("")
-  const [hasWorkScheduleAccess, setHasWorkScheduleAccess] = useState(true)
+  const [userRoleId, setUserRoleId] = useState<string | null>(null)
+  const [hasWorkScheduleAccess, setHasWorkScheduleAccess] = useState(false)
+  const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
+  const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
@@ -130,6 +133,14 @@ export default function EmployeePage() {
         const { data } = await response.json()
         if (data) {
           setHasWorkScheduleAccess(data.has_work_schedule_access !== false)
+          setHasCalendarAccess(data.has_calendar_access !== false)
+          setHasWorkPeriodAccess(data.has_work_period_access !== false)
+          
+          // Sauvegarder le roleId pour le filtrage des tâches
+          if (data.role_id) {
+            setUserRoleId(data.role_id)
+            localStorage.setItem("userRoleId", data.role_id)
+          }
         }
       }
     } catch (error) {
@@ -162,16 +173,17 @@ export default function EmployeePage() {
       // Charger les instructions
       const responseInstructions = await fetch("/api/db/new_member_instruction_items?is_active=true&orderBy=order_index&orderDir=asc")
       if (responseInstructions.ok) {
-        const data = await responseInstructions.json()
-        setInstructions(data || [])
+        const result = await responseInstructions.json()
+        setInstructions(result.data || [])
       }
 
       // Charger le lien WhatsApp depuis la config
       const responseConfig = await fetch("/api/db/app_config?key=whatsapp_link")
       if (responseConfig.ok) {
-        const configData = await responseConfig.json()
-        if (configData.length > 0 && configData[0].value) {
-          setWhatsappLink(configData[0].value)
+        const configResult = await responseConfig.json()
+        const configArray = configResult.data || []
+        if (configArray.length > 0 && configArray[0].value) {
+          setWhatsappLink(configArray[0].value)
         }
       }
     } catch (error) {
@@ -321,11 +333,11 @@ export default function EmployeePage() {
   const getPeriodEmoji = (period: "matin" | "aprem" | "journee") => {
     switch (period) {
       case "matin":
-        return "🌅"
+        return <Sunrise className="h-6 w-6 text-orange-500" />
       case "aprem":
-        return "🌇"
+        return <Sunset className="h-6 w-6 text-orange-600" />
       case "journee":
-        return "🌞"
+        return <Sun className="h-6 w-6 text-yellow-500" />
     }
   }
 
@@ -360,7 +372,7 @@ export default function EmployeePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
             <div className="flex items-center space-x-3 md:space-x-4">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <span className="text-xl md:text-2xl">👷‍♂️</span>
+                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-900">
@@ -389,7 +401,7 @@ export default function EmployeePage() {
           <Card className="shadow-2xl border border-gray-200 bg-white">
             <CardHeader className="text-center pb-4 md:pb-8">
               <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-full flex items-center justify-center mb-3 md:mb-4 shadow-lg">
-                <span className="text-xl md:text-2xl">🏠</span>
+                <Home className="h-7 w-7 md:h-9 md:w-9 text-white" />
               </div>
               <CardTitle className="text-2xl md:text-3xl text-gray-900">
                 Que souhaitez-vous faire ?
@@ -399,32 +411,30 @@ export default function EmployeePage() {
             <CardContent className="space-y-4 md:space-y-6 pb-6 md:pb-8">
               <div className="grid gap-4 md:gap-6">
                 {/* Bouton Calendrier */}
-                <Button
-                  onClick={() => setCurrentView("calendar")}
-                  className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                >
-                  <span className="text-3xl md:text-4xl">📅</span>
-                  <div className="text-left">
-                    <div className="font-bold text-base md:text-xl">Calendrier & Planning</div>
-                    <div className="text-xs md:text-sm opacity-90">Événements et horaires de travail</div>
-                  </div>
-                </Button>
-
-                {/* Bouton Planning / Pointage */}
-                <Button
-                  onClick={() => setCurrentView("schedule")}
-                  className="h-20 md:h-24 text-lg md:text-xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                >
-                  <span className="text-3xl md:text-4xl">⏰</span>
-                  <div className="text-left">
-                    <div className="font-bold text-base md:text-xl">
-                      {hasWorkScheduleAccess ? "Planning de Travail" : "Pointage Simple"}
+                {(hasCalendarAccess || hasWorkScheduleAccess) && (
+                  <Button
+                    onClick={() => setCurrentView("calendar")}
+                    className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                  >
+                    <Calendar className="w-8 h-8 md:w-10 md:h-10" />
+                    <div className="text-left">
+                      <div className="font-bold text-base md:text-xl">
+                        {hasCalendarAccess && hasWorkScheduleAccess
+                          ? "Calendrier & Planning"
+                          : hasCalendarAccess
+                          ? "Planning"
+                          : "Calendrier événement"}
+                      </div>
+                      <div className="text-xs md:text-sm opacity-90">
+                        {hasCalendarAccess && hasWorkScheduleAccess
+                          ? "Événements et horaires de travail"
+                          : hasCalendarAccess
+                          ? "Événements et activités"
+                          : "Horaires de travail"}
+                      </div>
                     </div>
-                    <div className="text-xs md:text-sm opacity-90">
-                      {hasWorkScheduleAccess ? "Gérer vos horaires" : "Pointer votre présence"}
-                    </div>
-                  </div>
-                </Button>
+                  </Button>
+                )}
 
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
@@ -440,17 +450,18 @@ export default function EmployeePage() {
                   </Button>
                 )}
 
-                {/* Section Travail */}
-                <div className="bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200">
-                  <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
-                    💼 Commencer ma période de travail
-                  </h3>
+                {/* Section Période de Travail */}
+                {hasWorkPeriodAccess && (
+                  <div className="bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200">
+                    <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
+                      Commencer ma période de travail
+                    </h3>
                   <div className="grid gap-3 md:gap-4">
                     <Button
                       onClick={() => requestPeriodSelection("matin")}
                       className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
                     >
-                      <span className="text-2xl md:text-3xl">🌅</span>
+                      <Sunrise className="w-7 h-7 md:w-9 md:h-9" />
                       <div className="text-left">
                         <div className="font-bold text-base md:text-lg">Matin</div>
                         <div className="text-xs md:text-sm opacity-90">Ouverture et contrôles</div>
@@ -460,7 +471,7 @@ export default function EmployeePage() {
                       onClick={() => requestPeriodSelection("aprem")}
                       className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
                     >
-                      <span className="text-2xl md:text-3xl">🌇</span>
+                      <Sunset className="w-7 h-7 md:w-9 md:h-9" />
                       <div className="text-left">
                         <div className="font-bold text-base md:text-lg">Après-midi</div>
                         <div className="text-xs md:text-sm opacity-90">Maintenance et nettoyage</div>
@@ -470,7 +481,7 @@ export default function EmployeePage() {
                       onClick={() => requestPeriodSelection("journee")}
                       className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
                     >
-                      <span className="text-2xl md:text-3xl">🌞</span>
+                      <Sun className="w-7 h-7 md:w-9 md:h-9" />
                       <div className="text-left">
                         <div className="font-bold text-base md:text-lg">Journée entière</div>
                         <div className="text-xs md:text-sm opacity-90">Ouverture à fermeture</div>
@@ -478,6 +489,7 @@ export default function EmployeePage() {
                     </Button>
                   </div>
                 </div>
+              )}
               </div>
             </CardContent>
           </Card>
@@ -519,7 +531,7 @@ export default function EmployeePage() {
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
               <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <span className="text-xl md:text-2xl">⚠️</span>
+                <AlertTriangle className="h-6 w-6 text-orange-500" />
                 <span>Confirmer votre période de travail</span>
               </DialogTitle>
             </DialogHeader>
@@ -601,15 +613,16 @@ export default function EmployeePage() {
     return (
       <div className="min-h-screen bg-white">
         {/* Header */}
+                {/* Header */}
         <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
             <div className="flex items-center space-x-3 md:space-x-4">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <span className="text-xl md:text-2xl">📅</span>
+                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Calendrier & Planning
+                  Espace Employé
                 </h1>
                 <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
                   {userName} • {userEmail}
@@ -638,55 +651,7 @@ export default function EmployeePage() {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
-          <CalendarView />
-        </div>
-      </div>
-    )
-  }
-
-  // Vue Planning de Travail / Pointage Simple
-  if (currentView === "schedule") {
-    return (
-      <div className="min-h-screen bg-white">
-        {/* Header */}
-        <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
-            <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <span className="text-xl md:text-2xl">⏰</span>
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  {hasWorkScheduleAccess ? "Planning de Travail" : "Pointage Simple"}
-                </h1>
-                <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
-                  {userName} • {userEmail}
-                </p>
-              </div>
-            </div>
-            <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto">
-              <Button
-                onClick={() => setCurrentView("menu")}
-                variant="outline"
-                size="sm"
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-              >
-                🏠 Menu
-              </Button>
-              <Button
-                onClick={handleLogout}
-                variant="outline"
-                size="sm"
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-              >
-                Déconnexion
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-4xl mx-auto p-6">
-          {hasWorkScheduleAccess ? <WorkScheduleCalendar /> : <SimpleTimeTracker />}
+          <CalendarView hasWorkScheduleAccess={hasWorkScheduleAccess} />
         </div>
       </div>
     )
@@ -702,7 +667,7 @@ export default function EmployeePage() {
             <div
               className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg"
             >
-              <span className="text-xl md:text-2xl">{selectedPeriod ? getPeriodEmoji(selectedPeriod) : "👷‍♂️"}</span>
+              {selectedPeriod ? getPeriodEmoji(selectedPeriod) : <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />}
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">
@@ -739,15 +704,15 @@ export default function EmployeePage() {
                 </span>
               </h2>
               {selectedGym && (
-                <p className="text-gray-700 mt-1 text-sm md:text-base font-medium">
-                  📍 {selectedGym.name}
+                <p className="text-gray-700 mt-1 text-sm md:text-base font-medium flex items-center gap-1">
+                  <MapPin className="h-4 w-4" /> {selectedGym.name}
                 </p>
               )}
               <p className="text-gray-600 mt-2 text-sm md:text-base lg:text-lg">
                 Complétez et validez chaque tâche individuellement
               </p>
-              <p className="text-red-600 mt-1 text-xs md:text-sm">
-                🔒 Session verrouillée - Vous ne pouvez plus changer de période
+              <p className="text-red-600 mt-1 text-xs md:text-sm flex items-center gap-1">
+                <Lock className="h-4 w-4" /> Session verrouillée - Vous ne pouvez plus changer de période
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 md:gap-3 lg:gap-4 w-full lg:w-auto">
@@ -772,7 +737,7 @@ export default function EmployeePage() {
           </div>
         </div>
 
-        {selectedPeriod && <TodoList period={selectedPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} onSessionEnd={handleSessionEnd} />}
+        {selectedPeriod && <TodoList period={selectedPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} roleId={userRoleId} onSessionEnd={handleSessionEnd} />}
       </div>
 
       {/* Dialog pour afficher les instructions */}

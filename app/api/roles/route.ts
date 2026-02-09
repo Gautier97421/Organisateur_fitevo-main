@@ -12,7 +12,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('Erreur GET roles:', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la récupération des rôles' } },
+      { error: error.message || 'Erreur lors de la récupération des rôles' },
       { status: 500 }
     )
   }
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     
     if (!name || !color) {
       return NextResponse.json(
-        { data: null, error: { message: 'Le nom et la couleur sont requis' } },
+        { error: 'Le nom et la couleur sont requis' },
         { status: 400 }
       )
     }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     // Vérifier si le rôle existe déjà
     const existing = await prisma.role.findUnique({ where: { name } })
     if (existing) {
-      return NextResponse.json({ data: existing, error: null })
+      return NextResponse.json({ data: existing })
     }
     
     // Créer le rôle
@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
       data: { name, color }
     })
     
-    return NextResponse.json({ data: role, error: null })
+    return NextResponse.json({ data: role })
   } catch (error: any) {
     console.error('Erreur POST role:', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la création du rôle' } },
+      { error: error.message || 'Erreur lors de la création du rôle' },
       { status: 500 }
     )
   }

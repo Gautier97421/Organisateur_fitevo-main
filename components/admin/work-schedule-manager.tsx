@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { supabase } from "@/lib/api-client"
 
 interface WorkSchedule {
   id: string
@@ -73,35 +72,46 @@ export function WorkScheduleManager() {
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
-      const { data, error } = await supabase
-        .from("work_schedules")
-        .select("*")
-        .gte("work_date", startOfMonth.toISOString().split("T")[0])
-        .lte("work_date", endOfMonth.toISOString().split("T")[0])
-        .order("work_date", { ascending: true })
+      const startDate = startOfMonth.toISOString().split("T")[0]
+      const endDate = endOfMonth.toISOString().split("T")[0]
 
-      if (error) throw error
-      setSchedules(data || [])
-      detectConflicts(data || [])
+      const response = await fetch(`/api/db/work_schedules?work_date_gte=${startDate}&work_date_lte=${endDate}`)
+      
+      if (response.ok) {
+        const result = await response.json()
+        const data = result.data || []
+        setSchedules(data)
+        detectConflicts(data)
+      } else {
+        setSchedules([])
+      }
     } catch (error) {
-      // Erreur silencieuse
+      console.error("Erreur lors du chargement des horaires:", error)
+      setSchedules([])
     }
   }
 
   const loadEmployees = async () => {
     try {
-      const { data, error } = await supabase.from("employees").select("email, name").eq("is_active", true)
+      const response = await fetch("/api/db/users?role=employee&is_active=true")
 
-      if (error) throw error
+      if (response.ok) {
+        const result = await response.json()
+        const data = result.data || []
+        
+        const employeesWithColors = data.map((emp: any, index: number) => ({
+          email: emp.email,
+          name: emp.name,
+          color: employeeColors[index % employeeColors.length],
+        }))
 
-      const employeesWithColors = (data || []).map((emp, index) => ({
-        ...emp,
-        color: employeeColors[index % employeeColors.length],
-      }))
-
-      setEmployees(employeesWithColors)
+        setEmployees(employeesWithColors)
+      } else {
+        setEmployees([])
+      }
     } catch (error) {
-      // Erreur silencieuse
+      console.error("Erreur lors du chargement des employés:", error)
+      setEmployees([])
     }
   }
 
@@ -147,9 +157,13 @@ export function WorkScheduleManager() {
 
   const updateScheduleStatus = async (scheduleId: string, newStatus: "confirmed" | "completed") => {
     try {
-      const { error } = await supabase.from("work_schedules").update({ status: newStatus }).eq("id", scheduleId)
+      const response = await fetch(`/api/db/work_schedules/${scheduleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { status: newStatus } })
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error("Erreur lors de la mise à jour")
 
       setSchedules(schedules.map((s) => (s.id === scheduleId ? { ...s, status: newStatus } : s)))
 
@@ -164,9 +178,11 @@ export function WorkScheduleManager() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce planning ?")) return
 
     try {
-      const { error } = await supabase.from("work_schedules").delete().eq("id", scheduleId)
+      const response = await fetch(`/api/db/work_schedules/${scheduleId}`, {
+        method: 'DELETE'
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error("Erreur lors de la suppression")
 
       setSchedules(schedules.filter((s) => s.id !== scheduleId))
       setShowDetailsDialog(false)

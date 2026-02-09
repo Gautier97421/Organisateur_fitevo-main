@@ -38,14 +38,21 @@ interface TaskItem {
   period: "matin" | "aprem" | "journee"
   order_index: number
   gym_id: string
+  role_ids?: string[] // IDs des rôles autorisés
   type?: string
   options?: string[]
   required?: boolean
   created_at: string
 }
 
+interface Role {
+  id: string
+  name: string
+  color: string
+}
+
 // Composant SortableTaskItem pour le drag and drop
-function SortableTaskItem({ task, index, onDelete }: { task: TaskItem; index: number; onDelete: (id: string) => void }) {
+function SortableTaskItem({ task, index, roles, onDelete }: { task: TaskItem; index: number; roles: Role[]; onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -88,10 +95,26 @@ function SortableTaskItem({ task, index, onDelete }: { task: TaskItem; index: nu
                 </span>
               )}
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full text-xs flex-shrink-0">
-                {task.type === "checkbox" ? "☑️" : task.type === "text" ? "📝" : "📋"}
+                {task.type === "checkbox" ? <CheckSquare2 className="h-3 w-3" /> : task.type === "text" ? <FileText className="h-3 w-3" /> : <List className="h-3 w-3" />}
               </span>
             </div>
             <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{task.description}</p>
+            {task.role_ids && task.role_ids.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {task.role_ids.map((roleId) => {
+                  const role = roles.find((r) => r.id === roleId)
+                  return role ? (
+                    <span
+                      key={roleId}
+                      className="px-2 py-0.5 rounded-full text-xs text-white font-medium"
+                      style={{ backgroundColor: role.color }}
+                    >
+                      {role.name}
+                    </span>
+                  ) : null
+                })}
+              </div>
+            )}
             {task.options && task.options.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {task.options.slice(0, 3).map((option, idx) => (
@@ -115,7 +138,7 @@ function SortableTaskItem({ task, index, onDelete }: { task: TaskItem; index: nu
             className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800 flex-shrink-0"
             title="Supprimer"
           >
-            🗑️
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
@@ -126,7 +149,9 @@ function SortableTaskItem({ task, index, onDelete }: { task: TaskItem; index: nu
 export function TaskManager() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [selectedGym, setSelectedGym] = useState<string>("")
+  const [selectedRole, setSelectedRole] = useState<string>("all") // "all" pour tous les rôles
   const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
   const [showForm, setShowForm] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -136,12 +161,14 @@ export function TaskManager() {
     type: "checkbox" | "text" | "qcm"
     options: string[]
     required: boolean
+    roleIds: string[] // IDs des rôles sélectionnés
   }>({
     title: "",
     description: "",
     type: "checkbox",
     options: [],
     required: true,
+    roleIds: [],
   })
 
   // Configuration drag and drop
@@ -171,6 +198,18 @@ export function TaskManager() {
     }
   }
 
+  const loadRoles = async () => {
+    try {
+      const response = await fetch('/api/roles')
+      if (!response.ok) throw new Error('Erreur chargement rôles')
+      
+      const result = await response.json()
+      setRoles(result.data || [])
+    } catch (error) {
+      console.error('Erreur lors du chargement des rôles:', error)
+    }
+  }
+
   const loadTasks = async () => {
     if (!selectedGym) return
 
@@ -181,8 +220,15 @@ export function TaskManager() {
       const result = await response.json()
       const tasksData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
       
+      // Parser les champs JSON et trier
+      const parsedTasks = tasksData.map((task: any) => ({
+        ...task,
+        options: task.options ? (typeof task.options === 'string' ? JSON.parse(task.options) : task.options) : [],
+        role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
+      }))
+      
       // Trier côté client par period puis order_index
-      const sortedTasks = tasksData.sort((a: any, b: any) => {
+      const sortedTasks = parsedTasks.sort((a: any, b: any) => {
         const periodOrder: any = { matin: 1, aprem: 2, journee: 3 }
         if (a.period !== b.period) {
           return (periodOrder[a.period] || 0) - (periodOrder[b.period] || 0)
@@ -200,6 +246,7 @@ export function TaskManager() {
 
   useEffect(() => {
     loadGyms()
+    loadRoles()
   }, [])
 
   useEffect(() => {
@@ -216,7 +263,22 @@ export function TaskManager() {
   }, 15000, [selectedGym])
 
   const getCurrentTasks = () => {
-    return tasks.filter((task) => task.period === activePeriod)
+    return tasks.filter((task) => {
+      // Filtrer par période
+      if (task.period !== activePeriod) return false
+      
+      // Filtrer par rôle si un rôle est sélectionné
+      if (selectedRole !== "all") {
+        // Si la tâche a des rôles définis, vérifier si le rôle sélectionné est inclus
+        if (task.role_ids && task.role_ids.length > 0) {
+          return task.role_ids.includes(selectedRole)
+        }
+        // Si la tâche n'a pas de rôles définis, elle est visible par tous
+        return true
+      }
+      
+      return true
+    })
   }
 
   const addTask = async () => {
@@ -247,6 +309,7 @@ export function TaskManager() {
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
+            role_ids: newTask.roleIds.length > 0 ? JSON.stringify(newTask.roleIds) : null,
             user_id: userId,
             created_by: userId,
             status: 'pending'
@@ -256,13 +319,14 @@ export function TaskManager() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(JSON.stringify(errorData, null, 2))
+        console.error('Erreur API:', errorData)
+        throw new Error(errorData.error?.message || `Erreur ${response.status}`)
       }
 
       const result = await response.json()
-      if (result.data) {
-        setTasks([...tasks, result.data])
-      }
+      
+      // Recharger toutes les tâches depuis le serveur
+      await loadTasks()
 
       setNewTask({
         title: "",
@@ -270,10 +334,12 @@ export function TaskManager() {
         type: "checkbox",
         options: [],
         required: true,
+        roleIds: [],
       })
       setShowForm(false)
-    } catch (error) {
-      alert(`Erreur lors de l'ajout de la tâche:\n${error}`)
+    } catch (error: any) {
+      console.error('Erreur lors de l\'ajout:', error)
+      alert(`Erreur lors de l'ajout de la tâche:\n${error.message || error}`)
     }
   }
 
@@ -343,7 +409,19 @@ export function TaskManager() {
   }
 
   const getPeriodCount = (period: "matin" | "aprem" | "journee") => {
-    return tasks.filter((task) => task.period === period).length
+    return tasks.filter((task) => {
+      if (task.period !== period) return false
+      
+      // Appliquer le même filtre de rôle
+      if (selectedRole !== "all") {
+        if (task.role_ids && task.role_ids.length > 0) {
+          return task.role_ids.includes(selectedRole)
+        }
+        return true
+      }
+      
+      return true
+    }).length
   }
 
   const currentTasks = getCurrentTasks().sort((a, b) => a.order_index - b.order_index)
@@ -390,25 +468,52 @@ export function TaskManager() {
         </Button>
       </div>
 
-      {/* Sélecteur de salle */}
+      {/* Sélecteur de salle et de rôle */}
       <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
         <CardContent className="p-6">
-          <div className="flex items-center space-x-4">
-            <Building className="h-6 w-6 text-red-600 dark:text-red-400" />
-            <div className="flex-1">
-              <Label className="text-lg font-medium dark:text-white">Sélectionnée :</Label>
-              <Select value={selectedGym} onValueChange={setSelectedGym}>
-                <SelectTrigger className="h-12 text-lg border-2 rounded-xl mt-2">
-                  <SelectValue placeholder="Choisir une salle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {gyms.map((gym) => (
-                    <SelectItem key={gym.id} value={gym.id}>
-                      {gym.name} - {gym.location}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-center space-x-4">
+              <Building className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="flex-1">
+                <Label className="text-lg font-medium dark:text-white">Salle :</Label>
+                <Select value={selectedGym} onValueChange={setSelectedGym}>
+                  <SelectTrigger className="h-12 text-lg border-2 rounded-xl mt-2">
+                    <SelectValue placeholder="Choisir une salle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gyms.map((gym) => (
+                      <SelectItem key={gym.id} value={gym.id}>
+                        {gym.name} - {gym.location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="h-6 w-6 rounded-full bg-gradient-to-r from-red-500 to-orange-500 flex-shrink-0" />
+              <div className="flex-1">
+                <Label className="text-lg font-medium dark:text-white">Rôle :</Label>
+                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                  <SelectTrigger className="h-12 text-lg border-2 rounded-xl mt-2">
+                    <SelectValue placeholder="Filtrer par rôle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les rôles</SelectItem>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: role.color }}
+                          />
+                          {role.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -506,6 +611,43 @@ export function TaskManager() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
+                  <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
+                  <div className="flex flex-wrap gap-2">
+                    {roles.map((role) => (
+                      <div
+                        key={role.id}
+                        className={`px-3 py-2 rounded-lg cursor-pointer border-2 transition-all ${
+                          newTask.roleIds.includes(role.id)
+                            ? 'border-red-500 bg-red-50'
+                            : 'border-gray-300 bg-white hover:border-gray-400'
+                        }`}
+                        onClick={() => {
+                          const isSelected = newTask.roleIds.includes(role.id)
+                          setNewTask({
+                            ...newTask,
+                            roleIds: isSelected
+                              ? newTask.roleIds.filter((id) => id !== role.id)
+                              : [...newTask.roleIds, role.id]
+                          })
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: role.color }}
+                          />
+                          <span className="font-medium">{role.name}</span>
+                          {newTask.roleIds.includes(role.id) && (
+                            <CheckCircle className="h-4 w-4 text-red-600" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {newTask.type === "qcm" && (
                   <Textarea
                     placeholder="Options (une par ligne)&#10;Option 1&#10;Option 2&#10;Option 3"
@@ -580,6 +722,7 @@ export function TaskManager() {
                         key={task.id}
                         task={task}
                         index={index}
+                        roles={roles}
                         onDelete={deleteTask}
                       />
                     ))}

@@ -32,6 +32,7 @@ model User {
   hasCalendarAccess     Boolean  @default(true) @map("has_calendar_access")
   hasEventProposalAccess Boolean @default(true) @map("has_event_proposal_access")
   hasWorkScheduleAccess Boolean  @default(true) @map("has_work_schedule_access")
+  hasWorkPeriodAccess   Boolean  @default(true) @map("has_work_period_access")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   
@@ -178,6 +179,7 @@ model Task {
   assignedTo  String?   @map("assigned_to")
   dueDate     DateTime? @map("due_date")
   gymId       String?   @map("gym_id")
+  roleIds     Json?     @map("role_ids") // IDs des rôles autorisés à voir cette tâche
   orderIndex  Int       @default(0) @map("order_index")
   createdBy   String    @map("created_by")
   createdAt   DateTime  @default(now()) @map("created_at")

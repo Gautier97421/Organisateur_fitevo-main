@@ -57,7 +57,8 @@ export function EmployeeManager() {
     newRoleColor: "bleu",
     hasCalendarAccess: true,
     hasEventProposalAccess: true,
-    hasWorkScheduleAccess: true
+    hasWorkScheduleAccess: true,
+    hasWorkPeriodAccess: true
   })
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
@@ -73,6 +74,7 @@ export function EmployeeManager() {
     hasCalendarAccess: boolean;
     hasEventProposalAccess: boolean;
     hasWorkScheduleAccess: boolean;
+    hasWorkPeriodAccess: boolean;
   } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
@@ -215,6 +217,7 @@ export function EmployeeManager() {
             has_calendar_access: newEmployee.hasCalendarAccess,
             has_event_proposal_access: newEmployee.hasEventProposalAccess,
             has_work_schedule_access: newEmployee.hasWorkScheduleAccess,
+            has_work_period_access: newEmployee.hasWorkPeriodAccess,
             active: true
           }
         })
@@ -247,7 +250,8 @@ export function EmployeeManager() {
         newRoleColor: "bleu",
         hasCalendarAccess: true,
         hasEventProposalAccess: true,
-        hasWorkScheduleAccess: true
+        hasWorkScheduleAccess: true,
+        hasWorkPeriodAccess: true
       })
       setIsAddingEmployee(false)
       alert("Employé ajouté avec succès !")
@@ -276,7 +280,8 @@ export function EmployeeManager() {
       newRoleColor: "bleu",
       hasCalendarAccess: employee.has_calendar_access !== false,
       hasEventProposalAccess: employee.has_event_proposal_access !== false,
-      hasWorkScheduleAccess: employee.has_work_schedule_access !== false
+      hasWorkScheduleAccess: employee.has_work_schedule_access !== false,
+      hasWorkPeriodAccess: employee.has_work_period_access !== false
     })
     setIsEditingEmployee(true)
   }
@@ -324,7 +329,8 @@ export function EmployeeManager() {
           role_id: roleId && roleId !== "new" ? roleId : null,
           has_calendar_access: editEmployee.hasCalendarAccess,
           has_event_proposal_access: editEmployee.hasEventProposalAccess,
-          has_work_schedule_access: editEmployee.hasWorkScheduleAccess
+          has_work_schedule_access: editEmployee.hasWorkScheduleAccess,
+          has_work_period_access: editEmployee.hasWorkPeriodAccess
         })
       })
 
@@ -757,17 +763,7 @@ export function EmployeeManager() {
                         onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasCalendarAccess: checked as boolean })}
                       />
                       <Label htmlFor="perm-calendar" className="text-sm text-gray-700">
-                        Accès au calendrier
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="perm-events"
-                        checked={newEmployee.hasEventProposalAccess}
-                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasEventProposalAccess: checked as boolean })}
-                      />
-                      <Label htmlFor="perm-events" className="text-sm text-gray-700">
-                        Proposition d'événements
+                        Accès au calendrier d'événements
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -777,13 +773,23 @@ export function EmployeeManager() {
                         onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasWorkScheduleAccess: checked as boolean })}
                       />
                       <Label htmlFor="perm-schedule" className="text-sm text-gray-700">
-                        Accès au planning de travail complet
+                        Accès au planning de travail
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="perm-period"
+                        checked={newEmployee.hasWorkPeriodAccess}
+                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasWorkPeriodAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="perm-period" className="text-sm text-gray-700">
+                        Accès aux périodes de travail
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {newEmployee.hasWorkScheduleAccess 
-                        ? "L'employé aura accès au planning de travail complet" 
-                        : "L'employé aura uniquement accès au pointage simple (scan QR code)"}
+                      {newEmployee.hasWorkPeriodAccess 
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                        : "L'employé n'aura pas accès aux périodes de travail"}
                     </div>
                   </div>
                 </div>
@@ -953,17 +959,7 @@ export function EmployeeManager() {
                         onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasCalendarAccess: checked as boolean })}
                       />
                       <Label htmlFor="edit-perm-calendar" className="text-sm text-gray-700">
-                        Accès au calendrier
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="edit-perm-events"
-                        checked={editEmployee.hasEventProposalAccess}
-                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasEventProposalAccess: checked as boolean })}
-                      />
-                      <Label htmlFor="edit-perm-events" className="text-sm text-gray-700">
-                        Proposition d'événements
+                        Accès au calendrier d'événements
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -973,13 +969,23 @@ export function EmployeeManager() {
                         onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasWorkScheduleAccess: checked as boolean })}
                       />
                       <Label htmlFor="edit-perm-schedule" className="text-sm text-gray-700">
-                        Accès au planning de travail complet
+                        Accès au planning de travail
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-perm-period"
+                        checked={editEmployee.hasWorkPeriodAccess}
+                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasWorkPeriodAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="edit-perm-period" className="text-sm text-gray-700">
+                        Accès aux périodes de travail
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {editEmployee.hasWorkScheduleAccess 
-                        ? "L'employé aura accès au planning de travail complet" 
-                        : "L'employé aura uniquement accès au pointage simple (scan QR code)"}
+                      {editEmployee.hasWorkPeriodAccess 
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                        : "L'employé n'aura pas accès aux périodes de travail"}
                     </div>
                   </div>
                 </div>

@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText } from "lucide-react"
+import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { CashRegisterForm } from "./cash-register-form"
 import {
@@ -37,6 +37,7 @@ interface TodoListProps {
   period: "matin" | "aprem" | "journee"
   isBlocked: boolean
   gymId?: string // ID de la salle sélectionnée
+  roleId?: string | null // ID du rôle de l'employé
   onSessionEnd?: () => void
 }
 
@@ -57,7 +58,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
-export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListProps) {
+export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: TodoListProps) {
   const [showValidationDialog, setShowValidationDialog] = useState(false)
   const [showCashRegisterForm, setShowCashRegisterForm] = useState(false)
   const [taskToValidate, setTaskToValidate] = useState<Task | null>(null)
@@ -67,14 +68,35 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
   // Fonction pour récupérer les tâches depuis la BDD selon la période
   const getTasksForPeriod = async (period: "matin" | "aprem" | "journee"): Promise<Task[]> => {
     try {
-      // Charger les tâches depuis l'API
-      const response = await fetch(`/api/db/tasks?period=${period}&status=pending`)
+      // Charger les tâches depuis l'API avec filtres de base
+      let url = `/api/db/tasks?period=${period}&status=pending`
+      
+      // Ajouter le filtre gym si défini
+      if (gymId) {
+        url += `&gym_id=${gymId}`
+      }
+      
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('Erreur lors du chargement des tâches')
       }
       
       const data = await response.json()
-      const dbTasks = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+      let dbTasks = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+      
+      // Filtrage côté client par roleId
+      if (roleId) {
+        dbTasks = dbTasks.filter((task: any) => {
+          // Si role_ids est null ou vide, la tâche est visible par tous
+          if (!task.role_ids || (Array.isArray(task.role_ids) && task.role_ids.length === 0)) {
+            return true
+          }
+          
+          // Sinon, vérifier si le roleId de l'utilisateur est dans le tableau
+          const roleIds = Array.isArray(task.role_ids) ? task.role_ids : []
+          return roleIds.includes(roleId)
+        })
+      }
       
       // Convertir les tâches de la BDD au format attendu
       return dbTasks.map((task: any) => ({
@@ -259,10 +281,15 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
     
     loadTasksFromDb()
     
-    // Recharger toutes les 10 secondes pour avoir un suivi en temps quasi-réel
-    const interval = setInterval(loadTasksFromDb, 10000)
-    return () => clearInterval(interval)
-  }, [period])
+    // Recharger toutes les 30 secondes SAUF si le formulaire de caisse est ouvert
+    let interval: NodeJS.Timeout | undefined
+    if (!showCashRegisterForm && !showValidationDialog) {
+      interval = setInterval(loadTasksFromDb, 30000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [period, showCashRegisterForm, showValidationDialog])
 
   const completedTasks = tasks.filter((task) => task.completed).length
   const validatedTasks = tasks.filter((task) => task.validated).length
@@ -529,8 +556,12 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
             </div>
           </div>
           <Progress value={progress} className="h-4" />
-          <p className="text-center mt-2 text-gray-600">
-            {progress === 100 ? "🎉 Toutes les tâches terminées !" : `${Math.round(progress)}% terminé`}
+          <p className="text-center mt-2 text-gray-600 flex items-center justify-center gap-2">
+            {progress === 100 ? (
+              <><PartyPopper className="h-5 w-5 text-green-600" /> Toutes les tâches terminées !</>
+            ) : (
+              `${Math.round(progress)}% terminé`
+            )}
           </p>
         </CardContent>
       </Card>
@@ -610,15 +641,17 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
                     className="text-lg min-h-[100px] bg-white text-gray-900"
                   />
                   {textValues[task.id] && textValues[task.id] !== debouncedTextValues[task.id] && (
-                    <p className="text-sm text-red-600">⏳ Saisie en cours...</p>
+                    <p className="text-sm text-red-600 flex items-center gap-1">
+                      <Hourglass className="h-4 w-4" /> Saisie en cours...
+                    </p>
                   )}
                 </div>
               )}
 
               {task.type === "qcm" && task.options && (
                 <div className="space-y-3">
-                  <Label className="text-lg font-medium text-gray-900">
-                    📋 Choisissez une option :
+                  <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                    <ListIcon className="h-5 w-5" /> Choisissez une option :
                   </Label>
                   <RadioGroup
                     value={task.value || ""}
@@ -656,18 +689,18 @@ export function TodoList({ period, isBlocked, gymId, onSessionEnd }: TodoListPro
           <CardContent className="p-6 text-center">
             <div className="space-y-4">
               <div className="text-green-700">
-                <span className="text-3xl">🎉</span>
+                <PartyPopper className="h-12 w-12 mx-auto text-green-600" />
                 <p className="text-xl font-bold mt-2">Félicitations !</p>
                 <p className="text-lg">Toutes les tâches obligatoires sont validées</p>
-                <p className="text-sm mt-2 text-amber-600 dark:text-amber-400">
-                  💰 Vous devrez remplir la fiche de caisse avant l'envoi final
+                <p className="text-sm mt-2 text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
+                  <DollarSign className="h-4 w-4" /> Vous devrez remplir la fiche de caisse avant l'envoi final
                 </p>
               </div>
               <Button
                 onClick={submitTodoList}
-                className="bg-green-600 hover:bg-green-700 text-white text-xl px-8 py-4 h-auto"
+                className="bg-green-600 hover:bg-green-700 text-white text-xl px-8 py-4 h-auto flex items-center gap-2"
               >
-                💰 Remplir la fiche de caisse
+                <DollarSign className="h-6 w-6" /> Remplir la fiche de caisse
               </Button>
             </div>
           </CardContent>

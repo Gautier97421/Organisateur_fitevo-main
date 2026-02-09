@@ -31,7 +31,11 @@ interface CalendarEvent {
   rejection_reason?: string
 }
 
-export function CalendarView() {
+interface CalendarViewProps {
+  hasWorkScheduleAccess?: boolean
+}
+
+export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -45,6 +49,13 @@ export function CalendarView() {
     event_time: "",
     duration_minutes: 60,
   })
+
+  // S'assurer que activeView est "events" si pas d'accès au planning
+  useEffect(() => {
+    if (!hasWorkScheduleAccess && activeView === "schedule") {
+      setActiveView("events")
+    }
+  }, [hasWorkScheduleAccess, activeView])
 
   const loadEvents = async () => {
     try {
@@ -289,18 +300,20 @@ export function CalendarView() {
           <Calendar className="mr-2 h-5 w-5" />
           Événements Annuels
         </Button>
-        <Button
-          variant={activeView === "schedule" ? "default" : "outline"}
-          onClick={() => setActiveView("schedule")}
-          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
-            activeView === "schedule"
-              ? "bg-red-600 text-white shadow-lg"
-              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-          }`}
-        >
-          <Clock className="mr-2 h-5 w-5" />
-          Planning de Travail
-        </Button>
+        {hasWorkScheduleAccess && (
+          <Button
+            variant={activeView === "schedule" ? "default" : "outline"}
+            onClick={() => setActiveView("schedule")}
+            className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+              activeView === "schedule"
+                ? "bg-red-600 text-white shadow-lg"
+                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+            }`}
+          >
+            <Clock className="mr-2 h-5 w-5" />
+            Planning de Travail
+          </Button>
+        )}
       </div>
 
       {activeView === "events" ? (

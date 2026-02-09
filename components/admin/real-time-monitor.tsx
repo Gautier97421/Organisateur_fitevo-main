@@ -51,11 +51,33 @@ export function RealTimeMonitor() {
       
       const statusPromises = employees.map(async (emp: any) => {
         // Charger le planning du jour
-        const responseSchedule = await fetch(`/api/db/work_schedules?user_id=${emp.id}&work_date=${today}&single=true`)
+        const responseSchedule = await fetch(`/api/db/work_schedules?user_id=${emp.id}&work_date=${today}`)
         let schedule = null
+        let currentPeriod: "matin" | "aprem" | "journee" | null = null
+        let isOnBreak = false
+        let breakStartTime: string | undefined = undefined
+        
         if (responseSchedule.ok) {
           const scheduleData = await responseSchedule.json()
-          schedule = scheduleData.data
+          const schedules = Array.isArray(scheduleData.data) ? scheduleData.data : []
+          
+          // Chercher une session de travail active (type=work sans end_time)
+          const activeWork = schedules.find((s: any) => s.type === 'work' && !s.end_time)
+          if (activeWork && activeWork.notes) {
+            // Extraire la période depuis les notes (format: "Période: matin")
+            const periodMatch = activeWork.notes.match(/Période:\s*(matin|aprem|journee)/)
+            if (periodMatch) {
+              currentPeriod = periodMatch[1] as "matin" | "aprem" | "journee"
+              schedule = activeWork
+            }
+          }
+          
+          // Chercher une pause active (type=break sans end_time)
+          const activeBreak = schedules.find((s: any) => s.type === 'break' && !s.end_time)
+          if (activeBreak) {
+            isOnBreak = true
+            breakStartTime = activeBreak.start_time
+          }
         }
 
         // Charger les tâches de l'employé
@@ -68,33 +90,28 @@ export function RealTimeMonitor() {
 
         // Filtrer les tâches selon la période
         let periodTasks = tasks
-        if (schedule?.type === 'work') {
-          // Déterminer la période depuis le localStorage de l'employé (simulation)
-          // En production, vous devriez stocker ça dans la DB
-          const period = localStorage.getItem(`employee_${emp.id}_period`) as "matin" | "aprem" | "journee" | null
-          
-          if (period === 'matin') {
+        if (currentPeriod) {
+          if (currentPeriod === 'matin') {
             periodTasks = tasks.filter((t: any) => !t.period || t.period === 'matin' || t.period === 'journee')
-          } else if (period === 'aprem') {
+          } else if (currentPeriod === 'aprem') {
             periodTasks = tasks.filter((t: any) => !t.period || t.period === 'aprem' || t.period === 'journee')
+          } else if (currentPeriod === 'journee') {
+            periodTasks = tasks.filter((t: any) => !t.period || t.period === 'matin' || t.period === 'aprem' || t.period === 'journee')
           }
         }
 
         const completedTasks = periodTasks.filter((t: any) => t.status === 'completed').length
         const totalTasks = periodTasks.length
 
-        // Déterminer si en pause (type = 'break' dans work_schedules)
-        const isOnBreak = schedule?.type === 'break'
-
         return {
           id: emp.id,
           name: emp.name,
           email: emp.email,
-          currentPeriod: schedule?.type === 'work' ? (localStorage.getItem(`employee_${emp.id}_period`) as "matin" | "aprem" | "journee" | null) : null,
+          currentPeriod: currentPeriod,
           tasksCompleted: completedTasks,
           totalTasks: totalTasks,
           isOnBreak: isOnBreak,
-          breakStartTime: isOnBreak && schedule?.start_time ? schedule.start_time : undefined,
+          breakStartTime: breakStartTime,
           lastUpdate: new Date().toLocaleTimeString("fr-FR", {
             hour: "2-digit",
             minute: "2-digit",

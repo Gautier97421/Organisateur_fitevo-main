@@ -70,15 +70,17 @@ export function WorkScheduleCalendar() {
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
-      const { data, error } = await supabase
-        .from("work_schedules")
-        .select("*")
-        .gte("work_date", startOfMonth.toISOString().split("T")[0])
-        .lte("work_date", endOfMonth.toISOString().split("T")[0])
-        .order("work_date", { ascending: true })
-
-      if (error) throw error
-      setSchedules(data || [])
+      const response = await fetch(
+        `/api/db/work_schedules?work_date_gte=${startOfMonth.toISOString().split("T")[0]}&work_date_lte=${endOfMonth.toISOString().split("T")[0]}&orderBy=work_date`
+      )
+      
+      if (!response.ok) throw new Error('Erreur lors du chargement')
+      
+      const result = await response.json()
+      const schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      
+      console.log('Schedules chargés:', schedulesData) // Debug
+      setSchedules(schedulesData)
     } catch (error) {
       console.error("Erreur lors du chargement des plannings:", error)
     }
@@ -86,18 +88,22 @@ export function WorkScheduleCalendar() {
 
   const loadEmployees = async () => {
     try {
-      const { data, error } = await supabase.from("employees").select("email, name").eq("is_active", true)
+      const response = await fetch('/api/db/employees?is_active=true')
+      
+      if (!response.ok) throw new Error('Erreur lors du chargement')
+      
+      const result = await response.json()
+      const employeesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
 
-      if (error) throw error
-
-      const employeesWithColors = (data || []).map((emp, index) => ({
-        ...emp,
+      const employeesWithColors = employeesData.map((emp: any, index: number) => ({
+        email: emp.email,
+        name: emp.name,
         color: employeeColors[index % employeeColors.length],
       }))
 
       setEmployees(employeesWithColors)
     } catch (error) {
-      // Erreur silencieuse
+      console.error('Erreur lors du chargement des employés:', error)
     }
   }
 
@@ -176,7 +182,15 @@ export function WorkScheduleCalendar() {
 
   const getSchedulesForDate = (date: Date) => {
     const dateString = date.toISOString().split("T")[0]
-    return schedules.filter((schedule) => schedule.work_date === dateString)
+    return schedules.filter((schedule) => {
+      // Gérer différents formats de date
+      const scheduleDate = schedule.work_date 
+        ? (typeof schedule.work_date === 'string' 
+            ? schedule.work_date.split("T")[0] 
+            : new Date(schedule.work_date).toISOString().split("T")[0])
+        : ''
+      return scheduleDate === dateString
+    })
   }
 
   const getEmployeeColor = (employeeEmail: string) => {
@@ -212,42 +226,44 @@ export function WorkScheduleCalendar() {
   const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Navigation du calendrier */}
       <Card className="border border-gray-200 shadow-xl bg-white">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-3 md:pb-4">
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
               onClick={() => navigateMonth("prev")}
-              className="border-2 border-gray-300 rounded-xl bg-white"
+              className="border-2 border-gray-300 rounded-xl bg-white px-2 md:px-4"
+              size="sm"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-2xl font-bold text-gray-900">
+            <h3 className="text-base md:text-xl lg:text-2xl font-bold text-gray-900 text-center">
               Planning - {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <Button
               variant="outline"
               onClick={() => navigateMonth("next")}
-              className="border-2 border-gray-300 rounded-xl bg-white"
+              className="border-2 border-gray-300 rounded-xl bg-white px-2 md:px-4"
+              size="sm"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 md:p-6">
           {/* En-têtes des jours */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
+          <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2 md:mb-4">
             {dayNames.map((day) => (
-              <div key={day} className="text-center font-semibold text-gray-600 py-2">
+              <div key={day} className="text-center font-semibold text-gray-600 py-1 md:py-2 text-xs md:text-sm">
                 {day}
               </div>
             ))}
           </div>
 
           {/* Grille du calendrier */}
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {getDaysInMonth().map((dayInfo, index) => {
               const daySchedules = getSchedulesForDate(dayInfo.date)
               const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
@@ -258,7 +274,7 @@ export function WorkScheduleCalendar() {
                   key={index}
                   onClick={() => dayInfo.isCurrentMonth && !isPast && handleDateClick(dayInfo.date)}
                   className={`
-                    min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
+                    min-h-[60px] md:min-h-[100px] p-1 md:p-2 border rounded-lg md:rounded-xl cursor-pointer transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
                         ? "bg-white hover:bg-red-50"
@@ -272,22 +288,23 @@ export function WorkScheduleCalendar() {
                     ${isPast ? "cursor-not-allowed opacity-50" : "hover:shadow-md"}
                   `}
                 >
-                  <div className="font-semibold text-sm mb-1 text-gray-900">
+                  <div className="font-semibold text-[10px] md:text-sm mb-0.5 md:mb-1 text-gray-900">
                     {dayInfo.date.getDate()}
                   </div>
-                  <div className="space-y-1">
-                    {daySchedules.slice(0, 3).map((schedule) => (
+                  <div className="space-y-0.5 md:space-y-1">
+                    {daySchedules.slice(0, 2).map((schedule) => (
                       <div
                         key={schedule.id}
-                        className={`text-xs p-1 rounded text-white truncate ${getEmployeeColor(schedule.employee_email)}`}
-                        title={`${schedule.employee_name}: ${schedule.start_time} - ${schedule.end_time}${schedule.break_start_time ? ` (Pause: ${schedule.break_start_time})` : ""}`}
+                        className={`text-[8px] md:text-xs p-0.5 md:p-1 rounded text-white truncate ${getEmployeeColor(schedule.employee_email)}`}
+                        title={`${schedule.employee_name || 'Sans nom'}: ${schedule.start_time || ''} - ${schedule.end_time || ''}${schedule.break_start_time ? ` (Pause: ${schedule.break_start_time})` : ""}`}
                       >
-                        {schedule.employee_name.split(" ")[0]} {schedule.start_time}-{schedule.end_time}
+                        <span className="hidden md:inline">{schedule.employee_name ? schedule.employee_name.split(" ")[0] : 'Employé'} </span>
+                        {schedule.start_time || ''}-{schedule.end_time || ''}
                       </div>
                     ))}
-                    {daySchedules.length > 3 && (
-                      <div className="text-xs text-gray-500">
-                        +{daySchedules.length - 3} autre(s)
+                    {daySchedules.length > 2 && (
+                      <div className="text-[8px] md:text-xs text-gray-500">
+                        +{daySchedules.length - 2}
                       </div>
                     )}
                   </div>
@@ -300,9 +317,9 @@ export function WorkScheduleCalendar() {
 
       {/* Légende des employés */}
       <Card className="border border-gray-200 shadow-xl bg-white">
-        <CardContent className="p-4">
-          <h4 className="font-semibold mb-3 text-gray-900">Légende des employés :</h4>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <CardContent className="p-3 md:p-4">
+          <h4 className="font-semibold mb-2 md:mb-3 text-sm md:text-base text-gray-900">Légende des employés :</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
             {employees.map((employee) => (
               <div key={employee.email} className="flex items-center space-x-2">
                 <div className={`w-4 h-4 ${employee.color} rounded`}></div>
@@ -315,13 +332,13 @@ export function WorkScheduleCalendar() {
 
       {/* Dialog pour ajouter un horaire */}
       <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-              <Clock className="h-6 w-6 text-red-600" />
+            <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+              <Clock className="h-5 w-5 md:h-6 md:w-6 text-red-600" />
               <span>Nouvel Horaire de Travail</span>
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600">
+            <DialogDescription className="text-sm md:text-base text-gray-600">
               {selectedDate && (
                 <>
                   Date sélectionnée :{" "}

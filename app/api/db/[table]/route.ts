@@ -83,7 +83,7 @@ function mapFieldsToClient(table: string, data: any): any {
     delete mapped.remoteWorkEnabled
   }
   
-  // Mapper hasCalendarAccess, hasEventProposalAccess, hasWorkScheduleAccess
+  // Mapper hasCalendarAccess, hasEventProposalAccess, hasWorkScheduleAccess, hasWorkPeriodAccess
   if ((table === 'users' || table === 'employees' || table === 'admins')) {
     if (mapped.hasCalendarAccess !== undefined) {
       mapped.has_calendar_access = mapped.hasCalendarAccess
@@ -96,6 +96,10 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.hasWorkScheduleAccess !== undefined) {
       mapped.has_work_schedule_access = mapped.hasWorkScheduleAccess
       delete mapped.hasWorkScheduleAccess
+    }
+    if (mapped.hasWorkPeriodAccess !== undefined) {
+      mapped.has_work_period_access = mapped.hasWorkPeriodAccess
+      delete mapped.hasWorkPeriodAccess
     }
   }
   
@@ -349,6 +353,16 @@ export async function POST(
         // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
         if (!converted.eventDate.includes('T')) {
           converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+        }
+      }
+      
+      // Convertir les dates simples en DateTime ISO-8601 pour work_schedules
+      if (table === 'work_schedules' && converted.date) {
+        // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
+        if (typeof converted.date === 'string' && !converted.date.includes('T')) {
+          converted.date = new Date(`${converted.date}T00:00:00.000Z`)
+        } else if (typeof converted.date === 'string') {
+          converted.date = new Date(converted.date)
         }
       }
       

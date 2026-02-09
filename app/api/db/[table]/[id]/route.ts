@@ -49,6 +49,10 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.hasWorkScheduleAccess = mapped.has_work_schedule_access
       delete mapped.has_work_schedule_access
     }
+    if (mapped.has_work_period_access !== undefined) {
+      mapped.hasWorkPeriodAccess = mapped.has_work_period_access
+      delete mapped.has_work_period_access
+    }
     if (mapped.role_id !== undefined) {
       mapped.roleId = mapped.role_id
       delete mapped.role_id
@@ -155,6 +159,26 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.remoteWorkEnabled !== undefined) {
       mapped.remote_work_enabled = mapped.remoteWorkEnabled
       delete mapped.remoteWorkEnabled
+    }
+    if (mapped.hasCalendarAccess !== undefined) {
+      mapped.has_calendar_access = mapped.hasCalendarAccess
+      delete mapped.hasCalendarAccess
+    }
+    if (mapped.hasEventProposalAccess !== undefined) {
+      mapped.has_event_proposal_access = mapped.hasEventProposalAccess
+      delete mapped.hasEventProposalAccess
+    }
+    if (mapped.hasWorkScheduleAccess !== undefined) {
+      mapped.has_work_schedule_access = mapped.hasWorkScheduleAccess
+      delete mapped.hasWorkScheduleAccess
+    }
+    if (mapped.hasWorkPeriodAccess !== undefined) {
+      mapped.has_work_period_access = mapped.hasWorkPeriodAccess
+      delete mapped.hasWorkPeriodAccess
+    }
+    if (mapped.roleId !== undefined) {
+      mapped.role_id = mapped.roleId
+      delete mapped.roleId
     }
   }
   
