@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle } from "lucide-react"
+import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -25,6 +25,8 @@ export function EmployeeManager() {
   const [gyms, setGyms] = useState<Gym[]>([])
   const [newEmployee, setNewEmployee] = useState({ name: "", email: "", gymIds: [] as string[], remoteWork: false })
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
+  const [isEditingEmployee, setIsEditingEmployee] = useState(false)
+  const [editEmployee, setEditEmployee] = useState<{ id: string; name: string; email: string; gymIds: string[]; remoteWork: boolean } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
   const [whatsappLink, setWhatsappLink] = useState("")
@@ -46,8 +48,23 @@ export function EmployeeManager() {
     try {
       // Charger les employés
       const { data: employeesData, error: employeesError } = await supabase.from("employees").select("*").order("name")
-      if (!employeesError) {
-        setEmployees(employeesData || [])
+      if (!employeesError && employeesData) {
+        // Charger les salles assignées pour chaque employé
+        const employeesWithGyms = await Promise.all(
+          employeesData.map(async (emp) => {
+            const response = await fetch(`/api/employee-gyms?employeeId=${emp.id}`)
+            if (response.ok) {
+              const { data: gymsData } = await response.json()
+              return {
+                ...emp,
+                gym_ids: gymsData?.map((g: any) => g.id) || [],
+                gyms: gymsData || []
+              }
+            }
+            return emp
+          })
+        )
+        setEmployees(employeesWithGyms)
       }
 
       // Charger les admins
@@ -112,8 +129,17 @@ export function EmployeeManager() {
 
       const result = await response.json()
       
-      // TODO: Gérer les assignations de salles si nécessaire
-      // if (result.data && newEmployee.gymIds.length > 0) { ... }
+      // Gérer les assignations de salles
+      if (result.data && newEmployee.gymIds.length > 0) {
+        await fetch('/api/employee-gyms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeEmail: newEmployee.email,
+            gymIds: newEmployee.gymIds
+          })
+        })
+      }
 
       await loadData() // Recharger pour avoir les relations
       setNewEmployee({ name: "", email: "", gymIds: [], remoteWork: false })
@@ -121,6 +147,54 @@ export function EmployeeManager() {
       alert("Employé ajouté avec succès !")
     } catch (error) {
       alert("Erreur lors de l'ajout de l'employé")
+    }
+  }
+
+  const openEditEmployee = (employee: Employee) => {
+    setEditEmployee({
+      id: employee.id,
+      name: employee.name,
+      email: employee.email,
+      gymIds: employee.gym_ids || [],
+      remoteWork: employee.remote_work_enabled || false
+    })
+    setIsEditingEmployee(true)
+  }
+
+  const saveEditEmployee = async () => {
+    if (!editEmployee) return
+    
+    try {
+      // Mettre à jour les informations de base de l'employé
+      const response = await fetch(`/api/db/users/${editEmployee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            name: editEmployee.name,
+            remote_work_enabled: editEmployee.remoteWork
+          }
+        })
+      })
+
+      if (!response.ok) throw new Error('Erreur lors de la modification')
+
+      // Mettre à jour les salles assignées
+      await fetch('/api/employee-gyms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: editEmployee.id,
+          gymIds: editEmployee.gymIds
+        })
+      })
+
+      await loadData()
+      setIsEditingEmployee(false)
+      setEditEmployee(null)
+      alert("Employé modifié avec succès !")
+    } catch (error) {
+      alert("Erreur lors de la modification de l'employé")
     }
   }
 
@@ -489,6 +563,102 @@ export function EmployeeManager() {
             </Card>
           )}
 
+          {/* Formulaire d'édition d'employé */}
+          {isEditingEmployee && editEmployee && (
+            <Card className="border border-blue-200 bg-white">
+              <CardHeader className="border-b border-blue-200 bg-blue-50">
+                <CardTitle className="text-xl flex items-center space-x-2">
+                  <Pencil className="h-6 w-6 text-blue-600" />
+                  <span>Modifier l'employé</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Nom complet</Label>
+                    <Input
+                      id="edit-name"
+                      value={editEmployee.name}
+                      onChange={(e) => setEditEmployee({ ...editEmployee, name: e.target.value })}
+                      placeholder="Prénom Nom"
+                      className="border border-gray-300"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-email">Email</Label>
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={editEmployee.email}
+                      readOnly
+                      className="border border-gray-300 bg-gray-50 cursor-not-allowed"
+                      title="L'email ne peut pas être modifié"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Salles assignées</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {gyms.map((gym) => (
+                      <div key={gym.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-gym-${gym.id}`}
+                          checked={editEmployee.gymIds.includes(gym.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setEditEmployee({
+                                ...editEmployee,
+                                gymIds: [...editEmployee.gymIds, gym.id],
+                              })
+                            } else {
+                              setEditEmployee({
+                                ...editEmployee,
+                                gymIds: editEmployee.gymIds.filter((id) => id !== gym.id),
+                              })
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`edit-gym-${gym.id}`} className="text-sm text-gray-700">
+                          {gym.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
+                  <Checkbox
+                    id="edit-remote-work"
+                    checked={editEmployee.remoteWork}
+                    onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, remoteWork: checked as boolean })}
+                  />
+                  <Label htmlFor="edit-remote-work" className="text-sm text-gray-700">
+                    Télétravail autorisé (pas de restriction réseau)
+                  </Label>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button onClick={saveEditEmployee} className="bg-blue-600 hover:bg-blue-700">
+                    <Check className="mr-2 h-4 w-4" />
+                    Enregistrer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditingEmployee(false)
+                      setEditEmployee(null)
+                    }}
+                    className="border border-gray-300 hover:bg-gray-50"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Annuler
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-4">
             {employees.length === 0 ? (
               <Card className="border border-dashed border-gray-300 bg-white">
@@ -523,6 +693,15 @@ export function EmployeeManager() {
                         </div>
                       </div>
                       <div className="flex space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditEmployee(employee)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          title="Modifier"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

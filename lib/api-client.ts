@@ -8,6 +8,8 @@ export interface Employee {
   email: string;
   is_active: boolean;
   remote_work_enabled?: boolean;
+  gym_ids?: string[]; // IDs des salles assignées
+  gyms?: Gym[]; // Salles complètes (optionnel)
   created_at: string;
 }
 
