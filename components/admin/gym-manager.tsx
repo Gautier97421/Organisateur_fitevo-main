@@ -243,7 +243,7 @@ export function GymManager() {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-        <span className="ml-3 text-lg text-gray-900">Chargement des salles...</span>
+        <span className="ml-3 text-lg text-gray-900 dark:text-white">Chargement des salles...</span>
       </div>
     )
   }
@@ -251,7 +251,7 @@ export function GymManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           🏢 Gestion des Salles
         </h2>
         <Button
@@ -265,8 +265,8 @@ export function GymManager() {
 
       {/* Formulaire d'ajout */}
       {isAddingGym && (
-        <Card className="border-0 shadow-2xl bg-white">
-          <CardHeader className="bg-red-600 text-white rounded-t-xl">
+        <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
+          <CardHeader className="bg-red-600 dark:bg-red-700 text-white rounded-t-xl">
             <CardTitle>Ajouter une nouvelle salle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-6">
@@ -294,59 +294,63 @@ export function GymManager() {
             </div>
             
             {/* Section WiFi */}
-            <div className="mt-4 pt-4 border-t-2 border-gray-200">
-              <div className="flex items-center space-x-3 mb-4">
+            <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   id="gym-wifi-restricted"
                   checked={newGym.wifi_restricted}
                   onChange={(e) => setNewGym({ ...newGym, wifi_restricted: e.target.checked })}
-                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                  className="w-5 h-5 rounded border-2"
                 />
-                <Label htmlFor="gym-wifi-restricted" className="text-lg font-semibold text-gray-900 cursor-pointer">
+                <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   📶 Restreindre l'accès à cette salle via WiFi
-                </Label>
-              </div>
+                </span>
+              </label>
               
               {newGym.wifi_restricted && (
-                <div className="grid grid-cols-2 gap-4 ml-7">
-                  <div className="space-y-2">
-                    <Label htmlFor="gym-wifi-ssid">Nom du réseau (SSID)</Label>
-                    <Input
-                      id="gym-wifi-ssid"
-                      value={newGym.wifi_ssid}
-                      onChange={(e) => setNewGym({ ...newGym, wifi_ssid: e.target.value })}
-                      placeholder="FitEvo_WiFi"
-                      className="border-2 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gym-ip" className="flex items-center gap-2">
-                      Adresse IP
-                      <a
-                       
-                        href="https://whatismyipaddress.com/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-700"
-                        title="Trouver votre adresse IP"
-                      > Lien pour trouver votre IP
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </Label>
-                    <Input
-                      id="gym-ip"
-                      value={newGym.ip_address}
-                      onChange={(e) => setNewGym({ ...newGym, ip_address: e.target.value })}
-                      placeholder="192.168.1.1"
-                      className="border-2 rounded-xl"
-                    />
+                <div className="ml-8 space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="gym-wifi-ssid" className="dark:text-gray-300">Nom du réseau (SSID)</Label>
+                      <Input
+                        id="gym-wifi-ssid"
+                        value={newGym.wifi_ssid}
+                        onChange={(e) => setNewGym({ ...newGym, wifi_ssid: e.target.value })}
+                        placeholder="FitEvo_WiFi"
+                        className="border-2 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gym-ip" className="flex items-center gap-2 dark:text-gray-300">
+                        Adresse IP
+                        <a
+                          href="https://whatismyipaddress.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 flex hover:text-blue-700 dark:hover:text-blue-300"
+                          title="Trouver votre adresse IP"
+                        > Lien pour trouver son IP
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Label>
+                      <Input
+                        id="gym-ip"
+                        value={newGym.ip_address}
+                        onChange={(e) => setNewGym({ ...newGym, ip_address: e.target.value })}
+                        placeholder="192.168.1.1"
+                        className="border-2 rounded-xl"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+            <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -354,13 +358,13 @@ export function GymManager() {
                   onChange={(e) => setNewGym({ ...newGym, qr_code_enabled: e.target.checked })}
                   className="w-5 h-5 rounded border-2"
                 />
-                <span className="font-semibold text-gray-700 flex items-center gap-2">
+                <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <QrCode className="h-5 w-5" />
                   Générer un QR Code pour cette salle
                 </span>
               </label>
               {newGym.qr_code_enabled && (
-                <p className="text-sm text-gray-600 ml-8">
+                <p className="text-sm text-gray-600 dark:text-gray-400 ml-8">
                   Le QR Code sera généré automatiquement après la création de la salle.
                   Le super admin configure l'URL globale du site.
                 </p>
@@ -395,7 +399,7 @@ export function GymManager() {
       {/* Liste des salles */}
       <div className="grid gap-6">
         {gyms.map((gym) => (
-          <Card key={gym.id} className="border-0 shadow-xl bg-white">
+          <Card key={gym.id} className="border-0 shadow-xl bg-white dark:bg-gray-800">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-4">
@@ -510,47 +514,52 @@ export function GymManager() {
                 </div>
               </div>
 
-              <div className="mt-2 pt-2 border-t-2 border-gray-200">
-                <div className="flex items-center space-x-3 mb-4">
+              <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={editGym.wifi_restricted}
                     onChange={(e) => setEditGym({ ...editGym, wifi_restricted: e.target.checked })}
-                    className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                    className="w-5 h-5 rounded border-2"
                   />
-                  <Label className="text-lg font-semibold text-gray-900 cursor-pointer">
+                  <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     📶 Restreindre l'accès à cette salle via WiFi
-                  </Label>
-                </div>
+                  </span>
+                </label>
 
                 {editGym.wifi_restricted && (
-                  <div className="grid grid-cols-2 gap-4 ml-7">
-                    <div className="space-y-2">
-                      <Label>Nom du réseau (SSID)</Label>
-                      <Input
-                        value={editGym.wifi_ssid}
-                        onChange={(e) => setEditGym({ ...editGym, wifi_ssid: e.target.value })}
-                        className="border-2 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        Adresse IP
-                        <a
-                          href="https://whatismyipaddress.com/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Trouver votre adresse IP"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Label>
-                      <Input
-                        value={editGym.ip_address}
-                        onChange={(e) => setEditGym({ ...editGym, ip_address: e.target.value })}
-                        className="border-2 rounded-xl"
-                      />
+                  <div className="ml-8 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="dark:text-gray-300">Nom du réseau (SSID)</Label>
+                        <Input
+                          value={editGym.wifi_ssid}
+                          onChange={(e) => setEditGym({ ...editGym, wifi_ssid: e.target.value })}
+                          className="border-2 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 dark:text-gray-300">
+                          Adresse IP
+                          <a
+                            href="https://whatismyipaddress.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 flex hover:text-blue-700 dark:hover:text-blue-300"
+                            title="Trouver votre adresse IP"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Label>
+                        <Input
+                          value={editGym.ip_address}
+                          onChange={(e) => setEditGym({ ...editGym, ip_address: e.target.value })}
+                          className="border-2 rounded-xl"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -562,7 +571,7 @@ export function GymManager() {
                 </p>
               )}
 
-              <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -570,13 +579,13 @@ export function GymManager() {
                     onChange={(e) => setEditGym({ ...editGym, qr_code_enabled: e.target.checked })}
                     className="w-5 h-5 rounded border-2"
                   />
-                  <span className="font-semibold text-gray-700 flex items-center gap-2">
+                  <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <QrCode className="h-5 w-5" />
                     Générer un QR Code pour cette salle
                   </span>
                 </label>
                 {editGym.qr_code_enabled && (
-                  <p className="text-sm text-gray-600 ml-8">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 ml-8">
                     Le QR Code est généré automatiquement avec l'URL configurée par le super admin.
                   </p>
                 )}

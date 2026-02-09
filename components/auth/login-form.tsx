@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 
 export function LoginForm() {
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("") // Email ou pseudo
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -27,7 +27,7 @@ export function LoginForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
 
       const data = await response.json()
@@ -37,9 +37,9 @@ export function LoginForm() {
         return
       }
 
-      // Si l'utilisateur doit créer son mot de passe
-      if (data.needPasswordSetup) {
-        router.push(`/create-password?email=${encodeURIComponent(email)}`)
+      // Si c'est la première connexion, rediriger vers la page de configuration
+      if (data.isFirstLogin) {
+        router.push(`/first-login?email=${encodeURIComponent(data.user.email)}`)
         return
       }
 
@@ -64,16 +64,16 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="shadow-lg border border-gray-200 bg-white">
+    <Card className="shadow-lg border border-gray-200 bg-white dark:bg-gray-800">
       <CardContent className="p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Votre email"
-              className="h-12 text-base border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 bg-white text-gray-900"
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="Email ou pseudo"
+              className="h-12 text-base border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               required
             />
           </div>
@@ -83,20 +83,20 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mot de passe"
-              className="h-12 text-base border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 bg-white text-gray-900"
+              className="h-12 text-base border border-gray-300 focus:border-red-600 focus:ring-1 focus:ring-red-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
-            <p className="text-xs text-gray-500 mt-1">Laissez vide si première connexion</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Laissez vide si première connexion</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
               {error}
             </div>
           )}
 
           <Button
             type="submit"
-            className="w-full h-12 text-base bg-red-600 hover:bg-red-700 shadow transition-all duration-200"
+            className="w-full h-12 text-base bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 shadow transition-all duration-200"
             disabled={isLoading}
           >
             {isLoading ? (

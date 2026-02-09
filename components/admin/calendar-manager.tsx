@@ -287,11 +287,15 @@ export function CalendarManager() {
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    
+    // Ajuster pour commencer le lundi (0 = dimanche, 1 = lundi, etc.)
+    // Si dimanche (0), on le transforme en 6 (dernier jour de la semaine)
+    let startingDayOfWeek = firstDay.getDay() - 1
+    if (startingDayOfWeek === -1) startingDayOfWeek = 6
 
     const days = []
 
-    // Jours du mois précédent
+    // Jours du mois précédent (seulement si nécessaire)
     for (let i = startingDayOfWeek - 1; i >= 0; i--) {
       const prevDate = new Date(year, month, -i)
       days.push({ date: prevDate, isCurrentMonth: false })
@@ -303,8 +307,9 @@ export function CalendarManager() {
       days.push({ date, isCurrentMonth: true })
     }
 
-    // Jours du mois suivant
-    const remainingDays = 42 - days.length
+    // Jours du mois suivant (seulement pour compléter la dernière semaine)
+    const currentLength = days.length
+    const remainingDays = currentLength % 7 === 0 ? 0 : 7 - (currentLength % 7)
     for (let day = 1; day <= remainingDays; day++) {
       const nextDate = new Date(year, month + 1, day)
       days.push({ date: nextDate, isCurrentMonth: false })
@@ -404,7 +409,7 @@ export function CalendarManager() {
     "Décembre",
   ]
 
-  const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
   if (isLoading) {
     return (
@@ -418,12 +423,12 @@ export function CalendarManager() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           📅 Gestion du Calendrier
         </h2>
         <div className="flex items-center space-x-4">
           {pendingCount > 0 && (
-            <Badge className="bg-amber-100 text-amber-800 text-lg px-4 py-2">
+            <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 text-lg px-4 py-2">
               {pendingCount} événement{pendingCount > 1 ? "s" : ""} en attente
             </Badge>
           )}
@@ -463,23 +468,23 @@ export function CalendarManager() {
         <>
           {calendarView === "year" ? (
             /* Vue Année */
-            <Card className="border-0 shadow-xl bg-white">
+            <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("prev")}
-                    className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <h3 className="text-2xl font-bold text-gray-900">
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                     Année {currentDate.getFullYear()}
                   </h3>
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("next")}
-                    className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -495,30 +500,25 @@ export function CalendarManager() {
                       <div
                         key={index}
                         onClick={() => handleMonthClick(month)}
-                        className="min-h-[120px] p-4 border rounded-xl cursor-pointer transition-all duration-200 bg-white hover:bg-gray-50 hover:shadow-md border-gray-200"
+                        className="min-h-[120px] p-4 border rounded-xl cursor-pointer transition-all duration-200 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md border-gray-200 dark:border-gray-600"
                       >
-                        <div className="font-semibold text-lg mb-2 text-gray-900">
+                        <div className="font-semibold text-lg mb-2 text-gray-900 dark:text-white">
                           {monthNames[month.getMonth()]}
                         </div>
-                        <div className="space-y-1">
-                          {monthEvents.slice(0, 3).map((event) => (
-                            <div
-                              key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.status)}`}
-                              title={`${event.title} - ${event.status}`}
-                            >
-                              {event.title}
+                        {monthEvents.length > 0 ? (
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+                              {monthEvents.length}
                             </div>
-                          ))}
-                          {monthEvents.length > 3 && (
-                            <div className="text-xs text-gray-500">
-                              +{monthEvents.length - 3} autre(s)
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              événement{monthEvents.length > 1 ? "s" : ""}
                             </div>
-                          )}
-                          {monthEvents.length === 0 && (
-                            <div className="text-xs text-gray-400 italic">Cliquer pour voir</div>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 dark:text-gray-500 italic text-center mt-4">
+                            Aucun événement
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -527,13 +527,13 @@ export function CalendarManager() {
             </Card>
           ) : (
             /* Vue Mois */
-            <Card className="border-0 shadow-xl bg-white">
+            <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
                     onClick={backToYear}
-                    className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Retour
@@ -542,17 +542,17 @@ export function CalendarManager() {
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("prev")}
-                      className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <h3 className="text-2xl font-bold text-gray-900">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                       {selectedMonth && `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
                     </h3>
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("next")}
-                      className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -564,7 +564,7 @@ export function CalendarManager() {
                 {/* En-têtes des jours */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {dayNames.map((day) => (
-                    <div key={day} className="text-center font-semibold text-gray-600 py-2">
+                    <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
                       {day}
                     </div>
                   ))}
@@ -584,18 +584,18 @@ export function CalendarManager() {
                           min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             dayInfo.isCurrentMonth
-                              ? "bg-white hover:bg-gray-50"
-                              : "bg-gray-50 text-gray-400"
+                              ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                              : "bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
                           }
                           ${
                             isToday
-                              ? "border-red-600 bg-red-50"
-                              : "border-gray-200"
+                              ? "border-red-600 bg-red-50 dark:bg-red-900/20"
+                              : "border-gray-200 dark:border-gray-600"
                           }
                           hover:shadow-md
                         `}
                       >
-                        <div className="font-semibold text-sm mb-1 text-gray-900">
+                        <div className="font-semibold text-sm mb-1 text-gray-900 dark:text-white">
                           {dayInfo.date.getDate()}
                         </div>
                         <div className="space-y-1">
@@ -609,12 +609,12 @@ export function CalendarManager() {
                             </div>
                           ))}
                           {dayEvents.length > 2 && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
                               +{dayEvents.length - 2} autre(s)
                             </div>
                           )}
                           {dayEvents.length === 0 && dayInfo.isCurrentMonth && (
-                            <div className="text-xs text-gray-400 italic">Cliquer pour ajouter</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer pour ajouter</div>
                           )}
                         </div>
                       </div>
@@ -629,24 +629,24 @@ export function CalendarManager() {
         /* Vue Liste */
         <div className="space-y-6">
           {events.length === 0 ? (
-            <Card className="border-2 border-dashed border-gray-300 bg-gray-50">
-              <CardContent className="p-12 text-center text-gray-500">
+            <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
+              <CardContent className="p-12 text-center text-gray-500 dark:text-gray-400">
                 <div className="text-6xl mb-4">📅</div>
-                <p className="text-xl mb-2">Aucun événement trouvé</p>
+                <p className="text-xl mb-2 dark:text-gray-300">Aucun événement trouvé</p>
                 <p className="text-lg">Les événements apparaîtront ici</p>
               </CardContent>
             </Card>
           ) : (
             events.map((event) => (
-              <Card key={event.id} className="border-0 shadow-xl bg-white">
+              <Card key={event.id} className="border-0 shadow-xl bg-white dark:bg-gray-800">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-xl font-bold text-gray-900">{event.title}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{event.title}</h3>
                         {getStatusBadge(event.status)}
                       </div>
-                      <div className="space-y-2 text-gray-600">
+                      <div className="space-y-2 text-gray-600 dark:text-gray-400">
                         <p className="flex items-center space-x-2">
                           <Calendar className="h-4 w-4" />
                           <span>{formatDate(event.event_date)}</span>
@@ -658,15 +658,15 @@ export function CalendarManager() {
                           </span>
                         </p>
                         {event.description && (
-                          <p className="text-gray-700 mt-2">{event.description}</p>
+                          <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
                         )}
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                           Créé par {event.created_by_name} ({event.created_by_email})
                         </p>
                         {event.status === "rejected" && event.rejection_reason && (
-                          <div className="bg-red-50 p-3 rounded-lg border border-red-200">
-                            <p className="text-red-700 font-medium">Raison du refus :</p>
-                            <p className="text-red-600">{event.rejection_reason}</p>
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                            <p className="text-red-700 dark:text-red-400 font-medium">Raison du refus :</p>
+                            <p className="text-red-600 dark:text-red-400">{event.rejection_reason}</p>
                           </div>
                         )}
                       </div>

@@ -3,28 +3,45 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { identifier, password } = await request.json()
 
-    // Rechercher l'utilisateur
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Rechercher l'utilisateur par email ou username
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          { username: identifier }
+        ]
+      }
     })
 
     if (!user || !user.active) {
       return NextResponse.json(
-        { error: 'Email non trouvé ou compte inactif' },
+        { error: 'Identifiant non trouvé ou compte inactif' },
         { status: 401 }
       )
     }
 
-    // Si l'utilisateur n'a pas encore de mot de passe, rediriger vers la page de création
-    if (!user.password) {
+    // Si c'est la première connexion, rediriger vers la page de configuration
+    if (user.isFirstLogin) {
       return NextResponse.json(
         { 
-          needPasswordSetup: true,
-          userId: user.id 
+          isFirstLogin: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name
+          }
         },
         { status: 200 }
+      )
+    }
+
+    // Si l'utilisateur n'a pas de mot de passe mais isFirstLogin est false, c'est une erreur
+    if (!user.password) {
+      return NextResponse.json(
+        { error: 'Configuration du compte incomplète. Veuillez contacter un administrateur.' },
+        { status: 401 }
       )
     }
 

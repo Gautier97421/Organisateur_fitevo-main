@@ -135,8 +135,8 @@ export function RealTimeMonitor() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Suivi Temps Réel</h2>
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Suivi Temps Réel</h2>
+        <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
           <Clock className="h-4 w-4" />
           <span>Dernière mise à jour : {new Date().toLocaleTimeString("fr-FR")}</span>
         </div>
@@ -144,24 +144,24 @@ export function RealTimeMonitor() {
 
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          <span className="ml-3 text-sm text-gray-500">Chargement des données...</span>
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-300" />
+          <span className="ml-3 text-sm text-gray-500 dark:text-gray-400">Chargement des données...</span>
         </div>
       ) : employeeStatuses.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
-            <p className="text-sm text-gray-500">Aucun employé actif pour le moment</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Aucun employé actif pour le moment</p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4">
           {employeeStatuses.map((employee) => (
-          <Card key={employee.id} className="border border-gray-200">
+          <Card key={employee.id} className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg text-gray-900">{employee.name}</CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">{employee.email}</p>
+                  <CardTitle className="text-lg text-gray-900 dark:text-white">{employee.name}</CardTitle>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{employee.email}</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Badge variant="outline" className="border-red-200 text-red-700">
@@ -179,32 +179,32 @@ export function RealTimeMonitor() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Progression des tâches</span>
-                  <span className="font-medium text-gray-900">
+                  <span className="text-gray-600 dark:text-gray-300">Progression des tâches</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
                     {employee.tasksCompleted}/{employee.totalTasks}
                   </span>
                 </div>
                 {employee.totalTasks > 0 ? (
                   <Progress value={(employee.tasksCompleted / employee.totalTasks) * 100} className="h-2" />
                 ) : (
-                  <div className="text-xs text-gray-500 italic">Aucune tâche assignée</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 italic">Aucune tâche assignée</div>
                 )}
               </div>
 
-              <div className="flex items-center justify-between text-sm text-gray-600">
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
                 <div className="flex items-center space-x-4">
                   {employee.isOnBreak ? (
-                    <div className="flex items-center space-x-1 text-red-600">
+                    <div className="flex items-center space-x-1 text-red-600 dark:text-red-400">
                       <Coffee className="h-4 w-4" />
                       <span>Pause depuis {employee.breakStartTime}</span>
                     </div>
                   ) : employee.currentPeriod ? (
-                    <div className="flex items-center space-x-1 text-green-600">
+                    <div className="flex items-center space-x-1 text-green-600 dark:text-green-400">
                       <CheckCircle className="h-4 w-4" />
                       <span>En activité</span>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-1 text-gray-500">
+                    <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
                       <Clock className="h-4 w-4" />
                       <span>Pas encore commencé</span>
                     </div>
@@ -226,32 +226,32 @@ export function RealTimeMonitor() {
       )}
 
       {!isLoading && employeeStatuses.length > 0 && (
-        <Card className="border border-gray-200">
+        <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
           <CardHeader>
-            <CardTitle className="text-gray-900">Statistiques du jour</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-white">Statistiques du jour</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {employeeStatuses.reduce((sum, emp) => sum + emp.totalTasks, 0) > 0
                     ? Math.round((employeeStatuses.reduce((sum, emp) => sum + emp.tasksCompleted, 0) / 
                       employeeStatuses.reduce((sum, emp) => sum + emp.totalTasks, 0)) * 100)
                     : 0}%
                 </div>
-                <div className="text-sm text-gray-600">Tâches complétées</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Tâches complétées</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {employeeStatuses.filter(emp => !emp.isOnBreak && emp.currentPeriod).length}
                 </div>
-                <div className="text-sm text-gray-600">Employés actifs</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Employés actifs</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {employeeStatuses.filter(emp => emp.isOnBreak).length}
                 </div>
-                <div className="text-sm text-gray-600">En pause</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">En pause</div>
               </div>
             </div>
           </CardContent>

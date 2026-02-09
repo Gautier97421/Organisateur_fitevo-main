@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { LogOut, Shield } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface AdminHeaderProps {
   userEmail: string
@@ -27,10 +28,13 @@ export function AdminHeader({ userEmail }: AdminHeaderProps) {
             <p className="text-sm text-gray-200">{userEmail}</p>
           </div>
         </div>
-        <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100">
-          <LogOut className="mr-2 h-4 w-4" />
-          Déconnexion
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100">
+            <LogOut className="mr-2 h-4 w-4" />
+            Déconnexion
+          </Button>
+        </div>
       </div>
     </header>
   )

@@ -58,9 +58,6 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
         <span>QR Code - {gymName}</span>
       </div>
       <canvas ref={canvasRef} className="border-2 border-gray-200 rounded-lg" />
-      <p className="text-xs text-gray-600 text-center max-w-[200px]">
-        {qrUrl}
-      </p>
       <Button
         onClick={downloadQRCode}
         variant="outline"

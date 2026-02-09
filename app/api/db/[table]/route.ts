@@ -64,6 +64,12 @@ function mapFieldsToClient(table: string, data: any): any {
     delete mapped.active
   }
   
+  // Mapper isFirstLogin -> is_first_login pour users
+  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.isFirstLogin !== undefined) {
+    mapped.is_first_login = mapped.isFirstLogin
+    delete mapped.isFirstLogin
+  }
+  
   // Mapper date -> work_date pour work_schedules
   if (table === 'work_schedules' && mapped.date !== undefined) {
     mapped.work_date = mapped.date

@@ -41,9 +41,9 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-red-600 shadow-md border-b border-gray-200 p-4 md:p-6">
+      <div className="bg-red-600 dark:bg-red-700 shadow-md border-b border-gray-200 dark:border-gray-700 p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-7xl mx-auto gap-4">
           <div className="flex items-center space-x-3 md:space-x-4">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-lg flex items-center justify-center shadow">
@@ -83,8 +83,8 @@ export default function AdminPage() {
               size="sm"
               className={`text-sm md:text-base px-4 md:px-6 py-2 md:py-3 h-auto transition-all duration-200 whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "bg-red-600 hover:bg-red-700 text-white shadow"
-                  : "border border-gray-300 hover:bg-gray-50 bg-white text-gray-700"
+                  ? "bg-red-600 hover:bg-red-700 text-white shadow dark:bg-red-700 dark:hover:bg-red-800"
+                  : "border border-gray-300 hover:bg-gray-50 bg-white text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               <tab.icon className="w-4 h-4 mr-2" />
@@ -94,7 +94,7 @@ export default function AdminPage() {
         </div>
 
         {/* Contenu */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4 md:p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 md:p-6">
           {tabs.find((tab) => tab.id === activeTab)?.component}
         </div>
       </div>

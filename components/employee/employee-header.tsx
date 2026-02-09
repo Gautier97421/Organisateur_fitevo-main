@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, MessageCircle } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface EmployeeHeaderProps {
   userEmail: string
@@ -52,6 +53,7 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {whatsappLink && (
             <Button
               onClick={handleWhatsappClick}

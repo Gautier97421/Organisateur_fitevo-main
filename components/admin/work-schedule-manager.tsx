@@ -263,11 +263,11 @@ export function WorkScheduleManager() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           📅 Gestion des Plannings
         </h2>
         {conflicts.length > 0 && (
-          <Badge className="bg-red-100 text-red-800 text-lg px-4 py-2">
+          <Badge className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 text-lg px-4 py-2">
             <AlertTriangle className="h-4 w-4 mr-1" />
             {conflicts.length} conflit{conflicts.length > 1 ? "s" : ""}
           </Badge>
@@ -275,23 +275,23 @@ export function WorkScheduleManager() {
       </div>
 
       {/* Navigation du calendrier */}
-      <Card className="border-0 shadow-xl bg-white">
+      <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
               onClick={() => navigateMonth("prev")}
-              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-2xl font-bold text-gray-900">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               Planning - {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <Button
               variant="outline"
               onClick={() => navigateMonth("next")}
-              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -301,7 +301,7 @@ export function WorkScheduleManager() {
           {/* En-têtes des jours */}
           <div className="grid grid-cols-7 gap-2 mb-4">
             {dayNames.map((day) => (
-              <div key={day} className="text-center font-semibold text-gray-600 py-2">
+              <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
                 {day}
               </div>
             ))}
@@ -321,19 +321,19 @@ export function WorkScheduleManager() {
                     min-h-[120px] p-2 border rounded-xl transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
-                        ? "bg-white"
-                        : "bg-gray-50 text-gray-400"
+                        ? "bg-white dark:bg-gray-800"
+                        : "bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600"
                     }
                     ${
                       isToday
-                        ? "border-red-600 bg-red-50"
-                        : "border-gray-200"
+                        ? "border-red-600 bg-red-50 dark:bg-red-900/20"
+                        : "border-gray-200 dark:border-gray-700"
                     }
-                    ${hasConflict ? "border-red-600 bg-red-50" : ""}
+                    ${hasConflict ? "border-red-600 bg-red-50 dark:bg-red-900/20" : ""}
                   `}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="font-semibold text-sm text-gray-900">
+                    <div className="font-semibold text-sm text-gray-900 dark:text-white">
                       {dayInfo.date.getDate()}
                     </div>
                     {hasConflict && <AlertTriangle className="h-3 w-3 text-red-600" />}
@@ -366,14 +366,14 @@ export function WorkScheduleManager() {
       </Card>
 
       {/* Légende des employés */}
-      <Card className="border-0 shadow-xl bg-white">
+      <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
         <CardContent className="p-4">
-          <h4 className="font-semibold mb-3 text-gray-900">Légende des employés :</h4>
+          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">Légende des employés :</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {employees.map((employee) => (
               <div key={employee.email} className="flex items-center space-x-2">
                 <div className={`w-4 h-4 ${employee.color} rounded`}></div>
-                <span className="text-sm text-gray-700">{employee.name}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{employee.name}</span>
               </div>
             ))}
           </div>
@@ -381,24 +381,24 @@ export function WorkScheduleManager() {
       </Card>
 
       {/* Légende des statuts */}
-      <Card className="border-0 shadow-xl bg-white">
+      <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
         <CardContent className="p-4">
           <div className="flex items-center justify-center space-x-6 text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-amber-500 rounded"></div>
-              <span className="text-gray-700">Programmé</span>
+              <span className="text-gray-700 dark:text-gray-300">Programmé</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-green-600 rounded"></div>
-              <span className="text-gray-700">Confirmé</span>
+              <span className="text-gray-700 dark:text-gray-300">Confirmé</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-red-600 rounded"></div>
-              <span className="text-gray-700">Terminé</span>
+              <span className="text-gray-700 dark:text-gray-300">Terminé</span>
             </div>
             <div className="flex items-center space-x-2">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <span className="text-gray-700">Conflit d'horaires</span>
+              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <span className="text-gray-700 dark:text-gray-300">Conflit d'horaires</span>
             </div>
           </div>
         </CardContent>
@@ -406,14 +406,14 @@ export function WorkScheduleManager() {
 
       {/* Dialog de détails */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-              <User className="h-6 w-6 text-red-600" />
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-white">
+              <User className="h-6 w-6 text-red-600 dark:text-red-400" />
               <span>Détails du Planning</span>
             </DialogTitle>
             {selectedSchedule && (
-              <DialogDescription className="text-lg text-gray-600">
+              <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
                 <div className="space-y-2 mt-4">
                   <p>
                     <strong>Employé :</strong> {selectedSchedule.employee_name}

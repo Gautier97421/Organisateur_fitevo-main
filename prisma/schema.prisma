@@ -10,10 +10,12 @@ datasource db {
 model User {
   id                String   @id @default(cuid())
   email             String   @unique
+  username          String?  @unique // Pseudo choisi lors de la première connexion
   password          String?  // Optionnel - défini lors de la première connexion
   name              String
   role              String   @default("employee") // "employee", "admin", "superadmin"
   active            Boolean  @default(true)
+  isFirstLogin      Boolean  @default(true) @map("is_first_login")
   remoteWorkEnabled Boolean  @default(false) @map("remote_work_enabled")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
