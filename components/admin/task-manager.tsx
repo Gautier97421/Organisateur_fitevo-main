@@ -338,7 +338,7 @@ export function TaskManager() {
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
-            role_ids: newTask.roleIds.length > 0 ? JSON.stringify(newTask.roleIds) : null,
+            role_ids: newTask.roleIds.length > 0 ? newTask.roleIds : null,
             user_id: userId,
             created_by: userId,
             status: 'pending'
@@ -399,7 +399,7 @@ export function TaskManager() {
           type: editTask.type,
           options: editTask.type === "qcm" ? JSON.stringify(editTask.options) : null,
           required: editTask.required,
-          role_ids: editTask.roleIds.length > 0 ? JSON.stringify(editTask.roleIds) : null,
+          role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
         })
       })
 

@@ -40,6 +40,8 @@ export default function EmployeePage() {
   const [assignedGyms, setAssignedGyms] = useState<any[]>([])
   const [selectedGym, setSelectedGym] = useState<any | null>(null)
   const [showGymSelectionDialog, setShowGymSelectionDialog] = useState(false)
+  const [showNoTasksDialog, setShowNoTasksDialog] = useState(false)
+  const [noTasksPeriodName, setNoTasksPeriodName] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -249,22 +251,12 @@ export default function EmployeePage() {
       return
     }
 
-    // Si une seule salle et pas encore sélectionnée, la sélectionner automatiquement
-    if (assignedGyms.length === 1 && !selectedGym) {
-      setSelectedGym(assignedGyms[0])
-      localStorage.setItem(`employee_${userEmail}_selectedGym`, assignedGyms[0].id)
-    }
+    // Réinitialiser la salle sélectionnée à chaque nouvelle période
+    setSelectedGym(null)
 
-    // Si plusieurs salles et pas de salle sélectionnée, demander de choisir
-    if (assignedGyms.length > 1 && !selectedGym) {
-      setPendingPeriod(period)
-      setShowGymSelectionDialog(true)
-      return
-    }
-
-    // Sinon, procéder normalement
+    // Toujours demander de choisir la salle (même si une seule)
     setPendingPeriod(period)
-    setShowConfirmDialog(true)
+    setShowGymSelectionDialog(true)
   }
 
   const selectGymAndContinue = (gym: any) => {
@@ -276,9 +268,56 @@ export default function EmployeePage() {
 
   const confirmPeriodSelection = async () => {
     if (pendingPeriod) {
+      setShowConfirmDialog(false)
+      
+      // Vérifier d'abord si des tâches existent pour cette période/salle/rôle
+      try {
+        let tasksUrl = `/api/db/tasks?period=${pendingPeriod}`
+        
+        if (selectedGym?.id) {
+          tasksUrl += `&gym_id=${selectedGym.id}`
+        }
+        
+        const tasksResponse = await fetch(tasksUrl)
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json()
+          let dbTasks = Array.isArray(tasksData.data) ? tasksData.data : (tasksData.data ? [tasksData.data] : [])
+          
+          // Filtrer pour les tâches modèles (créées par admin)
+          dbTasks = dbTasks.filter((task: any) => task.created_by)
+          
+          // Filtrer par rôle si nécessaire
+          if (userRoleId) {
+            dbTasks = dbTasks.filter((task: any) => {
+              if (!task.role_ids || (Array.isArray(task.role_ids) && task.role_ids.length === 0)) {
+                return true
+              }
+              const roleIds = Array.isArray(task.role_ids) 
+                ? task.role_ids 
+                : (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : [])
+              return roleIds.includes(userRoleId)
+            })
+          }
+          
+          // Si aucune tâche trouvée, afficher un dialog et ne pas lancer la vue tâches
+          if (dbTasks.length === 0) {
+            setNoTasksPeriodName(getPeriodText(pendingPeriod))
+            setShowNoTasksDialog(true)
+            setPendingPeriod(null)
+            setSelectedGym(null)
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Erreur vérification tâches:', error)
+        alert('Erreur lors de la vérification des tâches. Veuillez réessayer.')
+        setPendingPeriod(null)
+        return
+      }
+      
+      // Si des tâches existent, procéder normalement
       setSelectedPeriod(pendingPeriod)
       setCurrentView("tasks")
-      setShowConfirmDialog(false)
       
       // Sauvegarder la période dans la base de données
       try {
@@ -319,6 +358,7 @@ export default function EmployeePage() {
   const cancelPeriodSelection = () => {
     setShowConfirmDialog(false)
     setPendingPeriod(null)
+    setSelectedGym(null)
   }
 
   const handleSessionEnd = () => {
@@ -602,6 +642,34 @@ export default function EmployeePage() {
                 ))}
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog "Aucune tâche assignée" */}
+        <Dialog open={showNoTasksDialog} onOpenChange={setShowNoTasksDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-6 w-6 text-orange-500" />
+                <span>Aucune tâche assignée</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm md:text-base text-gray-700 mb-3">
+                Aucune tâche n'a été assignée pour le créneau <strong>"{noTasksPeriodName}"</strong>.
+              </p>
+              <p className="text-sm text-gray-600">
+                Veuillez contacter votre administrateur ou choisir un autre créneau.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => setShowNoTasksDialog(false)}
+                className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+              >
+                Compris
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

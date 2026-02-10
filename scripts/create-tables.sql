@@ -103,44 +103,6 @@ CREATE TABLE IF NOT EXISTS emergency_alerts (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insertion des administrateurs par défaut
-INSERT INTO admins (name, email, is_super_admin) VALUES
-('Admin Principal', 'admin@salle.com', true),
-('Manager Salle', 'manager@salle.com', false)
-ON CONFLICT (email) DO NOTHING;
-
--- Insertion des tâches par défaut
-INSERT INTO tasks (title, description, type, period, required, order_index) VALUES
--- Tâches du matin
-('Ouverture de la salle', 'Vérifier l''éclairage et la ventilation', 'checkbox', 'matin', true, 1),
-('Contrôle des équipements', 'Vérifier le bon fonctionnement des machines', 'checkbox', 'matin', true, 2),
-('Température vestiaires', 'Noter la température des vestiaires', 'text', 'matin', true, 3),
-
--- Tâches de l'après-midi
-('Nettoyage intermédiaire', 'État de propreté en milieu de journée', 'qcm', 'aprem', true, 1),
-('Vérification matériel', 'Contrôler l''usure des équipements', 'checkbox', 'aprem', true, 2),
-('Incidents de la journée', 'Rapporter tout incident ou problème', 'text', 'aprem', false, 3),
-
--- Tâches de journée entière
-('Fermeture sécurisée', 'Vérifier toutes les fermetures', 'checkbox', 'journee', true, 1),
-('Bilan de la journée', 'Évaluation générale de la journée', 'qcm', 'journee', true, 2),
-('Remarques générales', 'Commentaires ou suggestions', 'text', 'journee', false, 3)
-ON CONFLICT DO NOTHING;
-
--- Mise à jour des options pour les QCM
-UPDATE tasks SET options = '["Très propre", "Propre", "À nettoyer", "Sale"]'::jsonb 
-WHERE title = 'Nettoyage intermédiaire';
-
-UPDATE tasks SET options = '["Excellente", "Bonne", "Correcte", "Difficile"]'::jsonb 
-WHERE title = 'Bilan de la journée';
-
--- Insertion d'employés de test
-INSERT INTO employees (name, email) VALUES
-('Marie Dupont', 'marie.dupont@salle.com'),
-('Pierre Martin', 'pierre.martin@salle.com'),
-('Sophie Leroy', 'sophie.leroy@salle.com')
-ON CONFLICT (email) DO NOTHING;
-
 -- Index pour améliorer les performances
 CREATE INDEX IF NOT EXISTS idx_tasks_period ON tasks(period);
 CREATE INDEX IF NOT EXISTS idx_task_completions_employee_date ON task_completions(employee_email, work_date);
