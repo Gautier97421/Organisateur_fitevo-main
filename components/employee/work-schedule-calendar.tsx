@@ -41,6 +41,8 @@ export function WorkScheduleCalendar() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>("") 
   const [selectedEmployee, setSelectedEmployee] = useState<{ email: string; name: string } | null>(null)
   const [newSchedule, setNewSchedule] = useState({
     start_time: "",
@@ -103,14 +105,70 @@ export function WorkScheduleCalendar() {
 
       setEmployees(employeesWithColors)
     } catch (error) {
-      console.error('Erreur lors du chargement des employés:', error)
+      // Erreur silencieuse
     }
   }
 
   const addSchedule = async () => {
-    if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate || !selectedEmployee) return
+    // Marquer qu'on a tenté de soumettre
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+    
+    // Validation des champs obligatoires
+    if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate || !selectedEmployee) {
+      setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
 
+    // Recharger les schedules pour avoir les données à jour
+    const selectedDateStr = selectedDate.toISOString().split("T")[0]
+    
     try {
+      // Récupérer les schedules du jour depuis l'API pour avoir les données fraîches
+      // Utiliser une plage de dates pour éviter les problèmes de fuseaux horaires
+      const checkResponse = await fetch(
+        `/api/db/work_schedules?work_date_gte=${selectedDateStr}&work_date_lte=${selectedDateStr}&employee_email=${encodeURIComponent(selectedEmployee.email)}`
+      )
+      
+      if (checkResponse.ok) {
+        const checkResult = await checkResponse.json()
+        const existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
+        
+        console.log('Vérification conflits - Schedules existants:', existingSchedules)
+        console.log('Nouvel horaire:', newSchedule.start_time, '-', newSchedule.end_time)
+        
+        if (existingSchedules.length > 0) {
+          // Vérifier les chevauchements d'horaires
+          const newStart = newSchedule.start_time
+          const newEnd = newSchedule.end_time
+
+          const hasConflict = existingSchedules.some((existing: any) => {
+            const existingStart = existing.start_time
+            const existingEnd = existing.end_time
+
+            console.log('Comparaison avec:', existingStart, '-', existingEnd)
+
+            // Vérifier si les horaires se chevauchent
+            const conflict = (
+              (newStart >= existingStart && newStart < existingEnd) || // Le début est dans un horaire existant
+              (newEnd > existingStart && newEnd <= existingEnd) ||      // La fin est dans un horaire existant
+              (newStart <= existingStart && newEnd >= existingEnd)      // L'horaire englobe un horaire existant
+            )
+            
+            console.log('Conflit détecté:', conflict)
+            return conflict
+          })
+
+          if (hasConflict) {
+            setErrorMessage(
+              `⚠️ Conflit d'horaire : ${selectedEmployee.name} a déjà un planning sur cette plage horaire. Veuillez modifier ou supprimer l'horaire existant.`
+            )
+            return
+          }
+        }
+      }
+
+      // Pas de conflit, on peut ajouter
       const response = await fetch('/api/db/work_schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,7 +176,7 @@ export function WorkScheduleCalendar() {
           data: [{
             employee_email: selectedEmployee.email,
             employee_name: selectedEmployee.name,
-            work_date: selectedDate.toISOString().split("T")[0],
+            work_date: selectedDateStr,
             start_time: newSchedule.start_time,
             end_time: newSchedule.end_time,
             status: "scheduled",
@@ -126,7 +184,10 @@ export function WorkScheduleCalendar() {
         })
       })
 
-      if (!response.ok) throw new Error('Erreur lors de l\'ajout')
+      if (!response.ok) {
+        setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
+        return
+      }
 
       // Recharger les schedules depuis le serveur
       await loadSchedules()
@@ -136,13 +197,13 @@ export function WorkScheduleCalendar() {
         end_time: "",
       })
       setSelectedEmployee(null)
+      setAttemptedSubmit(false)
+      setErrorMessage("")
       setShowScheduleDialog(false)
       setSelectedDate(null)
-
-      alert("Horaire de travail ajouté !")
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
-      alert("Erreur lors de l'ajout de l'horaire")
+      console.error('Erreur:', error)
+      setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
     }
   }
 
@@ -203,6 +264,8 @@ export function WorkScheduleCalendar() {
   const handleDateClick = (date: Date) => {
     if (date < new Date()) return // Empêcher la sélection de dates passées
     setSelectedDate(date)
+    setAttemptedSubmit(false)
+    setErrorMessage("")
     setShowScheduleDialog(true)
   }
 
@@ -329,7 +392,15 @@ export function WorkScheduleCalendar() {
       </Card>
 
       {/* Dialog pour ajouter un horaire */}
-      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+      <Dialog open={showScheduleDialog} onOpenChange={(open) => {
+        setShowScheduleDialog(open)
+        if (!open) {
+          setAttemptedSubmit(false)
+          setErrorMessage("")
+          setSelectedDate(null)
+          setSelectedEmployee(null)
+        }
+      }}>
         <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
@@ -352,10 +423,17 @@ export function WorkScheduleCalendar() {
               )}
             </DialogDescription>
           </DialogHeader>
+          
+          {errorMessage && (
+            <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mb-4">
+              <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Employé
+                Employé <span className="text-red-500">*</span>
               </label>
               <Select
                 value={selectedEmployee?.email || ""}
@@ -364,7 +442,7 @@ export function WorkScheduleCalendar() {
                   if (emp) setSelectedEmployee({ email: emp.email, name: emp.name })
                 }}
               >
-                <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                <SelectTrigger className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !selectedEmployee ? 'border-red-500' : ''}`}>
                   <SelectValue placeholder="Sélectionner un employé" />
                 </SelectTrigger>
                 <SelectContent>
@@ -379,22 +457,24 @@ export function WorkScheduleCalendar() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure de début
+                  Heure de début <span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="time"
                   value={newSchedule.start_time}
                   onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white text-gray-900"
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500 focus:border-red-600' : ''}`}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de fin</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Heure de fin <span className="text-red-500">*</span>
+                </label>
                 <Input
                   type="time"
                   value={newSchedule.end_time}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white text-gray-900"
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500 focus:border-red-600' : ''}`}
                 />
               </div>
             </div>
@@ -406,6 +486,8 @@ export function WorkScheduleCalendar() {
                 setShowScheduleDialog(false)
                 setSelectedDate(null)
                 setSelectedEmployee(null)
+                setAttemptedSubmit(false)
+                setErrorMessage("")
               }}
               className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
             >

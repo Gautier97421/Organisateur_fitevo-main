@@ -162,7 +162,7 @@ function FirstLoginForm() {
                   placeholder="Choisissez un mot de passe"
                   required
                   minLength={6}
-                  className="pr-10 dark:bg-gray-700 dark:text-white"
+                  className="pr-10 dark:bg-gray-700 dark:text-white [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <button
                   type="button"
@@ -188,7 +188,7 @@ function FirstLoginForm() {
                   placeholder="Confirmez votre mot de passe"
                   required
                   minLength={6}
-                  className="pr-10 dark:bg-gray-700 dark:text-white"
+                  className="pr-10 dark:bg-gray-700 dark:text-white [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <button
                   type="button"

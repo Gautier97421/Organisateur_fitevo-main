@@ -2,7 +2,7 @@
 
 import { Label } from "@/components/ui/label"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -168,6 +168,16 @@ export function TaskManager() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [attemptedEditSubmit, setAttemptedEditSubmit] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>("")
+  const [editErrorMessage, setEditErrorMessage] = useState<string>("")
+  const [showAddFormConflict, setShowAddFormConflict] = useState(false)
+  const [showEditFormConflict, setShowEditFormConflict] = useState(false)
+  
+  // Refs pour scroller vers les formulaires
+  const addFormRef = useRef<HTMLDivElement>(null)
+  const editFormRef = useRef<HTMLDivElement>(null)
   const [newTask, setNewTask] = useState<{
     title: string
     description: string
@@ -311,7 +321,15 @@ export function TaskManager() {
   }
 
   const addTask = async () => {
-    if (!newTask.title || !newTask.description || !selectedGym) return
+    // Marquer qu'on a tenté de soumettre
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+    
+    // Validation des champs obligatoires (seulement le titre maintenant)
+    if (!newTask.title || !selectedGym) {
+      setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
 
     try {
       const currentTasks = getCurrentTasks()
@@ -321,7 +339,7 @@ export function TaskManager() {
       const userId = localStorage.getItem("userId")
       
       if (!userId) {
-        alert("Erreur: Utilisateur non identifié. Veuillez vous reconnecter.")
+        setErrorMessage("❌ Session expirée. Veuillez vous reconnecter.")
         return
       }
 
@@ -348,8 +366,8 @@ export function TaskManager() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error('Erreur API:', errorData)
-        throw new Error(errorData.error?.message || `Erreur ${response.status}`)
+        setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
+        return
       }
 
       const result = await response.json()
@@ -365,14 +383,23 @@ export function TaskManager() {
         required: true,
         roleIds: [],
       })
+      setAttemptedSubmit(false)
+      setErrorMessage("")
       setShowForm(false)
     } catch (error: any) {
-      console.error('Erreur lors de l\'ajout:', error)
-      alert(`Erreur lors de l'ajout de la tâche:\n${error.message || error}`)
+      setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
     }
   }
 
   const openEditTask = (task: TaskItem) => {
+    if (showForm) {
+      // Scroller vers le formulaire d'ajout et afficher un message
+      addFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setShowAddFormConflict(true)
+      // Auto-effacer le message après 5 secondes
+      setTimeout(() => setShowAddFormConflict(false), 5000)
+      return
+    }
     setEditingTask(task)
     setEditTask({
       title: task.title,
@@ -382,12 +409,23 @@ export function TaskManager() {
       required: task.required || true,
       roleIds: task.role_ids || [],
     })
+    setAttemptedEditSubmit(false)
+    setEditErrorMessage("")
+    setShowEditFormConflict(false)
     setShowEditForm(true)
     setShowForm(false)
   }
 
   const updateTask = async () => {
-    if (!editingTask || !editTask.title || !editTask.description) return
+    // Marquer qu'on a tenté de soumettre
+    setAttemptedEditSubmit(true)
+    setEditErrorMessage("")
+    
+    // Validation des champs obligatoires (seulement le titre maintenant)
+    if (!editingTask || !editTask.title) {
+      setEditErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
 
     try {
       const response = await fetch(`/api/db/tasks/${editingTask.id}`, {
@@ -405,12 +443,15 @@ export function TaskManager() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error?.message || `Erreur ${response.status}`)
+        setEditErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+        return
       }
 
       await loadTasks()
       setShowEditForm(false)
       setEditingTask(null)
+      setAttemptedEditSubmit(false)
+      setEditErrorMessage("")
       setEditTask({
         title: "",
         description: "",
@@ -420,8 +461,7 @@ export function TaskManager() {
         roleIds: [],
       })
     } catch (error: any) {
-      console.error('Erreur lors de la modification:', error)
-      alert(`Erreur lors de la modification de la tâche:\n${error.message || error}`)
+      setEditErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
     }
   }
 
@@ -544,7 +584,22 @@ export function TaskManager() {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
         </div>
         <Button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showEditForm) {
+              // Scroller vers le formulaire de modification et afficher un message
+              editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              setShowEditFormConflict(true)
+              // Auto-effacer le message après 5 secondes
+              setTimeout(() => setShowEditFormConflict(false), 5000)
+              return
+            }
+            setShowForm(!showForm)
+            if (!showForm) {
+              setAttemptedSubmit(false)
+              setErrorMessage("")
+              setShowAddFormConflict(false)
+            }
+          }}
           className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 w-full sm:w-auto whitespace-nowrap"
         >
           <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -650,20 +705,37 @@ export function TaskManager() {
                   Modifier la tâche : {editingTask.title}
                 </CardTitle>
               </CardHeader>
+              
+              {editErrorMessage && (
+                <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mx-8 mt-4">
+                  <p className="text-red-700 text-sm font-medium text-center">{editErrorMessage}</p>
+                </div>
+              )}
+              
               <CardContent className="space-y-6 p-8">
-                <Input
-                  placeholder="Titre de la tâche"
-                  value={editTask.title}
-                  onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
-                  className="text-lg h-14 border-2 rounded-xl"
-                />
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">
+                    Titre de la tâche <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Titre de la tâche"
+                    value={editTask.title}
+                    onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
+                    className={`text-lg h-14 border-2 rounded-xl ${attemptedEditSubmit && !editTask.title ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
 
-                <Textarea
-                  placeholder="Description détaillée"
-                  value={editTask.description}
-                  onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
-                  className="text-lg border-2 rounded-xl min-h-[100px]"
-                />
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">
+                    Description détaillée <span className="text-gray-500 text-sm">(optionnel)</span>
+                  </Label>
+                  <Textarea
+                    placeholder="Description détaillée"
+                    value={editTask.description}
+                    onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
+                    className="text-lg border-2 rounded-xl min-h-[100px]"
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-6">
                   <Select
@@ -758,6 +830,9 @@ export function TaskManager() {
                     onClick={() => {
                       setShowEditForm(false)
                       setEditingTask(null)
+                      setAttemptedEditSubmit(false)
+                      setEditErrorMessage("")
+                      setShowEditFormConflict(false)
                     }}
                     className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                   >
@@ -765,33 +840,58 @@ export function TaskManager() {
                     Annuler
                   </Button>
                 </div>
+                
+                {showEditFormConflict && (
+                  <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
+                    <p className="text-orange-800 text-sm font-medium">
+                      ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant d'en ajouter une nouvelle.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
           {/* Formulaire d'ajout */}
           {showForm && (
-            <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
+            <Card ref={addFormRef} className="border-0 shadow-2xl bg-white dark:bg-gray-800">
               <CardHeader className="bg-red-600 dark:bg-red-700 text-white rounded-t-xl">
                 <CardTitle className="text-xl">
                   Ajouter une tâche à {selectedGymName} -{" "}
                   {activePeriod === "matin" ? "Matin" : activePeriod === "aprem" ? "Après-midi" : "Journée"}
                 </CardTitle>
               </CardHeader>
+              
+              {errorMessage && (
+                <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mx-8 mt-4">
+                  <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
+                </div>
+              )}
+              
               <CardContent className="space-y-6 p-8">
-                <Input
-                  placeholder="Titre de la tâche"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  className="text-lg h-14 border-2 rounded-xl"
-                />
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">
+                    Titre de la tâche <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Titre de la tâche"
+                    value={newTask.title}
+                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                    className={`text-lg h-14 border-2 rounded-xl ${attemptedSubmit && !newTask.title ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
 
-                <Textarea
-                  placeholder="Description détaillée"
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="text-lg border-2 rounded-xl min-h-[100px]"
-                />
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">
+                    Description détaillée <span className="text-gray-500 text-sm">(optionnel)</span>
+                  </Label>
+                  <Textarea
+                    placeholder="Description détaillée"
+                    value={newTask.description}
+                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                    className="text-lg border-2 rounded-xl min-h-[100px]"
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-6">
                   <Select
@@ -883,13 +983,26 @@ export function TaskManager() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setShowForm(false)}
+                    onClick={() => {
+                      setShowForm(false)
+                      setAttemptedSubmit(false)
+                      setErrorMessage("")
+                      setShowAddFormConflict(false)
+                    }}
                     className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                   >
                     <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     Annuler
                   </Button>
                 </div>
+                
+                {showAddFormConflict && (
+                  <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
+                    <p className="text-orange-800 text-sm font-medium">
+                      ⚠️ Veuillez terminer ou annuler l'ajout de cette tâche avant de modifier une tâche existante.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

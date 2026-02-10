@@ -141,7 +141,7 @@ export function CreatePasswordForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Créez un mot de passe sécurisé"
-                  className="h-12 pr-12"
+                  className="h-12 pr-12 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <Button
                   type="button"
@@ -168,7 +168,7 @@ export function CreatePasswordForm() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmez votre mot de passe"
-                  className="h-12 pr-12"
+                  className="h-12 pr-12 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <Button
                   type="button"

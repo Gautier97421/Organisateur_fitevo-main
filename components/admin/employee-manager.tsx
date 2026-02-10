@@ -64,6 +64,8 @@ export function EmployeeManager() {
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
   const [validationErrors, setValidationErrors] = useState<{[key: string]: boolean}>({})
   const [editValidationErrors, setEditValidationErrors] = useState<{[key: string]: boolean}>({})
+  const [showAddFormConflict, setShowAddFormConflict] = useState(false)
+  const [showEditFormConflict, setShowEditFormConflict] = useState(false)
   
   // Refs pour le scroll automatique
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -71,6 +73,8 @@ export function EmployeeManager() {
   const roleSelectRef = useRef<HTMLButtonElement>(null)
   const editNameInputRef = useRef<HTMLInputElement>(null)
   const editRoleSelectRef = useRef<HTMLButtonElement>(null)
+  const addFormRef = useRef<HTMLDivElement>(null)
+  const editFormRef = useRef<HTMLDivElement>(null)
   const [editEmployee, setEditEmployee] = useState<{ 
     id: string; 
     name: string; 
@@ -293,6 +297,15 @@ export function EmployeeManager() {
   }
 
   const openEditEmployee = (employee: Employee) => {
+    if (isAddingEmployee) {
+      // Scroller vers le formulaire d'ajout et afficher un message
+      addFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setShowAddFormConflict(true)
+      // Auto-effacer le message après 5 secondes
+      setTimeout(() => setShowAddFormConflict(false), 5000)
+      return
+    }
+    
     // Trouver le roleId à partir du role_id ou employee_role
     let roleId = employee.role_id || ""
     
@@ -315,6 +328,7 @@ export function EmployeeManager() {
       hasWorkScheduleAccess: employee.has_work_schedule_access !== false,
       hasWorkPeriodAccess: employee.has_work_period_access !== false
     })
+    setShowEditFormConflict(false)
     setIsEditingEmployee(true)
   }
 
@@ -676,7 +690,20 @@ export function EmployeeManager() {
         <div className="space-y-6">
           <div className="flex justify-end">
             <Button
-              onClick={() => setIsAddingEmployee(!isAddingEmployee)}
+              onClick={() => {
+                if (isEditingEmployee) {
+                  // Scroller vers le formulaire de modification et afficher un message
+                  editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  setShowEditFormConflict(true)
+                  // Auto-effacer le message après 5 secondes
+                  setTimeout(() => setShowEditFormConflict(false), 5000)
+                  return
+                }
+                setIsAddingEmployee(!isAddingEmployee)
+                if (!isAddingEmployee) {
+                  setShowAddFormConflict(false)
+                }
+              }}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -685,7 +712,7 @@ export function EmployeeManager() {
           </div>
 
           {isAddingEmployee && (
-            <Card className="border border-gray-200 bg-white">
+            <Card ref={addFormRef} className="border border-gray-200 bg-white">
               <CardHeader className="border-b border-gray-200 bg-gray-50">
                 <CardTitle className="text-lg font-medium text-gray-900">Nouvel employé</CardTitle>
               </CardHeader>
@@ -886,20 +913,31 @@ export function EmployeeManager() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setIsAddingEmployee(false)}
+                    onClick={() => {
+                      setIsAddingEmployee(false)
+                      setShowAddFormConflict(false)
+                    }}
                     className="border border-gray-300 hover:bg-gray-50"
                   >
                     <X className="mr-2 h-4 w-4" />
                     Annuler
                   </Button>
                 </div>
+                
+                {showAddFormConflict && (
+                  <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
+                    <p className="text-orange-800 text-sm font-medium">
+                      ⚠️ Veuillez terminer ou annuler l'ajout de cet employé avant de modifier un employé existant.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
           {/* Formulaire d'édition d'employé */}
           {isEditingEmployee && editEmployee && (
-            <Card className="border border-blue-200 bg-white">
+            <Card ref={editFormRef} className="border border-blue-200 bg-white">
               <CardHeader className="border-b border-blue-200 bg-blue-50">
                 <CardTitle className="text-xl flex items-center space-x-2">
                   <Pencil className="h-6 w-6 text-blue-600" />
@@ -1100,6 +1138,7 @@ export function EmployeeManager() {
                     onClick={() => {
                       setIsEditingEmployee(false)
                       setEditEmployee(null)
+                      setShowEditFormConflict(false)
                     }}
                     className="border border-gray-300 hover:bg-gray-50"
                   >
@@ -1107,6 +1146,14 @@ export function EmployeeManager() {
                     Annuler
                   </Button>
                 </div>
+                
+                {showEditFormConflict && (
+                  <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
+                    <p className="text-orange-800 text-sm font-medium">
+                      ⚠️ Veuillez terminer ou annuler la modification de cet employé avant d'en ajouter un nouveau.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

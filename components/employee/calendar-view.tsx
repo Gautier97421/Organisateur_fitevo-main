@@ -41,6 +41,8 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<Date | null>(null)
   const [showEventDialog, setShowEventDialog] = useState(false)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const [activeView, setActiveView] = useState<"events" | "schedule">("events")
   const [calendarView, setCalendarView] = useState<"year" | "month">("year")
   const [newEvent, setNewEvent] = useState({
@@ -117,30 +119,52 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
   }, 5000, [activeView, calendarView, selectedMonth])
 
   const addEvent = async () => {
-    if (!newEvent.title || !selectedDate) return
+    // Marquer qu'on a tenté de soumettre
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+    
+    // Validation des champs obligatoires
+    if (!newEvent.title || !selectedDate) {
+      setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
+
+    // Valider que selectedDate est une date valide
+    if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
+      setErrorMessage("❌ Date invalide. Veuillez sélectionner une date correcte.")
+      return
+    }
 
     try {
       const userEmail = localStorage.getItem("userEmail") || ""
       const userName = localStorage.getItem("userName") || ""
+      const userId = localStorage.getItem("userId") || ""
 
-      const { data, error } = await supabase
+      console.log("Débug création événement:", { userEmail, userName, userId }) // Debug
+
+      const { error } = await supabase
         .from("calendar_events")
-        .insert([
-          {
-            title: newEvent.title,
-            description: newEvent.description,
-            event_date: selectedDate.toISOString().split("T")[0],
-            event_time: newEvent.event_time || null,
-            duration_minutes: newEvent.duration_minutes,
-            created_by_email: userEmail,
-            created_by_name: userName,
-          },
-        ])
+        .insert([{
+          title: newEvent.title,
+          description: newEvent.description,
+          event_date: selectedDate.toISOString().split("T")[0],
+          event_time: newEvent.event_time || null,
+          duration_minutes: newEvent.duration_minutes,
+          created_by_email: userEmail,
+          created_by_name: userName,
+          user_id: userId,
+        }])
 
-      if (error) throw error
+      if (error) {
+        setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
+        return
+      }
 
-      if (data) {
-        setEvents([...events, ...data])
+      // Recharger les événements pour afficher le nouvel événement
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
       }
 
       setNewEvent({
@@ -151,11 +175,10 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
       })
       setShowEventDialog(false)
       setSelectedDate(null)
-
-      alert("Événement proposé ! Il sera visible une fois approuvé par un administrateur.")
+      setAttemptedSubmit(false)
+      setErrorMessage("")
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
-      alert("Erreur lors de l'ajout de l'événement")
+      setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
     }
   }
 
@@ -173,16 +196,28 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
     const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
     return events.filter((event) => {
-      const eventDate = new Date(event.event_date)
-      return eventDate >= startOfMonth && eventDate <= endOfMonth
+      try {
+        const eventDate = new Date(event.event_date)
+        if (isNaN(eventDate.getTime())) return false
+        return eventDate >= startOfMonth && eventDate <= endOfMonth
+      } catch {
+        return false
+      }
     })
   }
 
   const getEventsForDate = (date: Date) => {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return []
+    
     const dateString = date.toISOString().split("T")[0]
     return events.filter((event) => {
-      const eventDate = new Date(event.event_date).toISOString().split("T")[0]
-      return eventDate === dateString
+      try {
+        const eventDate = new Date(event.event_date)
+        if (isNaN(eventDate.getTime())) return false
+        return eventDate.toISOString().split("T")[0] === dateString
+      } catch {
+        return false
+      }
     })
   }
 
@@ -514,7 +549,14 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
           </Card>
 
           {/* Dialog pour ajouter un événement */}
-          <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
+          <Dialog open={showEventDialog} onOpenChange={(open) => {
+            setShowEventDialog(open)
+            if (!open) {
+              setAttemptedSubmit(false)
+              setErrorMessage("")
+              setSelectedDate(null)
+            }
+          }}>
             <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl flex items-center space-x-2 text-gray-900">
@@ -537,20 +579,37 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                   ) : "Sélectionnez une date dans le calendrier"}
                 </DialogDescription>
               </DialogHeader>
+              
+              {errorMessage && (
+                <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mb-4">
+                  <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
+                </div>
+              )}
+              
               <div className="space-y-4">
-                <Input
-                  placeholder="Titre de l'événement"
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  className="text-lg border-2 rounded-xl bg-white text-gray-900"
-                />
-                <Textarea
-                  placeholder="Description (optionnelle)"
-                  value={newEvent.description}
-                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                  className="text-lg border-2 rounded-xl bg-white text-gray-900"
-                  rows={3}
-                />
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Titre de l'événement <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="Titre de l'événement"
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    className={`text-lg border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.title ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Description <span className="text-gray-500 text-xs">(optionnel)</span>
+                  </label>
+                  <Textarea
+                    placeholder="Description (optionnelle)"
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                    className="text-lg border-2 rounded-xl bg-white text-gray-900"
+                    rows={3}
+                  />
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
@@ -584,6 +643,8 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                   onClick={() => {
                     setShowEventDialog(false)
                     setSelectedDate(null)
+                    setAttemptedSubmit(false)
+                    setErrorMessage("")
                   }}
                   className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                 >

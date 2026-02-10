@@ -143,10 +143,44 @@ function mapFieldsToClient(table: string, data: any): any {
     }
   }
   
-  // Mapper eventDate -> event_date pour calendar_events
-  if (table === 'calendar_events' && mapped.eventDate !== undefined) {
-    mapped.event_date = mapped.eventDate
-    delete mapped.eventDate
+  // Mapper les champs de calendar_events
+  if (table === 'calendar_events') {
+    if (mapped.eventDate !== undefined) {
+      mapped.event_date = mapped.eventDate
+      delete mapped.eventDate
+    }
+    if (mapped.eventTime !== undefined) {
+      mapped.event_time = mapped.eventTime
+      delete mapped.eventTime
+    }
+    if (mapped.durationMinutes !== undefined) {
+      mapped.duration_minutes = mapped.durationMinutes
+      delete mapped.durationMinutes
+    }
+    if (mapped.createdByEmail !== undefined) {
+      mapped.created_by_email = mapped.createdByEmail
+      delete mapped.createdByEmail
+    }
+    if (mapped.createdByName !== undefined) {
+      mapped.created_by_name = mapped.createdByName
+      delete mapped.createdByName
+    }
+    if (mapped.rejectionReason !== undefined) {
+      mapped.rejection_reason = mapped.rejectionReason
+      delete mapped.rejectionReason
+    }
+    if (mapped.approvedBy !== undefined) {
+      mapped.approved_by = mapped.approvedBy
+      delete mapped.approvedBy
+    }
+    if (mapped.approvedAt !== undefined) {
+      mapped.approved_at = mapped.approvedAt
+      delete mapped.approvedAt
+    }
+    if (mapped.userId !== undefined) {
+      mapped.user_id = mapped.userId
+      delete mapped.userId
+    }
   }
   
   // Mapper createdAt -> created_at et updatedAt -> updated_at

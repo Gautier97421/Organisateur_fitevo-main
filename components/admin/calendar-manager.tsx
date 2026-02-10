@@ -71,9 +71,16 @@ export function CalendarManager() {
         .order("event_date", { ascending: true })
 
       if (error) throw error
+      
+      // Debug pour voir les données
+      console.log("Events chargés:", data)
+      if (data && data.length > 0) {
+        console.log("Premier event - created_by_name:", data[0].created_by_name, "created_by_email:", data[0].created_by_email)
+      }
+      
       setEvents(data || [])
     } catch (error) {
-      // Erreur silencieuse
+      console.error("Erreur chargement events:", error)
     } finally {
       setIsLoading(false)
     }
@@ -237,6 +244,13 @@ export function CalendarManager() {
       if (!event) return
 
       const reminderDate = new Date(event.event_date)
+      
+      // Valider que la date est valide
+      if (isNaN(reminderDate.getTime())) {
+        alert("La date de l'événement est invalide. Impossible de créer un rappel.")
+        return
+      }
+      
       reminderDate.setDate(reminderDate.getDate() - reminderSettings.days_before)
 
       const { error } = await supabase.from("event_reminders").insert([
@@ -278,8 +292,13 @@ export function CalendarManager() {
     const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0)
 
     return events.filter((event) => {
-      const eventDate = new Date(event.event_date)
-      return eventDate >= startOfMonth && eventDate <= endOfMonth
+      try {
+        const eventDate = new Date(event.event_date)
+        if (isNaN(eventDate.getTime())) return false
+        return eventDate >= startOfMonth && eventDate <= endOfMonth
+      } catch {
+        return false
+      }
     })
   }
 
@@ -690,14 +709,14 @@ export function CalendarManager() {
                         <p className="flex items-center space-x-2">
                           <Clock className="h-4 w-4" />
                           <span>
-                            {formatTime(event.event_time)} • {event.duration_minutes} minutes
+                            {event.event_time ? `${formatTime(event.event_time)} • Durée : ${event.duration_minutes} minutes` : "Heure non précisée"}
                           </span>
                         </p>
                         {event.description && (
                           <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
                         )}
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Créé par {event.created_by_name} ({event.created_by_email})
+                          Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
                         </p>
                         {event.status === "rejected" && event.rejection_reason && (
                           <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
@@ -782,14 +801,14 @@ export function CalendarManager() {
                         <p className="flex items-center space-x-2">
                           <Clock className="h-4 w-4" />
                           <span>
-                            {formatTime(event.event_time)} • {event.duration_minutes} minutes
+                            {event.event_time ? `${formatTime(event.event_time)} • ${event.duration_minutes} minutes` : "Heure non précisée"}
                           </span>
                         </p>
                         {event.description && (
                           <p className="text-gray-700 mt-2">{event.description}</p>
                         )}
                         <p className="text-sm text-gray-500">
-                          Proposé par {event.created_by_name} ({event.created_by_email})
+                          Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
                         </p>
                       </div>
                     </div>
@@ -913,7 +932,7 @@ export function CalendarManager() {
               <span>Refuser l'événement</span>
             </DialogTitle>
             <DialogDescription id="rejection-description" className="text-lg text-gray-600">
-              Veuillez indiquer la raison du refus :
+              Raison du refus (optionnel) :
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -938,7 +957,6 @@ export function CalendarManager() {
             <Button
               onClick={() => selectedEventId && rejectEvent(selectedEventId, rejectionReason)}
               className="bg-red-600 hover:bg-red-700 text-lg px-6"
-              disabled={!rejectionReason.trim()}
             >
               <X className="mr-2 h-4 w-4" />
               Refuser
