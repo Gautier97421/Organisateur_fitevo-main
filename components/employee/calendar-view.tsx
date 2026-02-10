@@ -279,38 +279,38 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900">
-          <Calendar className="h-5 w-5 inline-block mr-2" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
           Calendrier & Planning
         </h2>
       </div>
 
       {/* Navigation entre vues */}
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <Button
           variant={activeView === "events" ? "default" : "outline"}
           onClick={() => setActiveView("events")}
-          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
             activeView === "events"
               ? "bg-red-600 text-white shadow-lg"
               : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
           }`}
         >
-          <Calendar className="mr-2 h-5 w-5" />
+          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Événements Annuels
         </Button>
         {hasWorkScheduleAccess && (
           <Button
             variant={activeView === "schedule" ? "default" : "outline"}
             onClick={() => setActiveView("schedule")}
-            className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
               activeView === "schedule"
                 ? "bg-red-600 text-white shadow-lg"
                 : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
             }`}
           >
-            <Clock className="mr-2 h-5 w-5" />
+            <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
             Planning de Travail
           </Button>
         )}
@@ -322,30 +322,30 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
           {calendarView === "year" ? (
             /* Vue Année */
             <Card className="border border-gray-200 shadow-xl bg-white">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-4 px-3 sm:px-6">
+                <div className="flex items-center justify-between gap-2">
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("prev")}
-                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 px-2 sm:px-4"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <h3 className="text-2xl font-bold text-gray-900">
+                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900">
                     Année {currentDate.getFullYear()}
                   </h3>
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("next")}
-                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 px-2 sm:px-4"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-6">
                 {/* Grille des mois */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
                   {getMonthsInYear().map((month, index) => {
                     const monthEvents = getEventsForMonth(month)
                     const isPastMonth = month < new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -355,7 +355,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                         key={index}
                         onClick={() => !isPastMonth && handleMonthClick(month)}
                         className={`
-                          min-h-[120px] p-4 border rounded-xl cursor-pointer transition-all duration-200
+                          min-h-[80px] sm:min-h-[120px] p-2 sm:p-4 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             isPastMonth
                               ? "bg-gray-50 text-gray-400 cursor-not-allowed opacity-50"
@@ -364,7 +364,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                           border-gray-200
                         `}
                       >
-                        <div className="font-semibold text-lg mb-2 text-gray-900">
+                        <div className="font-semibold text-sm sm:text-lg mb-2 text-gray-900">
                           {monthNames[month.getMonth()]}
                         </div>
                         <div className="space-y-1">
@@ -395,39 +395,39 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
           ) : (
             /* Vue Mois */
             <Card className="border border-gray-200 shadow-xl bg-white">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-4 px-3 sm:px-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <Button
                     variant="outline"
                     onClick={backToYear}
-                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 w-full sm:w-auto"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Retour
                   </Button>
-                  <div className="flex items-center space-x-4">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("prev")}
-                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
+                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 px-2 sm:px-4"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <h3 className="text-2xl font-bold text-gray-900">
+                    <h3 className="text-lg sm:text-2xl font-bold text-gray-900 text-center min-w-[180px] sm:min-w-[200px]">
                       {selectedMonth && `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
                     </h3>
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("next")}
-                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50"
+                      className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 px-2 sm:px-4"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="w-20"></div> {/* Spacer pour centrer */}
+                  <div className="hidden sm:block w-20"></div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-6">
                 {/* En-têtes des jours */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {dayNames.map((day) => (
@@ -515,14 +515,14 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
 
           {/* Dialog pour ajouter un événement */}
           <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
-            <DialogContent className="sm:max-w-md bg-white">
+            <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
               <DialogHeader>
-                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                  <Plus className="h-6 w-6 text-red-600" />
+                <DialogTitle className="text-lg sm:text-xl flex items-center space-x-2 text-gray-900">
+                  <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
                   <span>Nouvel Événement</span>
                 </DialogTitle>
-                <DialogDescription className="text-lg text-gray-600">
-                  {selectedDate && (
+                <DialogDescription id="add-event-description" className="text-sm sm:text-lg text-gray-600">
+                  {selectedDate ? (
                     <>
                       Date sélectionnée :{" "}
                       <strong>
@@ -534,7 +534,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                         })}
                       </strong>
                     </>
-                  )}
+                  ) : "Sélectionnez une date dans le calendrier"}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -551,7 +551,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                   className="text-lg border-2 rounded-xl bg-white text-gray-900"
                   rows={3}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
                     <Input
@@ -578,19 +578,19 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                   </div>
                 </div>
               </div>
-              <DialogFooter className="flex space-x-3">
+              <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <Button
                   variant="outline"
                   onClick={() => {
                     setShowEventDialog(false)
                     setSelectedDate(null)
                   }}
-                  className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
+                  className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                 >
-                  <XCircle className="h-5 w-5" /> Annuler
+                  <XCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Annuler
                 </Button>
-                <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5" /> Proposer
+                <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-sm sm:text-lg px-4 sm:px-6 flex items-center gap-2 w-full sm:w-auto">
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Proposer
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -128,10 +128,8 @@ export function WorkScheduleCalendar() {
 
       if (!response.ok) throw new Error('Erreur lors de l\'ajout')
 
-      const result = await response.json()
-      if (result.data) {
-        setSchedules([...schedules, ...result.data])
-      }
+      // Recharger les schedules depuis le serveur
+      await loadSchedules()
 
       setNewSchedule({
         start_time: "",

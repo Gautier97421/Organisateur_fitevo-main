@@ -44,28 +44,28 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
 
   return (
     <header className="bg-gradient-to-r from-red-600 to-black shadow-lg border-b-4 border-red-700">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <User className="h-8 w-8 text-white" />
+          <User className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
           <div>
-            <h1 className="text-xl font-bold text-white">Espace Employé</h1>
-            <p className="text-sm text-gray-200">{userEmail}</p>
+            <h1 className="text-lg sm:text-xl font-bold text-white">Espace Employé</h1>
+            <p className="text-xs sm:text-sm text-gray-200">{userEmail}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <ThemeToggle />
           {whatsappLink && (
             <Button
               onClick={handleWhatsappClick}
               variant="outline"
-              className="bg-green-500 text-white border-2 border-green-500 hover:bg-green-600"
+              className="bg-green-500 text-white border-2 border-green-500 hover:bg-green-600 text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap"
             >
-              <MessageCircle className="mr-2 h-4 w-4" />
+              <MessageCircle className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
               WhatsApp
             </Button>
           )}
-          <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100">
-            <LogOut className="mr-2 h-4 w-4" />
+          <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100 text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
+            <LogOut className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
             Déconnexion
           </Button>
         </div>

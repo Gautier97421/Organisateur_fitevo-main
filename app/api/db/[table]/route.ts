@@ -65,6 +65,12 @@ function mapFieldsToClient(table: string, data: any): any {
     delete mapped.active
   }
   
+  // Mapper roleIds -> role_ids pour tasks
+  if (table === 'tasks' && mapped.roleIds !== undefined) {
+    mapped.role_ids = mapped.roleIds
+    delete mapped.roleIds
+  }
+  
   // Mapper isFirstLogin -> is_first_login pour users
   if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.isFirstLogin !== undefined) {
     mapped.is_first_login = mapped.isFirstLogin
@@ -107,6 +113,34 @@ function mapFieldsToClient(table: string, data: any): any {
   if (table === 'work_schedules' && mapped.date !== undefined) {
     mapped.work_date = mapped.date
     delete mapped.date
+  }
+  
+  // Mapper les champs de work_schedules
+  if (table === 'work_schedules') {
+    if (mapped.employeeEmail !== undefined) {
+      mapped.employee_email = mapped.employeeEmail
+      delete mapped.employeeEmail
+    }
+    if (mapped.employeeName !== undefined) {
+      mapped.employee_name = mapped.employeeName
+      delete mapped.employeeName
+    }
+    if (mapped.startTime !== undefined) {
+      mapped.start_time = mapped.startTime
+      delete mapped.startTime
+    }
+    if (mapped.endTime !== undefined) {
+      mapped.end_time = mapped.endTime
+      delete mapped.endTime
+    }
+    if (mapped.breakDuration !== undefined) {
+      mapped.break_duration = mapped.breakDuration
+      delete mapped.breakDuration
+    }
+    if (mapped.breakStartTime !== undefined) {
+      mapped.break_start_time = mapped.breakStartTime
+      delete mapped.breakStartTime
+    }
   }
   
   // Mapper eventDate -> event_date pour calendar_events
@@ -253,8 +287,18 @@ export async function GET(
         include: Object.keys(include).length > 0 ? include : undefined
       })
       
+      // Debug pour work_schedules
+      if (table === 'work_schedules' && data && data.length > 0) {
+        console.log('[API work_schedules] Données Prisma (premier schedule):', JSON.stringify(data[0], null, 2))
+      }
+      
       // Mapper les champs du schéma vers les noms attendus par le client (gère automatiquement les tableaux)
       const mappedData = mapFieldsToClient(table, data)
+      
+      // Debug après mapping
+      if (table === 'work_schedules' && mappedData && mappedData.length > 0) {
+        console.log('[API work_schedules] Données mappées (premier schedule):', JSON.stringify(mappedData[0], null, 2))
+      }
       
       return NextResponse.json({ data: mappedData || [], error: null })
     }
@@ -295,6 +339,11 @@ export async function POST(
         // Mappings spéciaux pour correspondre au schéma Prisma
         if (camelKey === 'location' && table === 'gyms') {
           camelKey = 'address' // gyms utilise 'address' dans le schéma
+        }
+        
+        // Mapper role_ids -> roleIds pour tasks
+        if (table === 'tasks' && camelKey === 'roleIds') {
+          camelKey = 'roleIds'
         }
         
         // Mapper les champs WiFi de snake_case vers camelCase pour Prisma

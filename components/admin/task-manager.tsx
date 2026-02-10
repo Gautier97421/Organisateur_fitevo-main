@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2 } from "lucide-react"
+import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react"
 import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -52,7 +52,7 @@ interface Role {
 }
 
 // Composant SortableTaskItem pour le drag and drop
-function SortableTaskItem({ task, index, roles, onDelete }: { task: TaskItem; index: number; roles: Role[]; onDelete: (id: string) => void }) {
+function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: TaskItem; index: number; roles: Role[]; onDelete: (id: string) => void; onEdit: (task: TaskItem) => void }) {
   const {
     attributes,
     listeners,
@@ -131,15 +131,26 @@ function SortableTaskItem({ task, index, roles, onDelete }: { task: TaskItem; in
               </div>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDelete(task.id)}
-            className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800 flex-shrink-0"
-            title="Supprimer"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex space-x-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(task)}
+              className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800 flex-shrink-0"
+              title="Modifier"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDelete(task.id)}
+              className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800 flex-shrink-0"
+              title="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -154,6 +165,8 @@ export function TaskManager() {
   const [selectedRole, setSelectedRole] = useState<string>("all") // "all" pour tous les rôles
   const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
   const [showForm, setShowForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [newTask, setNewTask] = useState<{
     title: string
@@ -162,6 +175,21 @@ export function TaskManager() {
     options: string[]
     required: boolean
     roleIds: string[] // IDs des rôles sélectionnés
+  }>({
+    title: "",
+    description: "",
+    type: "checkbox",
+    options: [],
+    required: true,
+    roleIds: [],
+  })
+  const [editTask, setEditTask] = useState<{
+    title: string
+    description: string
+    type: "checkbox" | "text" | "qcm"
+    options: string[]
+    required: boolean
+    roleIds: string[]
   }>({
     title: "",
     description: "",
@@ -263,14 +291,14 @@ export function TaskManager() {
   }, 15000, [selectedGym])
 
   const getCurrentTasks = () => {
-    return tasks.filter((task) => {
+     const filtered = tasks.filter((task) => {
       // Filtrer par période
       if (task.period !== activePeriod) return false
       
       // Filtrer par rôle si un rôle est sélectionné
       if (selectedRole !== "all") {
         // Si la tâche a des rôles définis, vérifier si le rôle sélectionné est inclus
-        if (task.role_ids && task.role_ids.length > 0) {
+        if (task.role_ids && Array.isArray(task.role_ids) && task.role_ids.length > 0) {
           return task.role_ids.includes(selectedRole)
         }
         // Si la tâche n'a pas de rôles définis, elle est visible par tous
@@ -279,6 +307,7 @@ export function TaskManager() {
       
       return true
     })
+    return filtered
   }
 
   const addTask = async () => {
@@ -343,7 +372,62 @@ export function TaskManager() {
     }
   }
 
+  const openEditTask = (task: TaskItem) => {
+    setEditingTask(task)
+    setEditTask({
+      title: task.title,
+      description: task.description || "",
+      type: task.type as "checkbox" | "text" | "qcm" || "checkbox",
+      options: task.options || [],
+      required: task.required || true,
+      roleIds: task.role_ids || [],
+    })
+    setShowEditForm(true)
+    setShowForm(false)
+  }
+
+  const updateTask = async () => {
+    if (!editingTask || !editTask.title || !editTask.description) return
+
+    try {
+      const response = await fetch(`/api/db/tasks/${editingTask.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTask.title,
+          description: editTask.description,
+          type: editTask.type,
+          options: editTask.type === "qcm" ? JSON.stringify(editTask.options) : null,
+          required: editTask.required,
+          role_ids: editTask.roleIds.length > 0 ? JSON.stringify(editTask.roleIds) : null,
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error?.message || `Erreur ${response.status}`)
+      }
+
+      await loadTasks()
+      setShowEditForm(false)
+      setEditingTask(null)
+      setEditTask({
+        title: "",
+        description: "",
+        type: "checkbox",
+        options: [],
+        required: true,
+        roleIds: [],
+      })
+    } catch (error: any) {
+      console.error('Erreur lors de la modification:', error)
+      alert(`Erreur lors de la modification de la tâche:\n${error.message || error}`)
+    }
+  }
+
   const deleteTask = async (id: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return
+    
     try {
       const response = await fetch(`/api/db/tasks/${id}`, {
         method: 'DELETE'
@@ -414,7 +498,7 @@ export function TaskManager() {
       
       // Appliquer le même filtre de rôle
       if (selectedRole !== "all") {
-        if (task.role_ids && task.role_ids.length > 0) {
+        if (task.role_ids && Array.isArray(task.role_ids) && task.role_ids.length > 0) {
           return task.role_ids.includes(selectedRole)
         }
         return true
@@ -454,16 +538,16 @@ export function TaskManager() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-          <ListTodo className="h-8 w-8 text-red-600" />
-          <h2 className="text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
+          <ListTodo className="h-6 w-6 sm:h-8 sm:w-8 text-red-600" />
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2"
+          className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 w-full sm:w-auto whitespace-nowrap"
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
           Nouvelle Tâche
         </Button>
       </div>
@@ -522,11 +606,11 @@ export function TaskManager() {
       {selectedGym && (
         <>
           {/* Navigation entre les périodes */}
-          <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             <Button
               variant={activePeriod === "matin" ? "default" : "outline"}
               onClick={() => setActivePeriod("matin")}
-              className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+              className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
                 activePeriod === "matin"
                   ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
@@ -537,7 +621,7 @@ export function TaskManager() {
             <Button
               variant={activePeriod === "aprem" ? "default" : "outline"}
               onClick={() => setActivePeriod("aprem")}
-              className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+              className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
                 activePeriod === "aprem"
                   ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
@@ -548,7 +632,7 @@ export function TaskManager() {
             <Button
               variant={activePeriod === "journee" ? "default" : "outline"}
               onClick={() => setActivePeriod("journee")}
-              className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+              className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
                 activePeriod === "journee"
                   ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                   : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
@@ -557,6 +641,133 @@ export function TaskManager() {
               Journée ({getPeriodCount("journee")} tâches)
             </Button>
           </div>
+
+          {/* Formulaire d'édition */}
+          {showEditForm && editingTask && (
+            <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
+              <CardHeader className="bg-blue-600 dark:bg-blue-700 text-white rounded-t-xl">
+                <CardTitle className="text-xl">
+                  Modifier la tâche : {editingTask.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 p-8">
+                <Input
+                  placeholder="Titre de la tâche"
+                  value={editTask.title}
+                  onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
+                  className="text-lg h-14 border-2 rounded-xl"
+                />
+
+                <Textarea
+                  placeholder="Description détaillée"
+                  value={editTask.description}
+                  onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
+                  className="text-lg border-2 rounded-xl min-h-[100px]"
+                />
+
+                <div className="grid grid-cols-2 gap-6">
+                  <Select
+                    value={editTask.type}
+                    onValueChange={(value) => setEditTask({ ...editTask, type: value as any })}
+                  >
+                    <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="checkbox">Case à cocher</SelectItem>
+                      <SelectItem value="text">Texte libre</SelectItem>
+                      <SelectItem value="qcm">Choix multiple</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="flex items-center space-x-3 bg-gray-50 dark:bg-gray-700 p-4 rounded-xl">
+                    <input
+                      type="checkbox"
+                      id="edit-required"
+                      checked={editTask.required}
+                      onChange={(e) => setEditTask({ ...editTask, required: e.target.checked })}
+                      className="w-6 h-6 text-blue-600 rounded"
+                    />
+                    <label htmlFor="edit-required" className="text-lg font-medium">
+                      Tâche obligatoire
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
+                  <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
+                  <div className="flex flex-wrap gap-2">
+                    {roles.map((role) => (
+                      <div
+                        key={role.id}
+                        className={`px-3 py-2 rounded-lg cursor-pointer border-2 transition-all ${
+                          editTask.roleIds.includes(role.id)
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 bg-white hover:border-gray-400'
+                        }`}
+                        onClick={() => {
+                          const isSelected = editTask.roleIds.includes(role.id)
+                          setEditTask({
+                            ...editTask,
+                            roleIds: isSelected
+                              ? editTask.roleIds.filter((id) => id !== role.id)
+                              : [...editTask.roleIds, role.id]
+                          })
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: role.color }}
+                          />
+                          <span className="font-medium">{role.name}</span>
+                          {editTask.roleIds.includes(role.id) && (
+                            <CheckCircle className="h-4 w-4 text-blue-600" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {editTask.type === "qcm" && (
+                  <Textarea
+                    placeholder="Options (une par ligne)&#10;Option 1&#10;Option 2&#10;Option 3"
+                    value={editTask.options.join("\n")}
+                    onChange={(e) =>
+                      setEditTask({
+                        ...editTask,
+                        options: e.target.value.split("\n").filter((opt) => opt.trim()),
+                      })
+                    }
+                    className="text-lg border-2 rounded-xl"
+                  />
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                  <Button
+                    onClick={updateTask}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 rounded-xl shadow-lg flex items-center gap-2 w-full sm:w-auto"
+                  >
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Enregistrer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditForm(false)
+                      setEditingTask(null)
+                    }}
+                    className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
+                  >
+                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Annuler
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Formulaire d'ajout */}
           {showForm && (
@@ -662,20 +873,20 @@ export function TaskManager() {
                   />
                 )}
 
-                <div className="flex space-x-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                   <Button
                     onClick={addTask}
-                    className="bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-3 rounded-xl shadow-lg flex items-center gap-2"
+                    className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 rounded-xl shadow-lg flex items-center gap-2 w-full sm:w-auto"
                   >
-                    <CheckCircle className="h-5 w-5" />
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     Ajouter
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowForm(false)}
-                    className="text-lg px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
+                    className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                   >
-                    <XCircle className="h-5 w-5" />
+                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     Annuler
                   </Button>
                 </div>
@@ -724,6 +935,7 @@ export function TaskManager() {
                         index={index}
                         roles={roles}
                         onDelete={deleteTask}
+                        onEdit={openEditTask}
                       />
                     ))}
                   </div>

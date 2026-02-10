@@ -120,6 +120,12 @@ export function CalendarManager() {
   const addEvent = async () => {
     if (!newEvent.title || !selectedDate) return
 
+    // Valider que selectedDate est une date valide
+    if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
+      alert("Date invalide. Veuillez sélectionner une date correcte.")
+      return
+    }
+
     try {
       const userEmail = localStorage.getItem("userEmail") || ""
       const userName = localStorage.getItem("userName") || ""
@@ -144,8 +150,11 @@ export function CalendarManager() {
 
       if (error) throw error
 
-      if (data) {
-        setEvents([...events, ...data])
+      // Recharger les événements après l'ajout
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
       }
 
       setNewEvent({
@@ -275,10 +284,17 @@ export function CalendarManager() {
   }
 
   const getEventsForDate = (date: Date) => {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return []
+    
     const dateString = date.toISOString().split("T")[0]
     return events.filter((event) => {
-      const eventDate = new Date(event.event_date).toISOString().split("T")[0]
-      return eventDate === dateString
+      try {
+        const eventDate = new Date(event.event_date)
+        if (isNaN(eventDate.getTime())) return false
+        return eventDate.toISOString().split("T")[0] === dateString
+      } catch {
+        return false
+      }
     })
   }
 
@@ -439,41 +455,41 @@ export function CalendarManager() {
       </div>
 
       {/* Navigation entre vues */}
-      <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <Button
           variant={activeView === "calendar" ? "default" : "outline"}
           onClick={() => setActiveView("calendar")}
-          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
             activeView === "calendar"
               ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Calendar className="mr-2 h-5 w-5" />
+          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Vue Calendrier
         </Button>
         <Button
           variant={activeView === "list" ? "default" : "outline"}
           onClick={() => setActiveView("list")}
-          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 ${
+          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
             activeView === "list"
               ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Clock className="mr-2 h-5 w-5" />
+          <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Liste des Événements
         </Button>
         <Button
           variant={activeView === "pending" ? "default" : "outline"}
           onClick={() => setActiveView("pending")}
-          className={`text-lg px-8 py-4 h-auto rounded-xl transition-all duration-200 relative ${
+          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 relative w-full sm:w-auto whitespace-nowrap ${
             activeView === "pending"
               ? "bg-orange-600 text-white shadow-lg hover:bg-orange-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Bell className="mr-2 h-5 w-5" />
+          <Bell className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Événements en attente
           {pendingCount > 0 && (
             <Badge className="ml-2 bg-orange-500 text-white">
@@ -489,30 +505,30 @@ export function CalendarManager() {
           {calendarView === "year" ? (
             /* Vue Année */
             <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-4 px-3 md:px-6">
+                <div className="flex items-center justify-between gap-2">
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("prev")}
-                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <h3 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white text-center">
                     Année {currentDate.getFullYear()}
                   </h3>
                   <Button
                     variant="outline"
                     onClick={() => navigateYear("next")}
-                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 md:px-6">
                 {/* Grille des mois */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
                   {getMonthsInYear().map((month, index) => {
                     const monthEvents = getEventsForMonth(month)
 
@@ -520,9 +536,9 @@ export function CalendarManager() {
                       <div
                         key={index}
                         onClick={() => handleMonthClick(month)}
-                        className="min-h-[120px] p-4 border rounded-xl cursor-pointer transition-all duration-200 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md border-gray-200 dark:border-gray-600"
+                        className="min-h-[100px] md:min-h-[120px] p-3 md:p-4 border rounded-xl cursor-pointer transition-all duration-200 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md border-gray-200 dark:border-gray-600"
                       >
-                        <div className="font-semibold text-lg mb-2 text-gray-900 dark:text-white">
+                        <div className="font-semibold text-base md:text-lg mb-2 text-gray-900 dark:text-white">
                           {monthNames[month.getMonth()]}
                         </div>
                         {monthEvents.length > 0 ? (
@@ -548,39 +564,39 @@ export function CalendarManager() {
           ) : (
             /* Vue Mois */
             <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-4 px-3 md:px-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <Button
                     variant="outline"
                     onClick={backToYear}
-                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 w-full sm:w-auto"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Retour
                   </Button>
-                  <div className="flex items-center space-x-4">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("prev")}
-                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
+                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white text-center min-w-[200px]">
                       {selectedMonth && `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
                     </h3>
                     <Button
                       variant="outline"
                       onClick={() => navigateMonth("next")}
-                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600"
+                      className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="w-20"></div> {/* Spacer pour centrer */}
+                  <div className="hidden sm:block w-20"></div> {/* Spacer pour centrer */}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 md:px-6">
                 {/* En-têtes des jours */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {dayNames.map((day) => (
@@ -777,10 +793,10 @@ export function CalendarManager() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col space-y-2 ml-4">
+                    <div className="flex flex-col sm:flex-row gap-2 ml-4">
                       <Button
                         onClick={() => approveEvent(event.id)}
-                        className="bg-green-600 hover:bg-green-700 rounded-xl"
+                        className="bg-green-600 hover:bg-green-700 rounded-xl w-full sm:w-auto"
                         size="sm"
                       >
                         <Check className="mr-2 h-4 w-4" />
@@ -792,7 +808,7 @@ export function CalendarManager() {
                           setShowRejectionDialog(true)
                         }}
                         variant="outline"
-                        className="border-2 text-red-600 hover:bg-red-50 rounded-xl bg-white border-red-600"
+                        className="border-2 text-red-600 hover:bg-red-50 rounded-xl bg-white border-red-600 w-full sm:w-auto"
                         size="sm"
                       >
                         <X className="mr-2 h-4 w-4" />
@@ -809,14 +825,14 @@ export function CalendarManager() {
 
       {/* Dialog pour ajouter un événement */}
       <Dialog open={showAddEventDialog} onOpenChange={setShowAddEventDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+            <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
               <Plus className="h-6 w-6 text-red-600" />
               <span>Nouvel Événement</span>
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600">
-              {selectedDate && (
+            <DialogDescription id="add-event-description" className="text-lg text-gray-600">
+              {selectedDate ? (
                 <>
                   Date sélectionnée :{" "}
                   <strong>
@@ -828,7 +844,7 @@ export function CalendarManager() {
                     })}
                   </strong>
                 </>
-              )}
+              ) : "Sélectionnez les détails de l'événement"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -845,7 +861,7 @@ export function CalendarManager() {
               className="text-lg border-2 rounded-xl bg-white text-gray-900"
               rows={3}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
                 <Input
@@ -870,18 +886,18 @@ export function CalendarManager() {
               </div>
             </div>
           </div>
-          <DialogFooter className="flex space-x-3">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:space-x-3">
             <Button
               variant="outline"
               onClick={() => {
                 setShowAddEventDialog(false)
                 setSelectedDate(null)
               }}
-              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+              className="text-sm md:text-lg px-4 md:px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <XCircle className="h-5 w-5" /> Annuler
             </Button>
-            <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
+            <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2 w-full sm:w-auto">
               <CheckCircle className="h-5 w-5" /> Créer
             </Button>
           </DialogFooter>
@@ -890,13 +906,13 @@ export function CalendarManager() {
 
       {/* Dialog de refus */}
       <Dialog open={showRejectionDialog} onOpenChange={setShowRejectionDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white" aria-describedby="rejection-description">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
               <X className="h-6 w-6 text-red-600" />
               <span>Refuser l'événement</span>
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600">
+            <DialogDescription id="rejection-description" className="text-lg text-gray-600">
               Veuillez indiquer la raison du refus :
             </DialogDescription>
           </DialogHeader>
@@ -933,13 +949,13 @@ export function CalendarManager() {
 
       {/* Dialog de rappel */}
       <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white" aria-describedby="reminder-description">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
               <Bell className="h-6 w-6 text-red-600" />
               <span>Programmer un rappel</span>
             </DialogTitle>
-            <DialogDescription className="text-lg text-gray-600">
+            <DialogDescription id="reminder-description" className="text-lg text-gray-600">
               Configurez les paramètres du rappel par email
             </DialogDescription>
           </DialogHeader>

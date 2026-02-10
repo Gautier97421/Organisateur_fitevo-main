@@ -249,15 +249,15 @@ export function GymManager() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Building className="h-8 w-8 text-red-600" />
-          <h2 className="text-3xl font-bold text-gray-900">Gestion des Salles</h2>
+    <div className="space-y-6 md:space-y-8 px-2 md:px-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-2 md:space-x-3">
+          <Building className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Gestion des Salles</h2>
         </div>
         <Button
           onClick={() => setIsAddingGym(!isAddingGym)}
-          className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg flex items-center gap-2"
+          className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg flex items-center gap-2 w-full sm:w-auto"
         >
           <Plus className="mr-2 h-4 w-4" />
           Nouvelle Salle
@@ -267,11 +267,11 @@ export function GymManager() {
       {/* Formulaire d'ajout */}
       {isAddingGym && (
         <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
-          <CardHeader className="bg-red-600 dark:bg-red-700 text-white rounded-t-xl">
-            <CardTitle>Ajouter une nouvelle salle</CardTitle>
+          <CardHeader className="bg-red-600 dark:bg-red-700 text-white rounded-t-xl p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Ajouter une nouvelle salle</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid grid-cols-2 gap-4">
+          <CardContent className="space-y-4 p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="gym-name">Nom de la salle *</Label>
                 <Input
@@ -401,30 +401,30 @@ export function GymManager() {
       <div className="grid gap-6">
         {gyms.map((gym) => (
           <Card key={gym.id} className="border-0 shadow-xl bg-white dark:bg-gray-800">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-4">
-                  <div className="w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg">
-                    <Building className="h-8 w-8" />
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <div className="flex items-start space-x-3 md:space-x-4 flex-1 w-full">
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
+                    <Building className="h-6 w-6 md:h-8 md:w-8" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-bold text-2xl text-gray-900">{gym.name}</h3>
-                      <Badge variant={gym.is_active ? "default" : "secondary"} className={`rounded-full ${gym.is_active ? 'bg-red-600' : 'bg-gray-400'}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                      <h3 className="font-bold text-xl md:text-2xl text-gray-900 truncate">{gym.name}</h3>
+                      <Badge variant={gym.is_active ? "default" : "secondary"} className={`rounded-full ${gym.is_active ? 'bg-red-600' : 'bg-gray-400'} w-fit`}>
                         {gym.is_active ? "Active" : "Inactive"}
                       </Badge>
                     </div>
                     <div className="flex items-center space-x-2 text-gray-700 mb-2">
-                      <MapPin className="h-4 w-4" />
-                      <span>{gym.location}</span>
+                      <MapPin className="h-4 w-4 flex-shrink-0" />
+                      <span className="text-sm md:text-base break-words">{gym.location}</span>
                     </div>
-                    {gym.description && <p className="text-gray-600 text-sm mb-2">{gym.description}</p>}
+                    {gym.description && <p className="text-gray-600 text-sm mb-2 break-words">{gym.description}</p>}
                     
                     {/* Informations WiFi */}
                     {gym.wifi_restricted && (
                       <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                         <p className="text-sm font-semibold text-gray-700 mb-2">📶 Accès restreint au WiFi</p>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 text-sm">
                           {gym.wifi_ssid && (
                             <div key="ssid">
                               <span className="text-gray-500">SSID: </span>
@@ -454,12 +454,12 @@ export function GymManager() {
                   </div>
                 )}
                 
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => toggleGymStatus(gym.id)}
-                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900 text-xs md:text-sm w-full sm:w-auto"
                   >
                     {gym.is_active ? "Désactiver" : "Activer"}
                   </Button>
@@ -467,7 +467,7 @@ export function GymManager() {
                     variant="outline"
                     size="sm"
                     onClick={() => openEditGym(gym)}
-                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
+                    className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900 text-xs md:text-sm w-full sm:w-auto"
                   >
                     <Pencil className="h-4 w-4 mr-2" />
                     Modifier
@@ -476,7 +476,7 @@ export function GymManager() {
                     variant="outline"
                     size="sm"
                     onClick={() => confirmDelete(gym.id, gym.name)}
-                    className="border-2 border-red-600 rounded-xl text-red-600 hover:bg-red-50 bg-white"
+                    className="border-2 border-red-600 rounded-xl text-red-600 hover:bg-red-50 bg-white text-xs md:text-sm w-full sm:w-auto"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -489,14 +489,14 @@ export function GymManager() {
 
       {/* Dialog de modification */}
       <Dialog open={isEditingGym} onOpenChange={setIsEditingGym}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl">Modifier la salle</DialogTitle>
-            <DialogDescription>Mettre à jour les informations de la salle.</DialogDescription>
+            <DialogTitle className="text-lg md:text-xl">Modifier la salle</DialogTitle>
+            <DialogDescription className="text-sm">Mettre à jour les informations de la salle.</DialogDescription>
           </DialogHeader>
           {editGym && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nom de la salle *</Label>
                   <Input

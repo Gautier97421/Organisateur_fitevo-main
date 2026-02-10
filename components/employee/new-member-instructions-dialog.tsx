@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -55,12 +56,15 @@ export function NewMemberInstructionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby="instructions-description">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg md:text-xl font-semibold text-gray-900">
             <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
             Instructions - Nouveau Adhérent
           </DialogTitle>
+          <DialogDescription id="instructions-description" className="text-xs md:text-sm text-gray-500">
+            Suivez les étapes ci-dessous pour accueillir un nouveau adhérent
+          </DialogDescription>
           {totalCount > 0 && (
             <p className="text-xs md:text-sm text-gray-500 mt-2">
               Progression : {completedCount} / {totalCount} étapes complétées

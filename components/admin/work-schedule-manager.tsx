@@ -80,13 +80,20 @@ export function WorkScheduleManager() {
       if (response.ok) {
         const result = await response.json()
         const data = result.data || []
+        console.log(`[WorkScheduleManager] Chargé ${data.length} schedules pour ${startDate} à ${endDate}`)
+        if (data.length > 0) {
+          console.log('[WorkScheduleManager] Premier schedule (JSON):', JSON.stringify(data[0], null, 2))
+          console.log('[WorkScheduleManager] employee_name:', data[0].employee_name)
+          console.log('[WorkScheduleManager] employeeName:', data[0].employeeName)
+        }
         setSchedules(data)
         detectConflicts(data)
       } else {
+        console.error('[WorkScheduleManager] Erreur réponse API:', response.status)
         setSchedules([])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des horaires:", error)
+      console.error("[WorkScheduleManager] Erreur lors du chargement des horaires:", error)
       setSchedules([])
     }
   }
@@ -160,12 +167,17 @@ export function WorkScheduleManager() {
       const response = await fetch(`/api/db/work_schedules/${scheduleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { status: newStatus } })
+        body: JSON.stringify({ status: newStatus })
       })
 
-      if (!response.ok) throw new Error("Erreur lors de la mise à jour")
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('Erreur API:', error)
+        throw new Error(error.error || "Erreur lors de la mise à jour")
+      }
 
-      setSchedules(schedules.map((s) => (s.id === scheduleId ? { ...s, status: newStatus } : s)))
+      // Recharger les schedules depuis le serveur
+      await loadSchedules()
 
       alert(`Statut mis à jour : ${newStatus === "confirmed" ? "Confirmé" : "Terminé"}`)
     } catch (error) {
@@ -184,7 +196,8 @@ export function WorkScheduleManager() {
 
       if (!response.ok) throw new Error("Erreur lors de la suppression")
 
-      setSchedules(schedules.filter((s) => s.id !== scheduleId))
+      // Recharger les schedules depuis le serveur
+      await loadSchedules()
       setShowDetailsDialog(false)
       alert("Planning supprimé")
     } catch (error) {
@@ -227,7 +240,33 @@ export function WorkScheduleManager() {
 
   const getSchedulesForDate = (date: Date) => {
     const dateString = date.toISOString().split("T")[0]
-    return schedules.filter((schedule) => schedule.work_date === dateString)
+    const filtered = schedules.filter((schedule) => {
+      // Vérifier que work_date existe
+      if (!schedule.work_date) {
+        console.warn('[WorkScheduleManager] work_date manquant pour le schedule:', schedule.id)
+        return false
+      }
+      
+      // Normaliser work_date au format YYYY-MM-DD
+      let scheduleDate: string
+      const workDate = schedule.work_date as any
+      
+      if (typeof workDate === 'string') {
+        // Si c'est une string ISO "2026-02-10T00:00:00.000Z" ou "2026-02-10"
+        scheduleDate = workDate.split("T")[0]
+      } else if (workDate && typeof workDate === 'object' && workDate.toISOString) {
+        // Si c'est un objet Date
+        scheduleDate = workDate.toISOString().split("T")[0]
+      } else {
+        console.warn('[WorkScheduleManager] Format work_date inconnu:', workDate, 'pour schedule:', schedule.id)
+        return false
+      }
+      
+      const matches = scheduleDate === dateString
+      return matches
+    })
+    
+    return filtered
   }
 
   const getEmployeeColor = (employeeEmail: string) => {
@@ -277,9 +316,9 @@ export function WorkScheduleManager() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
           📅 Gestion des Plannings
         </h2>
         {conflicts.length > 0 && (
@@ -292,39 +331,39 @@ export function WorkScheduleManager() {
 
       {/* Navigation du calendrier */}
       <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-4 px-3 md:px-6">
+          <div className="flex items-center justify-between gap-2">
             <Button
               variant="outline"
               onClick={() => navigateMonth("prev")}
-              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 px-2 md:px-4"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white text-center">
               Planning - {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <Button
               variant="outline"
               onClick={() => navigateMonth("next")}
-              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600"
+              className="border-2 rounded-xl bg-white hover:bg-gray-50 border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 px-2 md:px-4"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2 md:px-6">
           {/* En-têtes des jours */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
+          <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2 md:mb-4">
             {dayNames.map((day) => (
-              <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
+              <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-1 md:py-2 text-xs sm:text-sm">
                 {day}
               </div>
             ))}
           </div>
 
           {/* Grille du calendrier */}
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {getDaysInMonth().map((dayInfo, index) => {
               const daySchedules = getSchedulesForDate(dayInfo.date)
               const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
@@ -334,7 +373,7 @@ export function WorkScheduleManager() {
                 <div
                   key={index}
                   className={`
-                    min-h-[120px] p-2 border rounded-xl transition-all duration-200
+                    min-h-[80px] sm:min-h-[100px] md:min-h-[120px] p-1 md:p-2 border rounded-lg md:rounded-xl transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
                         ? "bg-white dark:bg-gray-800"
@@ -349,27 +388,35 @@ export function WorkScheduleManager() {
                   `}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="font-semibold text-sm text-gray-900 dark:text-white">
+                    <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-white">
                       {dayInfo.date.getDate()}
                     </div>
                     {hasConflict && <AlertTriangle className="h-3 w-3 text-red-600" />}
                   </div>
                   <div className="space-y-1">
-                    {daySchedules.slice(0, 3).map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        onClick={() => {
-                          setSelectedSchedule(schedule)
-                          setShowDetailsDialog(true)
-                        }}
-                        className={`text-xs p-1 rounded text-white truncate cursor-pointer hover:opacity-80 ${getEmployeeColor(schedule.employee_email)}`}
-                        title={`${schedule.employee_name}: ${schedule.start_time} - ${schedule.end_time} (${schedule.status})`}
-                      >
-                        {schedule.employee_name.split(" ")[0]} {schedule.start_time}-{schedule.end_time}
-                      </div>
-                    ))}
+                    {daySchedules.slice(0, 3).map((schedule) => {
+                      const scheduleData = schedule as any
+                      const employeeName = scheduleData.employee_name || 'Employé'
+                      const startTime = scheduleData.start_time || ''
+                      const endTime = scheduleData.end_time || ''
+                      const employeeEmail = scheduleData.employee_email || ''
+                      
+                      return (
+                        <div
+                          key={schedule.id}
+                          onClick={() => {
+                            setSelectedSchedule(schedule)
+                            setShowDetailsDialog(true)
+                          }}
+                          className={`text-[10px] sm:text-xs p-1 rounded text-white truncate cursor-pointer hover:opacity-80 ${getEmployeeColor(employeeEmail)}`}
+                          title={`${employeeName}: ${startTime} - ${endTime} (${schedule.status})`}
+                        >
+                          <span className="hidden sm:inline">{employeeName.split(" ")[0]} </span>{startTime}-{endTime}
+                        </div>
+                      )
+                    })}
                     {daySchedules.length > 3 && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
                         +{daySchedules.length - 3} autre(s)
                       </div>
                     )}
@@ -398,8 +445,8 @@ export function WorkScheduleManager() {
 
       {/* Légende des statuts */}
       <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-center space-x-6 text-sm">
+        <CardContent className="p-3 md:p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-center gap-4 sm:gap-6 text-xs sm:text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-amber-500 rounded"></div>
               <span className="text-gray-700 dark:text-gray-300">Programmé</span>
@@ -432,17 +479,17 @@ export function WorkScheduleManager() {
               <DialogDescription className="text-lg text-gray-600 dark:text-gray-300">
                 <div className="space-y-2 mt-4">
                   <p>
-                    <strong>Employé :</strong> {selectedSchedule.employee_name}
+                    <strong>Employé :</strong> {(selectedSchedule as any).employee_name || 'N/A'}
                   </p>
                   <p>
                     <strong>Date :</strong> {new Date(selectedSchedule.work_date).toLocaleDateString("fr-FR")}
                   </p>
                   <p>
-                    <strong>Horaires :</strong> {selectedSchedule.start_time} - {selectedSchedule.end_time}
+                    <strong>Horaires :</strong> {(selectedSchedule as any).start_time || 'N/A'} - {(selectedSchedule as any).end_time || 'N/A'}
                   </p>
                   <p>
-                    <strong>Pause :</strong> {selectedSchedule.break_duration} min
-                    {selectedSchedule.break_start_time && ` à ${selectedSchedule.break_start_time}`}
+                    <strong>Pause :</strong> {(selectedSchedule as any).break_duration || 0} min
+                    {(selectedSchedule as any).break_start_time && ` à ${(selectedSchedule as any).break_start_time}`}
                   </p>
                   <p>
                     <strong>Statut :</strong>

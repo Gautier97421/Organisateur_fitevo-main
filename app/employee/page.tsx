@@ -694,45 +694,52 @@ export default function EmployeePage() {
 
       <div className="max-w-4xl mx-auto p-3 md:p-6">
         {/* En-tête de la période */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8 mb-6 md:mb-8 border border-gray-200">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold flex items-center space-x-2 md:space-x-3">
-                <span className="text-3xl md:text-4xl">{selectedPeriod && getPeriodEmoji(selectedPeriod)}</span>
-                <span className="text-gray-900">
-                  To-Do List du {selectedPeriod && getPeriodText(selectedPeriod)}
-                </span>
-              </h2>
-              {selectedGym && (
-                <p className="text-gray-700 mt-1 text-sm md:text-base font-medium flex items-center gap-1">
-                  <MapPin className="h-4 w-4" /> {selectedGym.name}
-                </p>
-              )}
-              <p className="text-gray-600 mt-2 text-sm md:text-base lg:text-lg">
-                Complétez et validez chaque tâche individuellement
-              </p>
-              <p className="text-red-600 mt-1 text-xs md:text-sm flex items-center gap-1">
-                <Lock className="h-4 w-4" /> Session verrouillée - Vous ne pouvez plus changer de période
-              </p>
+        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-6 lg:p-8 mb-6 md:mb-8 border border-gray-200">
+          <div className="flex flex-col gap-4">
+            {/* Titre et salle */}
+            <div className="flex items-center gap-3">
+              <span className="text-3xl md:text-4xl lg:text-5xl">{selectedPeriod && getPeriodEmoji(selectedPeriod)}</span>
+              <div className="flex-1">
+                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">
+                  To-Do List {selectedPeriod && getPeriodText(selectedPeriod)}
+                </h2>
+                {selectedGym && (
+                  <p className="text-gray-700 mt-1 text-sm md:text-base font-medium flex items-center gap-1">
+                    <MapPin className="h-4 w-4" /> {selectedGym.name}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 md:gap-3 lg:gap-4 w-full lg:w-auto">
-              <Button
-                onClick={() => setShowInstructionsDialog(true)}
-                size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base"
-              >
-                <UserPlus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                Nouveau Adhérent
-              </Button>
-              <BreakManager
-                isOnBreak={isOnBreak}
-                breakStartTime={breakStartTime}
-                accumulatedBreakTime={accumulatedBreakTime}
-                onBreakStart={handleBreakStart}
-                onBreakEnd={handleBreakEnd}
-                onBreakResume={handleBreakResume}
-              />
-              <EmergencyButton />
+            
+            {/* Instructions et boutons */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-gray-600 text-sm md:text-base">
+                  Complétez et validez chaque tâche individuellement
+                </p>
+                <p className="text-red-600 mt-1 text-xs md:text-sm flex items-center gap-1">
+                  <Lock className="h-3 w-3 md:h-4 md:w-4" /> Session verrouillée
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto lg:flex-shrink-0">
+                <Button
+                  onClick={() => setShowInstructionsDialog(true)}
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
+                >
+                  <UserPlus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                  Nouveau Adhérent
+                </Button>
+                <BreakManager
+                  isOnBreak={isOnBreak}
+                  breakStartTime={breakStartTime}
+                  accumulatedBreakTime={accumulatedBreakTime}
+                  onBreakStart={handleBreakStart}
+                  onBreakEnd={handleBreakEnd}
+                  onBreakResume={handleBreakResume}
+                />
+                <EmergencyButton />
+              </div>
             </div>
           </div>
         </div>

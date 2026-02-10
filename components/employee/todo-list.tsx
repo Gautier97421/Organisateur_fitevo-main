@@ -68,21 +68,34 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
   // Fonction pour récupérer les tâches depuis la BDD selon la période
   const getTasksForPeriod = async (period: "matin" | "aprem" | "journee"): Promise<Task[]> => {
     try {
-      // Charger les tâches depuis l'API avec filtres de base
-      let url = `/api/db/tasks?period=${period}&status=pending`
+      // Charger les tâches "modèles" (templates) depuis l'API
+      // Ces tâches sont créées par l'admin et n'ont pas de statut completed par défaut
+      // On ne filtre PAS par user_id car ce sont des templates globaux
+      let url = `/api/db/tasks?period=${period}`
       
       // Ajouter le filtre gym si défini
       if (gymId) {
         url += `&gym_id=${gymId}`
       }
       
+      console.log('🔍 Chargement des tâches depuis:', url)
+      
       const response = await fetch(url)
       if (!response.ok) {
+        console.error('❌ Erreur API:', response.status, response.statusText)
         throw new Error('Erreur lors du chargement des tâches')
       }
       
       const data = await response.json()
+      console.log('📦 Données reçues de l\'API:', data)
+      
       let dbTasks = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+      
+      // Filtrer pour ne garder que les tâches "modèles" (pas les tâches complétées par les utilisateurs)
+      // On garde celles qui ont un created_by (créées par admin) et pas de completion par l'utilisateur actuel
+      dbTasks = dbTasks.filter((task: any) => task.created_by)
+      
+      console.log('📋 Tâches après filtrage:', dbTasks.length)
       
       // Filtrage côté client par roleId
       if (roleId) {
@@ -93,10 +106,14 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
           }
           
           // Sinon, vérifier si le roleId de l'utilisateur est dans le tableau
-          const roleIds = Array.isArray(task.role_ids) ? task.role_ids : []
+          const roleIds = Array.isArray(task.role_ids) 
+            ? task.role_ids 
+            : (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : [])
           return roleIds.includes(roleId)
         })
       }
+      
+      console.log('✅ Tâches finales après filtre rôle:', dbTasks.length)
       
       // Convertir les tâches de la BDD au format attendu
       return dbTasks.map((task: any) => ({
@@ -106,123 +123,13 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         type: task.type as "checkbox" | "text" | "qcm",
         options: task.options ? (typeof task.options === 'string' ? JSON.parse(task.options) : task.options) : undefined,
         required: task.required,
-        completed: task.status === 'completed',
-        validated: task.status === 'completed',
-        validated_at: task.updated_at,
+        completed: false, // Par défaut non complété
+        validated: false, // Par défaut non validé
         value: ''
       }))
     } catch (error) {
-      console.error('Erreur chargement tâches:', error)
+      console.error('❌ Erreur chargement tâches:', error)
       return []
-    }
-  }
-
-  // Fonction de fallback pour les tâches fictives (si la BDD est vide)
-  const getFallbackTasks = (period: "matin" | "aprem" | "journee"): Task[] => {
-    const morningTasks = [
-      {
-        id: "m1",
-        title: "Ouverture de la salle",
-        description: "Vérifier l'éclairage et la ventilation",
-        type: "checkbox" as const,
-        required: true,
-        completed: false,
-        validated: false,
-      },
-      {
-        id: "m2",
-        title: "Contrôle des équipements",
-        description: "Vérifier le bon fonctionnement des machines",
-        type: "checkbox" as const,
-        required: true,
-        completed: false,
-        validated: false,
-      },
-      {
-        id: "m3",
-        title: "Température vestiaires",
-        description: "Noter la température des vestiaires",
-        type: "text" as const,
-        required: true,
-        completed: false,
-        validated: false,
-        value: "",
-      },
-    ]
-
-    const afternoonTasks = [
-      {
-        id: "a1",
-        title: "Nettoyage intermédiaire",
-        description: "État de propreté en milieu de journée",
-        type: "qcm" as const,
-        options: ["Très propre", "Propre", "À nettoyer", "Sale"],
-        required: true,
-        completed: false,
-        validated: false,
-        value: "",
-      },
-      {
-        id: "a2",
-        title: "Vérification matériel",
-        description: "Contrôler l'usure des équipements",
-        type: "checkbox" as const,
-        required: true,
-        completed: false,
-        validated: false,
-      },
-      {
-        id: "a3",
-        title: "Incidents de la journée",
-        description: "Rapporter tout incident ou problème",
-        type: "text" as const,
-        required: false,
-        completed: false,
-        validated: false,
-        value: "",
-      },
-    ]
-
-    const fullDayTasks = [
-      {
-        id: "f1",
-        title: "Fermeture sécurisée",
-        description: "Vérifier toutes les fermetures",
-        type: "checkbox" as const,
-        required: true,
-        completed: false,
-        validated: false,
-      },
-      {
-        id: "f2",
-        title: "Bilan de la journée",
-        description: "Évaluation générale de la journée",
-        type: "qcm" as const,
-        options: ["Excellente", "Bonne", "Correcte", "Difficile"],
-        required: true,
-        completed: false,
-        validated: false,
-        value: "",
-      },
-      {
-        id: "f3",
-        title: "Remarques générales",
-        description: "Commentaires ou suggestions",
-        type: "text" as const,
-        required: false,
-        completed: false,
-        validated: false,
-        value: "",
-      },
-    ]
-
-    switch (period) {
-      case "matin":
-        return morningTasks
-      case "aprem":
-        return afternoonTasks
-      case "journee":
-        return fullDayTasks
     }
   }
 
@@ -235,21 +142,30 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const userId = localStorage.getItem("userId") || ""
       
       try {
-        // Charger les tâches de la BDD pour cette période
+        console.log('Début du chargement des tâches pour période:', period, 'gym:', gymId, 'user:', userId)
+        
+        // Charger les tâches "modèles" de la BDD pour cette période/salle
         const dbTasks = await getTasksForPeriod(period)
+        console.log('Tâches modèles chargées:', dbTasks.length)
         
         if (dbTasks.length > 0) {
-          // Si on a des tâches dans la BDD, les utiliser
-          // Vérifier le statut de completion pour cet utilisateur
-          const userResponse = await fetch(`/api/db/tasks?user_id=${userId}&period=${period}`)
+          // Vérifier si l'utilisateur a déjà complété certaines de ces tâches
+          // On cherche les tâches complétées par cet utilisateur pour cette période
+          const userTasksUrl = `/api/db/tasks?user_id=${userId}&period=${period}&status=completed`
+          console.log('Vérification des tâches complétées:', userTasksUrl)
+          
+          const userResponse = await fetch(userTasksUrl)
           if (userResponse.ok) {
             const userData = await userResponse.json()
             const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
+            console.log('Tâches complétées par l\'utilisateur:', userTasks.length)
             
             // Mettre à jour le statut des tâches selon les données utilisateur
             const mergedTasks = dbTasks.map(task => {
-              const userTask = userTasks.find((t: any) => t.title === task.title)
+              // Chercher si l'utilisateur a complété une tâche avec le même titre
+              const userTask = userTasks.find((t: any) => t.title === task.title && t.gym_id === gymId)
               if (userTask && userTask.status === 'completed') {
+                console.log('Tâche déjà complétée:', task.title)
                 return {
                   ...task,
                   completed: true,
@@ -260,20 +176,21 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
               return task
             })
             
+            console.log('Tâches finales:', mergedTasks.length, '- Complétées:', mergedTasks.filter(t => t.completed).length)
             setTasks(mergedTasks)
           } else {
+            console.log('Aucune tâche complétée trouvée, utilisation des modèles')
             setTasks(dbTasks)
           }
         } else {
-          // Fallback : utiliser les tâches fictives
-          const fallbackTasks = getFallbackTasks(period)
-          setTasks(fallbackTasks)
+          // Aucune tâche en BDD : afficher le message "Aucune tâche assignée"
+          console.warn('Aucune tâche en BDD pour cette période')
+          setTasks([])
         }
       } catch (error) {
         console.error('Erreur lors du chargement des tâches:', error)
-        // En cas d'erreur, utiliser les tâches fictives
-        const fallbackTasks = getFallbackTasks(period)
-        setTasks(fallbackTasks)
+        // En cas d'erreur, afficher également "Aucune tâche"
+        setTasks([])
       } finally {
         setIsLoadingTasks(false)
       }
@@ -289,7 +206,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [period, showCashRegisterForm, showValidationDialog])
+  }, [period, showCashRegisterForm, showValidationDialog, gymId, roleId])
 
   const completedTasks = tasks.filter((task) => task.completed).length
   const validatedTasks = tasks.filter((task) => task.validated).length
@@ -414,6 +331,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
           t.id === taskToValidate.id
             ? {
                 ...taskToValidate,
+                completed: true,
                 validated: true,
                 validated_at: validationTime,
               }
@@ -423,6 +341,40 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
 
       setShowValidationDialog(false)
       setTaskToValidate(null)
+      
+      // Forcer un rechargement après un court délai pour s'assurer que la BDD est à jour
+      setTimeout(() => {
+        const loadTasksFromDb = async () => {
+          const userId = localStorage.getItem("userId") || ""
+          try {
+            const dbTasks = await getTasksForPeriod(period)
+            if (dbTasks.length > 0) {
+              const userResponse = await fetch(`/api/db/tasks?user_id=${userId}&period=${period}`)
+              if (userResponse.ok) {
+                const userData = await userResponse.json()
+                const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
+                const mergedTasks = dbTasks.map(task => {
+                  const userTask = userTasks.find((t: any) => t.title === task.title)
+                  if (userTask && userTask.status === 'completed') {
+                    return {
+                      ...task,
+                      completed: true,
+                      validated: true,
+                      validated_at: userTask.updated_at
+                    }
+                  }
+                  return task
+                })
+                setTasks(mergedTasks)
+              }
+            }
+          } catch (error) {
+            console.error('Erreur rechargement tâches:', error)
+          }
+        }
+        loadTasksFromDb()
+      }, 500)
+      
       alert("Tâche validée ! Elle ne peut plus être modifiée.")
     } catch (error) {
       console.error("Erreur lors de la validation:", error)
@@ -709,12 +661,15 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
 
       {/* Dialog de confirmation de validation */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white" aria-describedby="validation-description">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
               <Lock className="h-6 w-6 text-red-600" />
               <span>Valider la tâche</span>
             </DialogTitle>
+            <DialogDescription id="validation-description" className="text-base text-gray-600">
+              Confirmez la validation de cette tâche 
+            </DialogDescription>
           </DialogHeader>
           <div className="text-base text-gray-600 mb-4">
             {taskToValidate && (
@@ -732,11 +687,11 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
               </>
             )}
           </div>
-          <DialogFooter className="flex space-x-3">
-            <Button variant="outline" onClick={cancelValidation} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2">
-              <XCircle className="h-5 w-5" /> Annuler
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button variant="outline" onClick={cancelValidation} className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto">
+              <XCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Annuler
             </Button>
-            <Button onClick={confirmValidation} className="bg-red-600 hover:bg-red-700 text-lg px-6">
+            <Button onClick={confirmValidation} className="bg-red-600 hover:bg-red-700 text-sm sm:text-lg px-4 sm:px-6 w-full sm:w-auto">
               <Lock className="mr-2 h-4 w-4" />
               Valider
             </Button>

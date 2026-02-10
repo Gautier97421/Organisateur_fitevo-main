@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,6 +62,15 @@ export function EmployeeManager() {
   })
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<{[key: string]: boolean}>({})
+  const [editValidationErrors, setEditValidationErrors] = useState<{[key: string]: boolean}>({})
+  
+  // Refs pour le scroll automatique
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const emailInputRef = useRef<HTMLInputElement>(null)
+  const roleSelectRef = useRef<HTMLButtonElement>(null)
+  const editNameInputRef = useRef<HTMLInputElement>(null)
+  const editRoleSelectRef = useRef<HTMLButtonElement>(null)
   const [editEmployee, setEditEmployee] = useState<{ 
     id: string; 
     name: string; 
@@ -171,7 +180,30 @@ export function EmployeeManager() {
   useAutoRefresh(loadData, 15000)
 
   const addEmployee = async () => {
-    if (!newEmployee.name || !newEmployee.email) return
+    // Validation des champs obligatoires
+    const errors: {[key: string]: boolean} = {}
+    if (!newEmployee.name) errors.name = true
+    if (!newEmployee.email) errors.email = true
+    if (!newEmployee.roleId) errors.roleId = true
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors)
+      // Scroll vers le premier champ en erreur
+      if (errors.name && nameInputRef.current) {
+        nameInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        nameInputRef.current.focus()
+      } else if (errors.email && emailInputRef.current) {
+        emailInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        emailInputRef.current.focus()
+      } else if (errors.roleId && roleSelectRef.current) {
+        roleSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        roleSelectRef.current.focus()
+      }
+      return
+    }
+    
+    // Reset les erreurs
+    setValidationErrors({})
 
     try {
       // Gérer le rôle (existant ou nouveau)
@@ -288,6 +320,27 @@ export function EmployeeManager() {
 
   const saveEditEmployee = async () => {
     if (!editEmployee) return
+    
+    // Validation des champs obligatoires
+    const errors: {[key: string]: boolean} = {}
+    if (!editEmployee.name) errors.name = true
+    if (!editEmployee.roleId) errors.roleId = true
+    
+    if (Object.keys(errors).length > 0) {
+      setEditValidationErrors(errors)
+      // Scroll vers le premier champ en erreur
+      if (errors.name && editNameInputRef.current) {
+        editNameInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        editNameInputRef.current.focus()
+      } else if (errors.roleId && editRoleSelectRef.current) {
+        editRoleSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        editRoleSelectRef.current.focus()
+      }
+      return
+    }
+    
+    // Reset les erreurs
+    setEditValidationErrors({})
     
     try {
       // Gérer le rôle (existant ou nouveau)
@@ -496,19 +549,19 @@ export function EmployeeManager() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center space-x-3">
-        <Users className="w-7 h-7 text-gray-700" />
-        <h2 className="text-2xl font-semibold text-gray-800">
+    <div className="space-y-6 md:space-y-8 px-2 md:px-0">
+      <div className="flex items-center space-x-2 md:space-x-3">
+        <Users className="w-6 h-6 md:w-7 md:h-7 text-gray-700" />
+        <h2 className="text-xl md:text-2xl font-semibold text-gray-800">
           Gestion des Utilisateurs
         </h2>
       </div>
 
       {/* Navigation entre employés et admins */}
-      <div className="flex space-x-2 border-b border-gray-200">
+      <div className="flex space-x-1 md:space-x-2 border-b border-gray-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab("employees")}
-          className={`flex items-center space-x-2 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
             activeTab === "employees"
               ? "text-red-600 border-b-2 border-red-600"
               : "text-gray-500 hover:text-gray-700"
@@ -522,7 +575,7 @@ export function EmployeeManager() {
         </button>
         <button
           onClick={() => setActiveTab("admins")}
-          className={`flex items-center space-x-2 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
             activeTab === "admins"
               ? "text-red-600 border-b-2 border-red-600"
               : "text-gray-500 hover:text-gray-700"
@@ -538,23 +591,23 @@ export function EmployeeManager() {
 
       {/* Section Lien WhatsApp */}
       <Card className="border border-red-200 bg-white">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
+        <CardContent className="p-3 md:p-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
             <div className="flex items-center gap-2 text-red-600">
-              <MessageCircle className="w-5 h-5" />
-              <span className="font-medium">Lien du groupe WhatsApp</span>
+              <MessageCircle className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-sm md:text-base font-medium">Lien du groupe WhatsApp</span>
             </div>
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 w-full flex flex-col sm:flex-row gap-2">
               <Input
                 value={whatsappLink}
                 onChange={(e) => setWhatsappLink(e.target.value)}
                 placeholder="https://chat.whatsapp.com/..."
-                className="flex-1 border-gray-300 focus:border-red-600 bg-white"
+                className="flex-1 border-gray-300 focus:border-red-600 bg-white text-sm md:text-base"
               />
               <Button
                 onClick={saveWhatsappLink}
                 disabled={isSavingWhatsapp}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                className="bg-red-600 hover:bg-red-700 text-white text-sm md:text-base w-full sm:w-auto"
               >
                 {isSavingWhatsapp ? (
                   <>
@@ -570,7 +623,7 @@ export function EmployeeManager() {
               </Button>
             </div>
           </div>
-          <p className="text-xs text-red-600 mt-2 ml-7">
+          <p className="text-xs text-red-600 mt-2 ml-0 md:ml-7">
             Ce lien sera affiché sur l'écran d'accueil des employés pour qu'ils puissent accéder au groupe
           </p>
         </CardContent>
@@ -579,13 +632,13 @@ export function EmployeeManager() {
       {/* Section URL du site (Super Admin uniquement) */}
       {isSuperAdmin && (
         <Card className="border border-blue-200 bg-white">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-3 md:p-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
               <div className="flex items-center gap-2 text-blue-600">
-                <QrCode className="w-5 h-5" />
-                <span className="font-medium">URL du site (pour QR Codes)</span>
+                <QrCode className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="text-sm md:text-base font-medium">URL du site (pour QR Codes)</span>
               </div>
-              <div className="flex-1 flex gap-2">
+              <div className="flex-1 w-full flex flex-col sm:flex-row gap-2">
                 <Input
                   value={siteUrl}
                   onChange={(e) => setSiteUrl(e.target.value)}
@@ -636,27 +689,39 @@ export function EmployeeManager() {
               <CardHeader className="border-b border-gray-200 bg-gray-50">
                 <CardTitle className="text-lg font-medium text-gray-900">Nouvel employé</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 p-6">
-                <div className="grid grid-cols-2 gap-4">
+              <CardContent className="space-y-4 p-4 md:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="emp-name">Nom complet</Label>
+                    <Label htmlFor="emp-name">Nom complet <span className="text-red-600">*</span></Label>
                     <Input
+                      ref={nameInputRef}
                       id="emp-name"
                       value={newEmployee.name}
-                      onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                      onChange={(e) => {
+                        setNewEmployee({ ...newEmployee, name: e.target.value })
+                        if (validationErrors.name) {
+                          setValidationErrors({ ...validationErrors, name: false })
+                        }
+                      }}
                       placeholder="Nom de l'employé"
-                      className="border border-gray-300"
+                      className={`border ${validationErrors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="emp-email">Email</Label>
+                    <Label htmlFor="emp-email">Email <span className="text-red-600">*</span></Label>
                     <Input
+                      ref={emailInputRef}
                       id="emp-email"
                       type="email"
                       value={newEmployee.email}
-                      onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                      onChange={(e) => {
+                        setNewEmployee({ ...newEmployee, email: e.target.value })
+                        if (validationErrors.email) {
+                          setValidationErrors({ ...validationErrors, email: false })
+                        }
+                      }}
                       placeholder="email@salle.com"
-                      className="border border-gray-300"
+                      className={`border ${validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                     />
                   </div>
                 </div>
@@ -693,12 +758,21 @@ export function EmployeeManager() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="emp-role">Rôle</Label>
+                    <Label htmlFor="emp-role">Rôle <span className="text-red-600">*</span></Label>
                     <Select
                       value={newEmployee.roleId}
-                      onValueChange={(value) => setNewEmployee({ ...newEmployee, roleId: value })}
+                      onValueChange={(value) => {
+                        setNewEmployee({ ...newEmployee, roleId: value })
+                        if (validationErrors.roleId) {
+                          setValidationErrors({ ...validationErrors, roleId: false })
+                        }
+                      }}
                     >
-                      <SelectTrigger id="emp-role" className="border border-gray-300">
+                      <SelectTrigger 
+                        ref={roleSelectRef}
+                        id="emp-role" 
+                        className={`border ${validationErrors.roleId ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
+                      >
                         <SelectValue placeholder="Sélectionner un rôle" />
                       </SelectTrigger>
                       <SelectContent>
@@ -835,13 +909,19 @@ export function EmployeeManager() {
               <CardContent className="space-y-4 p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-name">Nom complet</Label>
+                    <Label htmlFor="edit-name">Nom complet <span className="text-red-600">*</span></Label>
                     <Input
+                      ref={editNameInputRef}
                       id="edit-name"
                       value={editEmployee.name}
-                      onChange={(e) => setEditEmployee({ ...editEmployee, name: e.target.value })}
+                      onChange={(e) => {
+                        setEditEmployee({ ...editEmployee, name: e.target.value })
+                        if (editValidationErrors.name) {
+                          setEditValidationErrors({ ...editValidationErrors, name: false })
+                        }
+                      }}
                       placeholder="Prénom Nom"
-                      className="border border-gray-300"
+                      className={`border ${editValidationErrors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                     />
                   </div>
                   <div className="space-y-2">
@@ -889,12 +969,21 @@ export function EmployeeManager() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-role">Rôle</Label>
+                    <Label htmlFor="edit-role">Rôle <span className="text-red-600">*</span></Label>
                     <Select
                       value={editEmployee.roleId}
-                      onValueChange={(value) => setEditEmployee({ ...editEmployee, roleId: value })}
+                      onValueChange={(value) => {
+                        setEditEmployee({ ...editEmployee, roleId: value })
+                        if (editValidationErrors.roleId) {
+                          setEditValidationErrors({ ...editValidationErrors, roleId: false })
+                        }
+                      }}
                     >
-                      <SelectTrigger id="edit-role" className="border border-gray-300">
+                      <SelectTrigger 
+                        ref={editRoleSelectRef}
+                        id="edit-role" 
+                        className={`border ${editValidationErrors.roleId ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
+                      >
                         <SelectValue placeholder="Sélectionner un rôle" />
                       </SelectTrigger>
                       <SelectContent>
