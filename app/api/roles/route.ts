@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import logger from '@/lib/logger'
 
 // GET - Récupérer tous les rôles
 export async function GET() {
@@ -10,9 +11,9 @@ export async function GET() {
     
     return NextResponse.json({ data: roles, error: null })
   } catch (error: any) {
-    console.error('Erreur GET roles:', error)
+    logger.error('Erreur GET roles', error)
     return NextResponse.json(
-      { error: error.message || 'Erreur lors de la récupération des rôles' },
+      { error: 'Erreur lors de la récupération des rôles' },
       { status: 500 }
     )
   }
@@ -43,9 +44,9 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ data: role })
   } catch (error: any) {
-    console.error('Erreur POST role:', error)
+    logger.error('Erreur POST role', error)
     return NextResponse.json(
-      { error: error.message || 'Erreur lors de la création du rôle' },
+      { error: 'Erreur lors de la création du rôle' },
       { status: 500 }
     )
   }

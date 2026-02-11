@@ -1,9 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { verifyPassword } from '@/lib/password-utils'
+import logger from '@/lib/logger'
+import { isValidEmail, isValidString } from '@/lib/validation'
+
+// Rate limiting simple en mémoire (en production utiliser Redis)
+const loginAttempts = new Map<string, { count: number; lastAttempt: number }>()
+const MAX_ATTEMPTS = 5
+const LOCKOUT_TIME = 15 * 60 * 1000 // 15 minutes
+
+function checkRateLimit(identifier: string): { allowed: boolean; remainingTime?: number } {
+  const now = Date.now()
+  const attempts = loginAttempts.get(identifier)
+  
+  if (attempts) {
+    // Nettoyer si le lockout est expiré
+    if (now - attempts.lastAttempt > LOCKOUT_TIME) {
+      loginAttempts.delete(identifier)
+      return { allowed: true }
+    }
+    
+    if (attempts.count >= MAX_ATTEMPTS) {
+      const remainingTime = Math.ceil((LOCKOUT_TIME - (now - attempts.lastAttempt)) / 1000)
+      return { allowed: false, remainingTime }
+    }
+  }
+  
+  return { allowed: true }
+}
+
+function recordLoginAttempt(identifier: string, success: boolean) {
+  if (success) {
+    loginAttempts.delete(identifier)
+    return
+  }
+  
+  const attempts = loginAttempts.get(identifier) || { count: 0, lastAttempt: 0 }
+  loginAttempts.set(identifier, {
+    count: attempts.count + 1,
+    lastAttempt: Date.now()
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { identifier, password } = await request.json()
+    
+    // Validation des entrées
+    if (!identifier || !password) {
+      return NextResponse.json(
+        { error: 'Identifiant et mot de passe requis' },
+        { status: 400 }
+      )
+    }
+    
+    // Valider le format de l'identifiant (email ou username)
+    if (!isValidEmail(identifier) && !isValidString(identifier, 1, 100)) {
+      return NextResponse.json(
+        { error: 'Format d\'identifiant invalide' },
+        { status: 400 }
+      )
+    }
+    
+    // Valider la longueur du mot de passe
+    if (!isValidString(password, 1, 255)) {
+      return NextResponse.json(
+        { error: 'Format de mot de passe invalide' },
+        { status: 400 }
+      )
+    }
+
+    // Vérifier le rate limiting
+    const rateLimit = checkRateLimit(identifier)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Trop de tentatives. Réessayez dans ${rateLimit.remainingTime} secondes.` },
+        { status: 429 }
+      )
+    }
 
     // Rechercher l'utilisateur par email ou username
     const user = await prisma.user.findFirst({
@@ -16,8 +90,9 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user || !user.active) {
+      recordLoginAttempt(identifier, false)
       return NextResponse.json(
-        { error: 'Identifiant non trouvé ou compte inactif' },
+        { error: 'Identifiants incorrects' },
         { status: 401 }
       )
     }
@@ -40,18 +115,26 @@ export async function POST(request: NextRequest) {
     // Si l'utilisateur n'a pas de mot de passe mais isFirstLogin est false, c'est une erreur
     if (!user.password) {
       return NextResponse.json(
-        { error: 'Configuration du compte incomplète. Veuillez contacter un administrateur.' },
+        { error: 'Configuration du compte incomplète. Contactez un administrateur.' },
         { status: 401 }
       )
     }
 
-    // Vérification simple du mot de passe (en production, utiliser bcrypt)
-    if (user.password !== password) {
+    // Vérification sécurisée du mot de passe avec hash
+    const isPasswordValid = await verifyPassword(password, user.password)
+    
+    if (!isPasswordValid) {
+      recordLoginAttempt(identifier, false)
       return NextResponse.json(
-        { error: 'Mot de passe incorrect' },
+        { error: 'Identifiants incorrects' },
         { status: 401 }
       )
     }
+
+    // Succès - enregistrer et retourner les informations
+    recordLoginAttempt(identifier, true)
+    
+    logger.info('Connexion réussie pour:', user.email)
 
     // Retourner les informations de l'utilisateur
     return NextResponse.json({
@@ -64,9 +147,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Erreur de connexion:', error)
+    logger.error('Erreur de connexion', error)
     return NextResponse.json(
-      { error: 'Erreur de connexion' },
+      { error: 'Une erreur est survenue. Veuillez réessayer.' },
       { status: 500 }
     )
   }

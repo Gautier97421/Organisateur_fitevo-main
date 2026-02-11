@@ -1,4 +1,6 @@
 import { prisma } from './prisma'
+import { verifyPassword } from './password-utils'
+import logger from './logger'
 
 // Authentification avec la base de données PostgreSQL
 export async function validateCredentials(email: string, password: string): Promise<boolean> {
@@ -11,10 +13,14 @@ export async function validateCredentials(email: string, password: string): Prom
       return false
     }
 
-    // Vérification simple du mot de passe (en production, utiliser bcrypt)
-    return user.password === password
+    // Vérification sécurisée du mot de passe avec hash
+    if (!user.password) {
+      return false
+    }
+    
+    return await verifyPassword(password, user.password)
   } catch (error) {
-    console.error('Erreur de validation:', error)
+    logger.error('Erreur de validation des credentials', error)
     return false
   }
 }
@@ -40,18 +46,28 @@ export function logout(): void {
 
 // Fonction utilitaire pour créer un utilisateur admin si nécessaire
 export async function ensureAdminUser() {
+  // Désactivé en production - utiliser le seed de manière contrôlée
+  if (process.env.NODE_ENV === 'production') {
+    return
+  }
+  
   const admin = await prisma.user.findUnique({
     where: { email: 'admin@fitevo.com' }
   })
 
   if (!admin) {
+    // Import dynamique pour éviter les erreurs
+    const { hashPassword } = await import('./password-utils')
+    const hashedPassword = await hashPassword('admin123')
+    
     await prisma.user.create({
       data: {
         email: 'admin@fitevo.com',
-        password: 'admin123',
+        password: hashedPassword,
         name: 'Admin',
         role: 'admin',
-        active: true
+        active: true,
+        isFirstLogin: false
       }
     })
   }

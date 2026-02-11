@@ -50,48 +50,23 @@ function FirstLoginForm() {
     setIsLoading(true)
 
     try {
-      // Vérifier que l'utilisateur existe et que c'est bien sa première connexion
-      const checkResponse = await fetch(`/api/db/users?email=${encodeURIComponent(email)}&single=true`)
-      if (!checkResponse.ok) {
-        throw new Error("Utilisateur non trouvé")
-      }
-
-      const checkData = await checkResponse.json()
-      const user = checkData.data
-
-      if (!user) {
-        throw new Error("Utilisateur non trouvé")
-      }
-
-      if (!user.is_first_login) {
-        throw new Error("Ce compte a déjà été configuré")
-      }
-
-      // Vérifier que le pseudo n'est pas déjà pris
-      const usernameCheckResponse = await fetch(`/api/db/users?username=${encodeURIComponent(username)}&single=true`)
-      if (usernameCheckResponse.ok) {
-        const usernameData = await usernameCheckResponse.json()
-        if (usernameData.data && usernameData.data.id !== user.id) {
-          throw new Error("Ce pseudo est déjà utilisé")
-        }
-      }
-
-      // Mettre à jour l'utilisateur avec le pseudo et le mot de passe
-      const updateResponse = await fetch(`/api/db/users/${user.id}`, {
-        method: "PUT",
+      // Utiliser la route dédiée pour la première connexion
+      const response = await fetch('/api/auth/first-login', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: username,
-          password: password,
-          is_first_login: false,
+          email,
+          username,
+          password,
         }),
       })
 
-      if (!updateResponse.ok) {
-        const errorData = await updateResponse.json()
-        throw new Error(errorData.error || "Erreur lors de la configuration du compte")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erreur lors de la configuration du compte")
       }
 
       alert("✅ Compte configuré avec succès ! Vous pouvez maintenant vous connecter.")

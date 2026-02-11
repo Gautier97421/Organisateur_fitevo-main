@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { supabase } from "@/lib/api-client"
 
 interface WorkSchedule {
   id: string
@@ -81,10 +80,9 @@ export function WorkScheduleCalendar() {
       const result = await response.json()
       const schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
       
-      console.log('Schedules chargés:', schedulesData) // Debug
       setSchedules(schedulesData)
     } catch (error) {
-      console.error("Erreur lors du chargement des plannings:", error)
+      // Erreur silencieuse - l'interface affichera un état vide
     }
   }
 
@@ -134,9 +132,6 @@ export function WorkScheduleCalendar() {
         const checkResult = await checkResponse.json()
         const existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
         
-        console.log('Vérification conflits - Schedules existants:', existingSchedules)
-        console.log('Nouvel horaire:', newSchedule.start_time, '-', newSchedule.end_time)
-        
         if (existingSchedules.length > 0) {
           // Vérifier les chevauchements d'horaires
           const newStart = newSchedule.start_time
@@ -146,8 +141,6 @@ export function WorkScheduleCalendar() {
             const existingStart = existing.start_time
             const existingEnd = existing.end_time
 
-            console.log('Comparaison avec:', existingStart, '-', existingEnd)
-
             // Vérifier si les horaires se chevauchent
             const conflict = (
               (newStart >= existingStart && newStart < existingEnd) || // Le début est dans un horaire existant
@@ -155,7 +148,6 @@ export function WorkScheduleCalendar() {
               (newStart <= existingStart && newEnd >= existingEnd)      // L'horaire englobe un horaire existant
             )
             
-            console.log('Conflit détecté:', conflict)
             return conflict
           })
 
@@ -202,7 +194,6 @@ export function WorkScheduleCalendar() {
       setShowScheduleDialog(false)
       setSelectedDate(null)
     } catch (error) {
-      console.error('Erreur:', error)
       setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
     }
   }

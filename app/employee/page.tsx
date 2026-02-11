@@ -146,7 +146,7 @@ export default function EmployeePage() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des permissions:", error)
+      // Erreur silencieuse
     }
   }
   const loadAssignedGyms = async (email: string) => {
@@ -166,7 +166,7 @@ export default function EmployeePage() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des salles assignées:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -283,19 +283,49 @@ export default function EmployeePage() {
           const tasksData = await tasksResponse.json()
           let dbTasks = Array.isArray(tasksData.data) ? tasksData.data : (tasksData.data ? [tasksData.data] : [])
           
-          // Filtrer pour les tâches modèles (créées par admin)
-          dbTasks = dbTasks.filter((task: any) => task.created_by)
-          
           // Filtrer par rôle si nécessaire
           if (userRoleId) {
             dbTasks = dbTasks.filter((task: any) => {
-              if (!task.role_ids || (Array.isArray(task.role_ids) && task.role_ids.length === 0)) {
+              // Si role_ids est null, undefined ou '', la tâche est visible par tous
+              if (!task.role_ids || task.role_ids === '') {
                 return true
               }
-              const roleIds = Array.isArray(task.role_ids) 
-                ? task.role_ids 
-                : (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : [])
-              return roleIds.includes(userRoleId)
+              
+              let roleArray: string[] = []
+              
+              // CAS 1: C'est déjà un tableau
+              if (Array.isArray(task.role_ids)) {
+                roleArray = task.role_ids
+              }
+              // CAS 2: C'est une chaîne JSON (double sérialisation)
+              else if (typeof task.role_ids === 'string') {
+                try {
+                  const parsed = JSON.parse(task.role_ids)
+                  if (Array.isArray(parsed)) {
+                    roleArray = parsed
+                  } else {
+                    return false
+                  }
+                } catch (e) {
+                  return false
+                }
+              }
+              // CAS 3: C'est un objet (Prisma Json retourne parfois comme objet)
+              else if (typeof task.role_ids === 'object') {
+                try {
+                  roleArray = Object.values(task.role_ids)
+                } catch (e) {
+                  return false
+                }
+              }
+              
+              // Si le tableau est vide, visible par tous
+              if (roleArray.length === 0) {
+                return true
+              }
+              
+              // Vérifier si le rôle de l'utilisateur est dans le tableau
+              return roleArray.includes(userRoleId)
             })
           }
           
@@ -309,15 +339,16 @@ export default function EmployeePage() {
           }
         }
       } catch (error) {
-        console.error('Erreur vérification tâches:', error)
         alert('Erreur lors de la vérification des tâches. Veuillez réessayer.')
         setPendingPeriod(null)
+        setSelectedGym(null)
         return
       }
       
       // Si des tâches existent, procéder normalement
       setSelectedPeriod(pendingPeriod)
       setCurrentView("tasks")
+      setShowConfirmDialog(false)
       
       // Sauvegarder la période dans la base de données
       try {
@@ -331,6 +362,8 @@ export default function EmployeePage() {
           body: JSON.stringify({
             data: {
               user_id: userId,
+              employee_email: userEmail,
+              employee_name: userName,
               date: today,
               start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
               end_time: '',
@@ -655,19 +688,19 @@ export default function EmployeePage() {
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p className="text-sm md:text-base text-gray-700 mb-3">
-                Aucune tâche n'a été assignée pour le créneau <strong>"{noTasksPeriodName}"</strong>.
+              <p className="text-sm md:text-base text-gray-600">
+                Aucune tâche n'a été assignée pour le créneau <strong>{noTasksPeriodName}</strong> dans la salle <strong>{selectedGym?.name || "sélectionnée"}</strong>.
               </p>
-              <p className="text-sm text-gray-600">
-                Veuillez contacter votre administrateur ou choisir un autre créneau.
+              <p className="text-sm text-gray-500 mt-3">
+                Contactez un administrateur pour qu'il attribue des tâches à votre rôle pour cette période.
               </p>
             </div>
             <DialogFooter>
               <Button
                 onClick={() => setShowNoTasksDialog(false)}
-                className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
               >
-                Compris
+                OK
               </Button>
             </DialogFooter>
           </DialogContent>

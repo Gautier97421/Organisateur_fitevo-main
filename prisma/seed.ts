@@ -4,18 +4,24 @@ const prisma = new PrismaClient()
 
 async function main() {
   console.log('🌱 Création des utilisateurs de test...')
+  console.log('💡 Les utilisateurs devront définir leur mot de passe à la première connexion.')
+  console.log('')
 
   // Super Admin
   const superadmin = await prisma.user.upsert({
     where: { email: 'superadmin@fitevo.com' },
-    update: {},
+    update: {
+      password: null,
+      isFirstLogin: true,
+    },
     create: {
       email: 'superadmin@fitevo.com',
-      password: 'superadmin123',
+      password: null,
       name: 'Super Administrateur',
       role: 'superadmin',
       active: true,
       remoteWorkEnabled: true,
+      isFirstLogin: true,
     },
   })
   console.log('✅ Super Admin créé:', superadmin.email)
@@ -23,14 +29,18 @@ async function main() {
   // Admin
   const admin = await prisma.user.upsert({
     where: { email: 'admin@fitevo.com' },
-    update: {},
+    update: {
+      password: null,
+      isFirstLogin: true,
+    },
     create: {
       email: 'admin@fitevo.com',
-      password: 'admin123',
+      password: null,
       name: 'Administrateur',
       role: 'admin',
       active: true,
       remoteWorkEnabled: true,
+      isFirstLogin: true,
     },
   })
   console.log('✅ Admin créé:', admin.email)
@@ -38,30 +48,30 @@ async function main() {
   // Employé
   const employee = await prisma.user.upsert({
     where: { email: 'employe@fitevo.com' },
-    update: {},
+    update: {
+      password: null,
+      isFirstLogin: true,
+    },
     create: {
       email: 'employe@fitevo.com',
-      password: 'employe123',
+      password: null,
       name: 'Employé Test',
       role: 'employee',
       active: true,
       remoteWorkEnabled: false,
+      isFirstLogin: true,
     },
   })
   console.log('✅ Employé créé:', employee.email)
 
-  console.log('\n📝 Comptes créés:')
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('Super Admin:')
-  console.log('  Email: superadmin@fitevo.com')
-  console.log('  Password: superadmin123')
-  console.log('\nAdmin:')
-  console.log('  Email: admin@fitevo.com')
-  console.log('  Password: admin123')
-  console.log('\nEmployé:')
-  console.log('  Email: employe@fitevo.com')
-  console.log('  Password: employe123')
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('\n📝 Comptes créés (première connexion requise):')
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('Super Admin:  superadmin@fitevo.com')
+  console.log('Admin:        admin@fitevo.com')
+  console.log('Employé:      employe@fitevo.com')
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('\n⚠️  Chaque utilisateur devra définir son mot de passe')
+  console.log('   lors de sa première connexion.')
 }
 
 main()

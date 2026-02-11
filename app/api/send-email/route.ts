@@ -1,18 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
+import logger from "@/lib/logger"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { type, data } = body
 
-    // Simulation d'envoi d'email
-    // Dans un vrai projet, vous utiliseriez un service comme SendGrid, Nodemailer, etc.
-
-    console.log("Email envoyé:", {
-      type,
-      data,
-      timestamp: new Date().toISOString(),
-    })
+    // Log uniquement en développement (pas d'infos sensibles en production)
+    logger.info("Email envoyé:", { type, timestamp: new Date().toISOString() })
 
     if (type === "emergency") {
       // Envoi d'email d'urgence
@@ -33,7 +28,7 @@ export async function POST(request: NextRequest) {
       message: "Type d'email non reconnu",
     })
   } catch (error) {
-    console.error("Erreur envoi email:", error)
+    logger.error("Erreur envoi email", error)
     return NextResponse.json(
       {
         success: false,

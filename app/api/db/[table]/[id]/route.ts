@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hashPassword } from '@/lib/password-utils'
+import logger from '@/lib/logger'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 // Mapping des tables
 const tableMapping: { [key: string]: string } = {
@@ -261,6 +264,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   const { table, id } = await params
   try {
     const prismaModel = tableMapping[table] || table
@@ -279,8 +291,8 @@ export async function GET(
     
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
-    console.error('Erreur GET:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Erreur GET', error)
+    return NextResponse.json({ error: 'Erreur lors de la récupération' }, { status: 500 })
   }
 }
 
@@ -289,6 +301,15 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   const { table, id } = await params
   try {
     const body = await request.json()
@@ -297,6 +318,13 @@ export async function PUT(
     
     // Mapper les champs du client vers Prisma
     const mappedData = mapFieldsFromClient(table, body)
+    
+    // Hacher le mot de passe s'il est présent (pour les users)
+    if ((table === 'users' || table === 'employees' || table === 'admins') && mappedData.password) {
+      mappedData.password = await hashPassword(mappedData.password)
+      // Marquer que ce n'est plus la première connexion
+      mappedData.isFirstLogin = false
+    }
     
     // @ts-ignore - Accès dynamique au modèle Prisma
     const result = await prisma[prismaModel].update({
@@ -309,8 +337,8 @@ export async function PUT(
     
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
-    console.error('Erreur PUT:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Erreur PUT:', error)
+    return NextResponse.json({ error: 'Erreur lors de la mise à jour' }, { status: 500 })
   }
 }
 
@@ -319,6 +347,15 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   return PUT(request, { params })
 }
 
@@ -327,6 +364,15 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   const { table, id } = await params
   try {
     const prismaModel = tableMapping[table] || table
@@ -338,7 +384,7 @@ export async function DELETE(
     
     return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
   } catch (error: any) {
-    console.error('Erreur DELETE:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Erreur DELETE:', error)
+    return NextResponse.json({ error: 'Erreur lors de la suppression' }, { status: 500 })
   }
 }

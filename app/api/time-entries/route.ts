@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import logger from '@/lib/logger'
 
 // GET - Récupérer les pointages
 export async function GET(request: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ data: entries, error: null })
   } catch (error: any) {
-    console.error('Erreur GET time_entries:', error)
+    logger.error('Erreur GET time_entries', error)
     return NextResponse.json(
       { data: null, error: { message: error.message || 'Erreur lors de la récupération' } },
       { status: 500 }
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ data: entry, error: null })
   } catch (error: any) {
-    console.error('Erreur POST time_entry:', error)
+    logger.error('Erreur POST time_entry', error)
     return NextResponse.json(
       { data: null, error: { message: error.message || 'Erreur lors du pointage' } },
       { status: 500 }

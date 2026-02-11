@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import logger from '@/lib/logger'
 
 // GET - Récupérer les salles d'un employé/utilisateur
 export async function GET(request: Request) {
@@ -51,8 +52,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: gyms })
   } catch (error: any) {
-    console.error('Error fetching employee gyms:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Error fetching employee gyms', error)
+    return NextResponse.json({ error: 'Erreur lors de la récupération' }, { status: 500 })
   }
 }
 
@@ -104,8 +105,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ data: [] })
   } catch (error: any) {
-    console.error('Error updating employee gyms:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Error updating employee gyms', error)
+    return NextResponse.json({ error: 'Erreur lors de la mise à jour' }, { status: 500 })
   }
 }
 
@@ -129,7 +130,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    console.error('Error deleting employee gym:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error('Error deleting employee gym', error)
+    return NextResponse.json({ error: 'Erreur lors de la suppression' }, { status: 500 })
   }
 }

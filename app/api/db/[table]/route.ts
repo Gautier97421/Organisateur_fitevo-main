@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hashPassword } from '@/lib/password-utils'
+import logger from '@/lib/logger'
+import { validateTableData, sanitizeObject } from '@/lib/validation'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 // Mapping des tables
 const tableMapping: { [key: string]: string } = {
@@ -206,6 +210,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
@@ -321,23 +334,13 @@ export async function GET(
         include: Object.keys(include).length > 0 ? include : undefined
       })
       
-      // Debug pour work_schedules
-      if (table === 'work_schedules' && data && data.length > 0) {
-        console.log('[API work_schedules] Données Prisma (premier schedule):', JSON.stringify(data[0], null, 2))
-      }
-      
       // Mapper les champs du schéma vers les noms attendus par le client (gère automatiquement les tableaux)
       const mappedData = mapFieldsToClient(table, data)
-      
-      // Debug après mapping
-      if (table === 'work_schedules' && mappedData && mappedData.length > 0) {
-        console.log('[API work_schedules] Données mappées (premier schedule):', JSON.stringify(mappedData[0], null, 2))
-      }
       
       return NextResponse.json({ data: mappedData || [], error: null })
     }
   } catch (error: any) {
-    console.error('Erreur GET:', error)
+    logger.error('Erreur GET', error)
     return NextResponse.json(
       { data: null, error: { message: error.message || 'Erreur lors de la récupération des données' } },
       { status: 500 }
@@ -350,6 +353,15 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   try {
     const { table } = await params
     const { data } = await request.json()
@@ -364,8 +376,22 @@ export async function POST(
     
     const items = Array.isArray(data) ? data : [data]
     
+    // Valider et sanitizer les données
+    for (const item of items) {
+      const validation = validateTableData(table, item)
+      if (!validation.valid) {
+        return NextResponse.json(
+          { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Sanitizer les données pour prévenir XSS
+    const sanitizedData = sanitizeObject(items)
+    
     // Convertir snake_case vers camelCase
-    const convertedItems = await Promise.all(items.map(async (item: any) => {
+    const convertedItems = await Promise.all(sanitizedData.map(async (item: any) => {
       const converted: any = {}
       for (const [key, value] of Object.entries(item)) {
         let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
@@ -497,13 +523,18 @@ export async function POST(
         delete data.createdBy
       }
       
+      // Hacher le mot de passe pour les utilisateurs
+      if ((table === 'users' || table === 'employees' || table === 'admins') && data.password) {
+        data.password = await hashPassword(data.password)
+      }
+      
       const result = await (prisma as any)[prismaModel].create({ data })
       results.push(result)
     }
     
     return NextResponse.json({ data: results, error: null })
   } catch (error: any) {
-    console.error('Erreur POST:', error)
+    logger.error('Erreur POST', error)
     return NextResponse.json(
       { data: null, error: { message: error.message || 'Erreur lors de la création' } },
       { status: 500 }
@@ -516,14 +547,35 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   try {
     const { table } = await params
     const { data, where } = await request.json()
     const prismaModel = tableMapping[table] || table
     
+    // Valider les données
+    const validation = validateTableData(table, data)
+    if (!validation.valid) {
+      return NextResponse.json(
+        { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
+        { status: 400 }
+      )
+    }
+    
+    // Sanitizer les données
+    const sanitizedData = sanitizeObject(data)
+    
     // Convertir snake_case vers camelCase
     const converted: any = {}
-    for (const [key, value] of Object.entries(data)) {
+    for (const [key, value] of Object.entries(sanitizedData)) {
       let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
       
       // Mapper location → address pour les gyms
@@ -578,7 +630,7 @@ export async function PUT(
     
     return NextResponse.json({ data: result, error: null })
   } catch (error: any) {
-    console.error('Erreur PUT:', error)
+    logger.error('Erreur PUT', error)
     return NextResponse.json(
       { data: null, error: { message: error.message } },
       { status: 500 }
@@ -591,6 +643,15 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
@@ -658,6 +719,13 @@ export async function PATCH(
       converted[camelKey] = value
     }
     
+    // Hacher le mot de passe s'il est présent (pour les users)
+    if ((table === 'users' || table === 'employees' || table === 'admins') && converted.password) {
+      converted.password = await hashPassword(converted.password)
+      // Marquer que ce n'est plus la première connexion
+      converted.isFirstLogin = false
+    }
+    
     const result = await (prisma as any)[prismaModel].update({
       where,
       data: converted,
@@ -668,7 +736,7 @@ export async function PATCH(
     
     return NextResponse.json({ data: mappedResult, error: null })
   } catch (error: any) {
-    console.error('Erreur PATCH:', error)
+    logger.error('Erreur PATCH', error)
     return NextResponse.json(
       { data: null, error: { message: error.message } },
       { status: 500 }
@@ -681,6 +749,15 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> }
 ) {
+  // Vérifier l'authentification
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Authentification requise' },
+      { status: 401 }
+    )
+  }
+  
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
@@ -701,7 +778,7 @@ export async function DELETE(
     
     return NextResponse.json({ data: result, error: null })
   } catch (error: any) {
-    console.error('Erreur DELETE:', error)
+    logger.error('Erreur DELETE', error)
     return NextResponse.json(
       { data: null, error: { message: error.message } },
       { status: 500 }

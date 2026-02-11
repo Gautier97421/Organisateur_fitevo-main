@@ -78,24 +78,22 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         url += `&gym_id=${gymId}`
       }
       
-      console.log('🔍 Chargement des tâches depuis:', url)
-      
       const response = await fetch(url)
       if (!response.ok) {
-        console.error('❌ Erreur API:', response.status, response.statusText)
         throw new Error('Erreur lors du chargement des tâches')
       }
       
       const data = await response.json()
-      console.log('📦 Données reçues de l\'API:', data)
       
       let dbTasks = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
       
-      // Filtrer pour ne garder que les tâches "modèles" (pas les tâches complétées par les utilisateurs)
-      // On garde celles qui ont un created_by (créées par admin) et pas de completion par l'utilisateur actuel
-      dbTasks = dbTasks.filter((task: any) => task.created_by)
-      
-      console.log('📋 Tâches après filtrage:', dbTasks.length)
+      // Filtrer pour ne garder que les tâches "modèles" (templates)
+      // Les tâches templates ont soit status='pending' soit pas de status du tout
+      // Les tâches complétées par les users ont status='completed'
+      dbTasks = dbTasks.filter((task: any) => {
+        // Garder les tâches qui ne sont pas complétées
+        return !task.status || task.status === 'pending'
+      })
       
       // Filtrage côté client par roleId
       if (roleId) {
@@ -113,8 +111,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         })
       }
       
-      console.log('✅ Tâches finales après filtre rôle:', dbTasks.length)
-      
       // Convertir les tâches de la BDD au format attendu
       return dbTasks.map((task: any) => ({
         id: task.id,
@@ -128,7 +124,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         value: ''
       }))
     } catch (error) {
-      console.error('❌ Erreur chargement tâches:', error)
       return []
     }
   }
@@ -142,30 +137,24 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const userId = localStorage.getItem("userId") || ""
       
       try {
-        console.log('Début du chargement des tâches pour période:', period, 'gym:', gymId, 'user:', userId)
-        
         // Charger les tâches "modèles" de la BDD pour cette période/salle
         const dbTasks = await getTasksForPeriod(period)
-        console.log('Tâches modèles chargées:', dbTasks.length)
         
         if (dbTasks.length > 0) {
           // Vérifier si l'utilisateur a déjà complété certaines de ces tâches
           // On cherche les tâches complétées par cet utilisateur pour cette période
           const userTasksUrl = `/api/db/tasks?user_id=${userId}&period=${period}&status=completed`
-          console.log('Vérification des tâches complétées:', userTasksUrl)
           
           const userResponse = await fetch(userTasksUrl)
           if (userResponse.ok) {
             const userData = await userResponse.json()
             const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
-            console.log('Tâches complétées par l\'utilisateur:', userTasks.length)
             
             // Mettre à jour le statut des tâches selon les données utilisateur
             const mergedTasks = dbTasks.map(task => {
               // Chercher si l'utilisateur a complété une tâche avec le même titre
               const userTask = userTasks.find((t: any) => t.title === task.title && t.gym_id === gymId)
               if (userTask && userTask.status === 'completed') {
-                console.log('Tâche déjà complétée:', task.title)
                 return {
                   ...task,
                   completed: true,
@@ -176,19 +165,15 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
               return task
             })
             
-            console.log('Tâches finales:', mergedTasks.length, '- Complétées:', mergedTasks.filter(t => t.completed).length)
             setTasks(mergedTasks)
           } else {
-            console.log('Aucune tâche complétée trouvée, utilisation des modèles')
             setTasks(dbTasks)
           }
         } else {
           // Aucune tâche en BDD : afficher le message "Aucune tâche assignée"
-          console.warn('Aucune tâche en BDD pour cette période')
           setTasks([])
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des tâches:', error)
         // En cas d'erreur, afficher également "Aucune tâche"
         setTasks([])
       } finally {
@@ -279,15 +264,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const userAgent = navigator.userAgent
       const userId = localStorage.getItem("userId") || ""
 
-      console.log("🔒 Validation de la tâche:", {
-        taskId: taskToValidate.id,
-        title: taskToValidate.title,
-        value: taskToValidate.value,
-        validated_at: validationTime,
-        user_agent: userAgent,
-        employee: localStorage.getItem("userEmail"),
-      })
-
       // Sauvegarder dans la base de données
       const taskData = {
         title: taskToValidate.title,
@@ -369,7 +345,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
               }
             }
           } catch (error) {
-            console.error('Erreur rechargement tâches:', error)
+            // Erreur silencieuse
           }
         }
         loadTasksFromDb()
@@ -377,7 +353,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       
       alert("Tâche validée ! Elle ne peut plus être modifiée.")
     } catch (error) {
-      console.error("Erreur lors de la validation:", error)
       alert("Erreur lors de la validation")
     }
   }
@@ -392,14 +367,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const completedTasksData = tasks.filter((task) => task.completed)
       const userId = localStorage.getItem("userId") || ""
       const today = new Date().toISOString().split('T')[0]
-
-      console.log("Envoi de la to-do list avec fiche de caisse:", {
-        period,
-        tasks: completedTasksData,
-        cashRegister: cashData,
-        timestamp: new Date().toISOString(),
-        employee: localStorage.getItem("userEmail"),
-      })
 
       // Mettre à jour work_schedules pour marquer la fin de la session
       const scheduleResponse = await fetch(`/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`)
@@ -436,7 +403,6 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         onSessionEnd()
       }
     } catch (error) {
-      console.error("Erreur lors de l'envoi:", error)
       alert("Erreur lors de l'envoi")
     }
   }
