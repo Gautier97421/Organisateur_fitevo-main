@@ -8,37 +8,104 @@ import { RealTimeMonitor } from "@/components/admin/real-time-monitor"
 import { CalendarManager } from "@/components/admin/calendar-manager"
 import { GymManager } from "@/components/admin/gym-manager"
 import { WorkScheduleManager } from "@/components/admin/work-schedule-manager"
-import { NewMemberManager } from "@/components/admin/new-member-manager"
+import { CustomPageManager } from "@/components/admin/custom-page-manager"
+import { CustomPageContent } from "@/components/admin/custom-page-content"
 import { useRouter } from "next/navigation"
-import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, UserPlus, Shield, LogOut } from "lucide-react"
+import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, Shield, LogOut, LayoutDashboard } from "lucide-react"
+import * as LucideIcons from "lucide-react"
+
+interface CustomPage {
+  id: string
+  title: string
+  icon: string
+  description: string | null
+  orderIndex: number
+  isActive: boolean
+  visibleTo: string
+}
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("tasks")
   const [userEmail, setUserEmail] = useState("")
   const [userName, setUserName] = useState("")
+  const [userRole, setUserRole] = useState("")
+  const [customPages, setCustomPages] = useState<CustomPage[]>([])
+  const [isLoadingPages, setIsLoadingPages] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
     const email = localStorage.getItem("userEmail") || ""
     const name = localStorage.getItem("userName") || ""
+    const role = localStorage.getItem("userRole") || ""
     setUserEmail(email)
     setUserName(name)
+    setUserRole(role)
   }, [])
+
+  useEffect(() => {
+    const loadCustomPages = async () => {
+      // Ne charger les pages personnalisées que pour les admins (pas les superadmins)
+      if (userRole === "superadmin") {
+        setIsLoadingPages(false)
+        return
+      }
+      
+      try {
+        const response = await fetch("/api/custom-pages?visibleTo=admin")
+        if (response.ok) {
+          const result = await response.json()
+          setCustomPages(result.data || [])
+        }
+      } catch (error) {
+        console.error("Error loading custom pages:", error)
+      } finally {
+        setIsLoadingPages(false)
+      }
+    }
+
+    if (userRole) {
+      loadCustomPages()
+    }
+  }, [userRole])
 
   const handleLogout = () => {
     localStorage.clear()
     router.push("/")
   }
 
-  const tabs = [
+  // Onglets fixes
+  const fixedTabs = [
     { id: "tasks", label: "Tâches", icon: ClipboardList, component: <TaskManager /> },
     { id: "gyms", label: "Salles", icon: Building2, component: <GymManager /> },
     { id: "employees", label: "Utilisateurs", icon: Users, component: <EmployeeManager /> },
     { id: "schedule", label: "Planning", icon: Calendar, component: <WorkScheduleManager /> },
     { id: "calendar", label: "Événements", icon: CalendarDays, component: <CalendarManager /> },
     { id: "monitor", label: "Suivi", icon: Activity, component: <RealTimeMonitor /> },
-    { id: "newmember", label: "Nouveau Adhérent", icon: UserPlus, component: <NewMemberManager /> },
   ]
+
+  // Ajouter l'onglet de gestion des pages pour les superadmins
+  const managementTabs = userRole === "superadmin" ? [
+    { 
+      id: "page-management", 
+      label: "Gestion Pages", 
+      icon: LayoutDashboard, 
+      component: <CustomPageManager /> 
+    }
+  ] : []
+
+  // Convertir les pages personnalisées en onglets
+  const dynamicTabs = customPages.map(page => {
+    const IconComponent = (LucideIcons as any)[page.icon] || LucideIcons.FileText
+    return {
+      id: `custom-${page.id}`,
+      label: page.title,
+      icon: IconComponent,
+      component: <CustomPageContent pageId={page.id} pageTitle={page.title} pageIcon={page.icon} />
+    }
+  })
+
+  // Combiner tous les onglets
+  const allTabs = [...fixedTabs, ...dynamicTabs, ...managementTabs]
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -75,7 +142,7 @@ export default function AdminPage() {
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {/* Navigation */}
         <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-          {tabs.map((tab) => (
+          {allTabs.map((tab) => (
             <Button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -95,7 +162,7 @@ export default function AdminPage() {
 
         {/* Contenu */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 md:p-6">
-          {tabs.find((tab) => tab.id === activeTab)?.component}
+          {allTabs.find((tab) => tab.id === activeTab)?.component}
         </div>
       </div>
     </div>

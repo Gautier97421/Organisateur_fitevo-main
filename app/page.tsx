@@ -17,7 +17,7 @@ export default function HomePage() {
         <div className="text-center mb-6 md:mb-8">
           <div className="mx-auto w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center mb-4 shadow-lg">
             <img
-              src="/logo_fitevo-remove.png"
+              src="/Logo-removebg-preview.png"
               alt="FitEvo"
               className="w-14 h-14 md:w-16 md:h-16 object-contain"
             />

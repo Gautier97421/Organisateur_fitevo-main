@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle, CalendarDays, Edit2, Trash2, MapPin } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   Dialog,
@@ -22,6 +22,7 @@ interface CalendarEvent {
   id: string
   title: string
   description?: string
+  location: string
   event_date: string
   event_time?: string
   duration_minutes: number
@@ -33,9 +34,10 @@ interface CalendarEvent {
 
 interface CalendarViewProps {
   hasWorkScheduleAccess?: boolean
+  hasCalendarAccess?: boolean
 }
 
-export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps) {
+export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess = true }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -43,21 +45,33 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
   const [showEventDialog, setShowEventDialog] = useState(false)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string>("")
-  const [activeView, setActiveView] = useState<"events" | "schedule">("events")
+  const [activeView, setActiveView] = useState<"events" | "schedule">(
+    hasCalendarAccess ? "events" : "schedule"
+  )
   const [calendarView, setCalendarView] = useState<"year" | "month">("year")
+  const [showDayEventsDialog, setShowDayEventsDialog] = useState(false)
+  const [selectedDayForDetails, setSelectedDayForDetails] = useState<Date | null>(null)
+  const [showEditEventDialog, setShowEditEventDialog] = useState(false)
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
+  const [eventToEdit, setEventToEdit] = useState<CalendarEvent | null>(null)
+  const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null)
   const [newEvent, setNewEvent] = useState({
     title: "",
     description: "",
+    location: "",
     event_time: "",
     duration_minutes: 60,
   })
 
-  // S'assurer que activeView est "events" si pas d'accès au planning
+  // S'assurer que activeView est correct selon les permissions
   useEffect(() => {
     if (!hasWorkScheduleAccess && activeView === "schedule") {
       setActiveView("events")
     }
-  }, [hasWorkScheduleAccess, activeView])
+    if (!hasCalendarAccess && activeView === "events") {
+      setActiveView("schedule")
+    }
+  }, [hasWorkScheduleAccess, hasCalendarAccess, activeView])
 
   const loadEvents = async () => {
     try {
@@ -124,7 +138,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
     setErrorMessage("")
     
     // Validation des champs obligatoires
-    if (!newEvent.title || !selectedDate) {
+    if (!newEvent.title || !newEvent.location || !selectedDate) {
       setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
       return
     }
@@ -147,6 +161,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
         .insert([{
           title: newEvent.title,
           description: newEvent.description,
+          location: newEvent.location,
           event_date: selectedDate.toISOString().split("T")[0],
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
@@ -170,6 +185,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
       setNewEvent({
         title: "",
         description: "",
+        location: "",
         event_time: "",
         duration_minutes: 60,
       })
@@ -179,6 +195,77 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
       setErrorMessage("")
     } catch (error) {
       setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
+    }
+  }
+
+  const handleEditEvent = async () => {
+    if (!eventToEdit) return
+
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+
+    if (!newEvent.title || !newEvent.location) {
+      setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from("calendar_events")
+        .update({
+          title: newEvent.title,
+          description: newEvent.description,
+          location: newEvent.location,
+          event_time: newEvent.event_time || null,
+          duration_minutes: newEvent.duration_minutes,
+        })
+        .eq("id", eventToEdit.id)
+
+      if (error) {
+        setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+        return
+      }
+
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
+      }
+
+      setShowEditEventDialog(false)
+      setEventToEdit(null)
+      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+      setAttemptedSubmit(false)
+      setErrorMessage("")
+    } catch (error) {
+      setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+    }
+  }
+
+  const handleDeleteEvent = async () => {
+    if (!eventToDelete) return
+
+    try {
+      const { error } = await supabase
+        .from("calendar_events")
+        .delete()
+        .eq("id", eventToDelete.id)
+
+      if (error) {
+        setErrorMessage("❌ Erreur lors de la suppression. Veuillez réessayer.")
+        return
+      }
+
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
+      }
+
+      setShowDeleteConfirmDialog(false)
+      setEventToDelete(null)
+    } catch (error) {
+      setErrorMessage("❌ Erreur lors de la suppression. Veuillez réessayer.")
     }
   }
 
@@ -269,7 +356,9 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    // getDay() retourne 0 pour dimanche, on ajuste pour que lundi soit 0
+    let startingDayOfWeek = firstDay.getDay() - 1
+    if (startingDayOfWeek === -1) startingDayOfWeek = 6 // Si dimanche, le mettre à la fin
 
     const days = []
 
@@ -310,31 +399,49 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
     "Décembre",
   ]
 
-  const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
-          Calendrier & Planning
+          {hasCalendarAccess && hasWorkScheduleAccess && (
+            <>
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
+              Calendrier & Planning
+            </>
+          )}
+          {!hasCalendarAccess && hasWorkScheduleAccess && (
+            <>
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
+              Planning de Travail
+            </>
+          )}
+          {hasCalendarAccess && !hasWorkScheduleAccess && (
+            <>
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
+              Calendrier d'Événements
+            </>
+          )}
         </h2>
       </div>
 
       {/* Navigation entre vues */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-        <Button
-          variant={activeView === "events" ? "default" : "outline"}
-          onClick={() => setActiveView("events")}
-          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-            activeView === "events"
-              ? "bg-red-600 text-white shadow-lg"
-              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-          }`}
-        >
-          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Événements Annuels
-        </Button>
+        {hasCalendarAccess && (
+          <Button
+            variant={activeView === "events" ? "default" : "outline"}
+            onClick={() => setActiveView("events")}
+            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+              activeView === "events"
+                ? "bg-red-600 text-white shadow-lg"
+                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+            }`}
+          >
+            <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+            Événements Annuels
+          </Button>
+        )}
         {hasWorkScheduleAccess && (
           <Button
             variant={activeView === "schedule" ? "default" : "outline"}
@@ -482,9 +589,14 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                     return (
                       <div
                         key={index}
-                        onClick={() => dayInfo.isCurrentMonth && !isPast && handleDateClick(dayInfo.date)}
+                        onClick={() => {
+                          if (dayInfo.isCurrentMonth) {
+                            setSelectedDayForDetails(dayInfo.date)
+                            setShowDayEventsDialog(true)
+                          }
+                        }}
                         className={`
-                          min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
+                          relative min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             dayInfo.isCurrentMonth
                               ? "bg-white hover:bg-red-50"
@@ -495,7 +607,7 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                               ? "border-red-500 bg-red-100"
                               : "border-gray-200"
                           }
-                          ${isPast ? "cursor-not-allowed opacity-50" : "hover:shadow-md"}
+                          ${dayInfo.isCurrentMonth ? "hover:shadow-md" : ""}
                         `}
                       >
                         <div className="font-semibold text-sm mb-1 text-gray-900">
@@ -520,6 +632,18 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                             <div className="text-xs text-gray-400 italic">Cliquer pour ajouter</div>
                           )}
                         </div>
+                        {dayInfo.isCurrentMonth && !isPast && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDateClick(dayInfo.date)
+                            }}
+                            className="absolute bottom-1 right-1 p-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded-full shadow-lg transition-all hover:scale-110"
+                            title="Ajouter un événement"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     )
                   })}
@@ -600,6 +724,17 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Lieu <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="Lieu de l'événement"
+                    value={newEvent.location}
+                    onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                    className={`text-lg border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.location ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
                     Description <span className="text-gray-500 text-xs">(optionnel)</span>
                   </label>
                   <Textarea
@@ -652,6 +787,295 @@ export function CalendarView({ hasWorkScheduleAccess = true }: CalendarViewProps
                 </Button>
                 <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-sm sm:text-lg px-4 sm:px-6 flex items-center gap-2 w-full sm:w-auto">
                   <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Proposer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de détails du jour */}
+          <Dialog open={showDayEventsDialog} onOpenChange={setShowDayEventsDialog}>
+            <DialogContent className="sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
+                  <CalendarDays className="h-6 w-6 text-red-600" />
+                  <span>
+                    Événements du {selectedDayForDetails && new Date(selectedDayForDetails).toLocaleDateString("fr-FR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                {selectedDayForDetails && (() => {
+                  const dayEvents = getEventsForDate(selectedDayForDetails).sort((a, b) => {
+                    const timeA = a.event_time || "00:00"
+                    const timeB = b.event_time || "00:00"
+                    return timeA.localeCompare(timeB)
+                  })
+
+                  if (dayEvents.length === 0) {
+                    return (
+                      <div className="text-center py-8 text-gray-500">
+                        <CalendarDays className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg">Aucun événement pour ce jour</p>
+                      </div>
+                    )
+                  }
+
+                  return dayEvents.map((event) => {
+                    const userEmail = localStorage.getItem("userEmail")
+                    const isOwnEvent = event.created_by_email === userEmail
+                    const today = new Date().toISOString().split('T')[0]
+                    const isPast = event.event_date < today
+                    const canModify = isOwnEvent && event.status === "pending" && !isPast
+
+                    return (
+                      <Card
+                        key={event.id}
+                        className={`border-2 bg-white ${getStatusColor(event.status)} bg-opacity-10`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-bold text-lg text-gray-900">{event.title}</h4>
+                              {isOwnEvent && (
+                                <span className="px-2 py-1 rounded text-xs font-medium bg-red-600 text-white">
+                                  Vous
+                                </span>
+                              )}
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(event.status)}`}>
+                              {event.status === "approved" ? "Approuvé" : event.status === "pending" ? "En attente" : "Refusé"}
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-sm text-gray-600">
+                            <div className="flex items-center space-x-2">
+                              <Clock className="h-4 w-4" />
+                              <span>
+                                {event.event_time ? `${event.event_time.slice(0, 5)} • Durée : ${event.duration_minutes} minutes` : "Heure non précisée"}
+                              </span>
+                            </div>
+                            {event.location && (
+                              <div className="flex items-center space-x-2 mt-2">
+                                <MapPin className="h-4 w-4" />
+                                <span className="text-gray-700">{event.location}</span>
+                              </div>
+                            )}
+                            {event.description && (
+                              <p className="text-gray-700 mt-2">{event.description}</p>
+                            )}
+                            {event.status === "rejected" && event.rejection_reason && (
+                              <div className="bg-red-50 p-2 rounded mt-2 border border-red-200">
+                                <p className="text-red-700 font-medium text-xs">Raison du refus :</p>
+                                <p className="text-red-600 text-xs">{event.rejection_reason}</p>
+                              </div>
+                            )}
+                          </div>
+                          {canModify && (
+                            <div className="flex gap-2 mt-3">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setEventToEdit(event)
+                                  setNewEvent({
+                                    title: event.title,
+                                    description: event.description || "",
+                                    location: event.location,
+                                    event_time: event.event_time || "",
+                                    duration_minutes: event.duration_minutes,
+                                  })
+                                  setShowDayEventsDialog(false)
+                                  setShowEditEventDialog(true)
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+                              >
+                                <Edit2 className="h-3 w-3 mr-1" />
+                                Modifier
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEventToDelete(event)
+                                  setShowDayEventsDialog(false)
+                                  setShowDeleteConfirmDialog(true)
+                                }}
+                                className="border-red-600 text-red-600 hover:bg-red-50 flex-1"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Supprimer
+                              </Button>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })
+                })()}
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => setShowDayEventsDialog(false)}
+                  className="bg-gray-600 hover:bg-gray-700 text-white"
+                >
+                  Fermer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog d'édition d'événement */}
+          <Dialog open={showEditEventDialog} onOpenChange={(open) => {
+            setShowEditEventDialog(open)
+            if (!open) {
+              setEventToEdit(null)
+              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+              setAttemptedSubmit(false)
+              setErrorMessage("")
+            }
+          }}>
+            <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                  <Edit2 className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
+                  <span>Modifier l'Événement</span>
+                </DialogTitle>
+                <DialogDescription className="text-sm md:text-base text-gray-600">
+                  {eventToEdit && (
+                    <>
+                      {new Date(eventToEdit.event_date).toLocaleDateString("fr-FR", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              
+              {errorMessage && (
+                <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mb-4">
+                  <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Titre de l'événement <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="Titre de l'événement"
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.title ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Lieu <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    placeholder="Lieu de l'événement"
+                    value={newEvent.location}
+                    onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.location ? 'border-red-500 focus:border-red-600' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Description
+                  </label>
+                  <Textarea
+                    placeholder="Description (facultatif)"
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900 min-h-[80px]"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Heure
+                    </label>
+                    <Input
+                      type="time"
+                      value={newEvent.event_time}
+                      onChange={(e) => setNewEvent({ ...newEvent, event_time: e.target.value })}
+                      className="border-2 rounded-xl bg-white text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Durée (min)
+                    </label>
+                    <Input
+                      type="number"
+                      value={newEvent.duration_minutes}
+                      onChange={(e) => setNewEvent({ ...newEvent, duration_minutes: Number.parseInt(e.target.value) || 60 })}
+                      min="15"
+                      max="480"
+                      className="border-2 rounded-xl bg-white text-gray-900"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditEventDialog(false)}
+                  className="flex-1 border-2 rounded-xl"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleEditEvent}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                >
+                  Enregistrer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de confirmation de suppression */}
+          <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+            <DialogContent className="sm:max-w-md bg-white">
+              <DialogHeader>
+                <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                  <Trash2 className="h-5 w-5 text-red-600" />
+                  <span>Confirmer la suppression</span>
+                </DialogTitle>
+                <DialogDescription className="text-sm text-gray-600">
+                  Êtes-vous sûr de vouloir supprimer cet événement ?
+                  {eventToDelete && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <p className="font-medium text-gray-900">{eventToDelete.title}</p>
+                      <p className="text-sm text-gray-600">
+                        {new Date(eventToDelete.event_date).toLocaleDateString("fr-FR")}
+                        {eventToDelete.event_time && ` - ${eventToDelete.event_time.slice(0, 5)}`}
+                      </p>
+                    </div>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirmDialog(false)}
+                  className="flex-1 border-2 rounded-xl"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleDeleteEvent}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl"
+                >
+                  Supprimer
                 </Button>
               </DialogFooter>
             </DialogContent>

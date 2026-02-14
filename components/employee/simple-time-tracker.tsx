@@ -74,11 +74,8 @@ export function SimpleTimeTracker() {
       if (result.data) {
         setRecentEntries([result.data, ...recentEntries.slice(0, 4)])
       }
-
-      alert(`✓ Pointage enregistré à ${gymName}`)
     } catch (error: any) {
       console.error("Erreur pointage:", error)
-      alert(error.message || "Erreur lors du pointage")
     } finally {
       setIsPunching(false)
     }

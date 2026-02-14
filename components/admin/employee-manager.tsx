@@ -60,6 +60,9 @@ export function EmployeeManager() {
     hasWorkScheduleAccess: true,
     hasWorkPeriodAccess: true
   })
+  const [newAdmin, setNewAdmin] = useState({ name: "", email: "" })
+  const [isAddingAdmin, setIsAddingAdmin] = useState(false)
+  const [adminValidationErrors, setAdminValidationErrors] = useState<{[key: string]: boolean}>({})
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
   const [validationErrors, setValidationErrors] = useState<{[key: string]: boolean}>({})
@@ -290,9 +293,8 @@ export function EmployeeManager() {
         hasWorkPeriodAccess: true
       })
       setIsAddingEmployee(false)
-      alert("Employé ajouté avec succès !")
     } catch (error) {
-      alert("Erreur lors de l'ajout de l'employé")
+      console.error("Erreur lors de l'ajout de l'employé:", error)
     }
   }
 
@@ -416,9 +418,8 @@ export function EmployeeManager() {
       await loadData()
       setIsEditingEmployee(false)
       setEditEmployee(null)
-      alert("Employé modifié avec succès !")
     } catch (error) {
-      alert("Erreur lors de la modification de l'employé")
+      console.error("Erreur lors de la modification de l'employé:", error)
     }
   }
 
@@ -445,17 +446,13 @@ export function EmployeeManager() {
 
       setShowDeleteDialog(false)
       setSelectedUser(null)
-      alert(
-        `${selectedUser.type === "employee" ? "Employé" : "Administrateur"} supprimé avec succès`,
-      )
     } catch (error) {
-      alert("Erreur lors de la suppression")
+      console.error("Erreur lors de la suppression:", error)
     }
   }
 
   const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isSuperAdmin = false) => {
     if (type === "admin" && isSuperAdmin) {
-      alert("Impossible de désactiver un Super Administrateur")
       return
     }
     setSelectedUser({ id, name, type, isSuperAdmin })
@@ -490,7 +487,7 @@ export function EmployeeManager() {
       setShowStatusDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      alert("Erreur lors de la mise à jour")
+      console.error("Erreur lors de la mise à jour:", error)
     }
   }
 
@@ -506,10 +503,8 @@ export function EmployeeManager() {
           updated_by: userName
         })
         .eq("key", "whatsapp_link")
-
-      alert("Lien WhatsApp enregistré avec succès !")
     } catch (error) {
-      alert("Erreur lors de la sauvegarde")
+      console.error("Erreur lors de la sauvegarde:", error)
     } finally {
       setIsSavingWhatsapp(false)
     }
@@ -544,10 +539,8 @@ export function EmployeeManager() {
             updated_by: userName
           })
       }
-
-      alert("URL du site enregistrée avec succès !")
     } catch (error) {
-      alert("Erreur lors de la sauvegarde")
+      console.error("Erreur lors de la sauvegarde:", error)
     } finally {
       setIsSavingSiteUrl(false)
     }
@@ -707,7 +700,7 @@ export function EmployeeManager() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Ajouter un employé
+              {isSuperAdmin ? "Ajouter un utilisateur" : "Ajouter un employé"}
             </Button>
           </div>
 
@@ -1240,6 +1233,113 @@ export function EmployeeManager() {
       {/* Section Admins */}
       {activeTab === "admins" && (
         <div className="space-y-6">
+          {isSuperAdmin && (
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setIsAddingAdmin(!isAddingAdmin)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Ajouter un admin
+              </Button>
+            </div>
+          )}
+
+          {isAddingAdmin && isSuperAdmin && (
+            <Card className="border border-gray-200 bg-white">
+              <CardHeader className="border-b border-gray-200 bg-gray-50">
+                <CardTitle className="text-lg font-medium text-gray-900">Nouvel administrateur</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 md:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-name">Nom complet <span className="text-red-600">*</span></Label>
+                    <Input
+                      id="admin-name"
+                      value={newAdmin.name}
+                      onChange={(e) => {
+                        setNewAdmin({ ...newAdmin, name: e.target.value })
+                        if (adminValidationErrors.name) {
+                          setAdminValidationErrors({ ...adminValidationErrors, name: false })
+                        }
+                      }}
+                      placeholder="Nom de l'administrateur"
+                      className={`border ${adminValidationErrors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-email">Email <span className="text-red-600">*</span></Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      value={newAdmin.email}
+                      onChange={(e) => {
+                        setNewAdmin({ ...newAdmin, email: e.target.value })
+                        if (adminValidationErrors.email) {
+                          setAdminValidationErrors({ ...adminValidationErrors, email: false })
+                        }
+                      }}
+                      placeholder="email@admin.com"
+                      className={`border ${adminValidationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
+                    />
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={async () => {
+                      const errors: {[key: string]: boolean} = {}
+                      if (!newAdmin.name) errors.name = true
+                      if (!newAdmin.email) errors.email = true
+                      
+                      if (Object.keys(errors).length > 0) {
+                        setAdminValidationErrors(errors)
+                        return
+                      }
+                      
+                      try {
+                        const response = await fetch('/api/db/users', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            data: {
+                              name: newAdmin.name,
+                              email: newAdmin.email,
+                              password: 'temppass123',
+                              role: 'admin',
+                              active: true
+                            }
+                          })
+                        })
+                        
+                        if (!response.ok) throw new Error('Erreur lors de l\'ajout')
+                        
+                        await loadData()
+                        setNewAdmin({ name: "", email: "" })
+                        setIsAddingAdmin(false)
+                        setAdminValidationErrors({})
+                      } catch (error) {
+                        console.error("Erreur lors de l'ajout de l'admin:", error)
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Ajouter
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsAddingAdmin(false)
+                      setNewAdmin({ name: "", email: "" })
+                      setAdminValidationErrors({})
+                    }}
+                    variant="outline"
+                  >
+                    Annuler
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-4">
             {admins.length === 0 ? (

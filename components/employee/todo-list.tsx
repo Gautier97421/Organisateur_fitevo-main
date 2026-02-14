@@ -350,10 +350,8 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         }
         loadTasksFromDb()
       }, 500)
-      
-      alert("Tâche validée ! Elle ne peut plus être modifiée.")
     } catch (error) {
-      alert("Erreur lors de la validation")
+      console.error("Erreur lors de la validation:", error)
     }
   }
 
@@ -396,14 +394,13 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       localStorage.removeItem(`employee_${userId}_sessionDate`)
 
       setShowCashRegisterForm(false)
-      alert("To-do list et fiche de caisse envoyées avec succès ! Votre session de travail est terminée.")
       
       // Appeler le callback pour réinitialiser la vue
       if (onSessionEnd) {
         onSessionEnd()
       }
     } catch (error) {
-      alert("Erreur lors de l'envoi")
+      console.error("Erreur lors de l'envoi:", error)
     }
   }
 

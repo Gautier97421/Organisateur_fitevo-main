@@ -114,6 +114,7 @@ model CalendarEvent {
   id               String    @id @default(cuid())
   title            String
   description      String?
+  location         String    @default("")
   eventDate        DateTime  @map("event_date")
   eventTime        String?   @map("event_time")
   durationMinutes  Int       @default(60) @map("duration_minutes")
@@ -270,4 +271,36 @@ model UserGym {
   
   @@unique([userId, gymId])
   @@map("user_gyms")
+}
+
+model CustomPage {
+  id          String   @id @default(cuid())
+  title       String   // Titre de la page (ex: "Nouveau Adhérent", "Procédure Fermeture")
+  icon        String   // Nom de l'icône Lucide (ex: "UserPlus", "Lock")
+  description String?  @db.Text
+  orderIndex  Int      @map("order_index")
+  isActive    Boolean  @default(true) @map("is_active")
+  visibleTo   String   @default("admin") @map("visible_to") // "admin" ou "superadmin"
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  items CustomPageItem[]
+  
+  @@map("custom_pages")
+}
+
+model CustomPageItem {
+  id          Int        @id @default(autoincrement())
+  pageId      String     @map("page_id")
+  title       String
+  description String?    @db.Text
+  orderIndex  Int        @map("order_index")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  
+  page CustomPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  @@map("custom_page_items")
 }

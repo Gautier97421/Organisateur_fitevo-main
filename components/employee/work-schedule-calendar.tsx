@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Plus, CalendarDays, Edit2, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,12 @@ export function WorkScheduleCalendar() {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string>("") 
   const [selectedEmployee, setSelectedEmployee] = useState<{ email: string; name: string } | null>(null)
+  const [showDayDetailsDialog, setShowDayDetailsDialog] = useState(false)
+  const [selectedDayForDetails, setSelectedDayForDetails] = useState<Date | null>(null)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
+  const [scheduleToEdit, setScheduleToEdit] = useState<WorkSchedule | null>(null)
+  const [scheduleToDelete, setScheduleToDelete] = useState<WorkSchedule | null>(null)
   const [newSchedule, setNewSchedule] = useState({
     start_time: "",
     end_time: "",
@@ -204,7 +210,9 @@ export function WorkScheduleCalendar() {
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    // getDay() retourne 0 pour dimanche, on ajuste pour que lundi soit 0
+    let startingDayOfWeek = firstDay.getDay() - 1
+    if (startingDayOfWeek === -1) startingDayOfWeek = 6 // Si dimanche, le mettre à la fin
 
     const days = []
 
@@ -243,6 +251,68 @@ export function WorkScheduleCalendar() {
     })
   }
 
+  const handleEditSchedule = async () => {
+    if (!scheduleToEdit) return
+
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+
+    if (!newSchedule.start_time || !newSchedule.end_time) {
+      setErrorMessage("⚠️ Veuillez remplir tous les champs obligatoires")
+      return
+    }
+
+    if (newSchedule.start_time >= newSchedule.end_time) {
+      setErrorMessage("⚠️ L'heure de début doit être avant l'heure de fin")
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/db/work_schedules/${scheduleToEdit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_time: newSchedule.start_time,
+          end_time: newSchedule.end_time,
+        })
+      })
+
+      if (!response.ok) {
+        setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+        return
+      }
+
+      await loadSchedules()
+      setShowEditDialog(false)
+      setScheduleToEdit(null)
+      setNewSchedule({ start_time: "", end_time: "" })
+      setAttemptedSubmit(false)
+    } catch (error) {
+      setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+    }
+  }
+
+  const handleDeleteSchedule = async () => {
+    if (!scheduleToDelete) return
+
+    try {
+      const response = await fetch(`/api/db/work_schedules/${scheduleToDelete.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        setErrorMessage("❌ Erreur lors de la suppression. Veuillez réessayer.")
+        return
+      }
+
+      await loadSchedules()
+      setShowDeleteConfirmDialog(false)
+      setScheduleToDelete(null)
+    } catch (error) {
+      setErrorMessage("❌ Erreur lors de la suppression. Veuillez réessayer.")
+    }
+  }
+
   const getEmployeeColor = (employeeEmail: string) => {
     const employee = employees.find((emp) => emp.email === employeeEmail)
     return employee?.color || "bg-gray-500"
@@ -275,7 +345,7 @@ export function WorkScheduleCalendar() {
     "Décembre",
   ]
 
-  const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -324,9 +394,14 @@ export function WorkScheduleCalendar() {
               return (
                 <div
                   key={index}
-                  onClick={() => dayInfo.isCurrentMonth && !isPast && handleDateClick(dayInfo.date)}
+                  onClick={() => {
+                    if (dayInfo.isCurrentMonth) {
+                      setSelectedDayForDetails(dayInfo.date)
+                      setShowDayDetailsDialog(true)
+                    }
+                  }}
                   className={`
-                    min-h-[60px] md:min-h-[100px] p-1 md:p-2 border rounded-lg md:rounded-xl cursor-pointer transition-all duration-200
+                    relative min-h-[60px] md:min-h-[100px] p-1 md:p-2 border rounded-lg md:rounded-xl cursor-pointer transition-all duration-200
                     ${
                       dayInfo.isCurrentMonth
                         ? "bg-white hover:bg-red-50"
@@ -337,7 +412,7 @@ export function WorkScheduleCalendar() {
                         ? "border-red-500 bg-red-100"
                         : "border-gray-200"
                     }
-                    ${isPast ? "cursor-not-allowed opacity-50" : "hover:shadow-md"}
+                    ${dayInfo.isCurrentMonth ? "hover:shadow-md" : ""}
                   `}
                 >
                   <div className="font-semibold text-[10px] md:text-sm mb-0.5 md:mb-1 text-gray-900">
@@ -360,6 +435,18 @@ export function WorkScheduleCalendar() {
                       </div>
                     )}
                   </div>
+                  {dayInfo.isCurrentMonth && !isPast && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDateClick(dayInfo.date)
+                      }}
+                        className="absolute bottom-1 right-1 p-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded-full shadow-lg transition-all hover:scale-110"
+                      title="Ajouter un horaire"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -486,6 +573,269 @@ export function WorkScheduleCalendar() {
             </Button>
             <Button onClick={addSchedule} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
               <CheckCircle className="h-5 w-5" /> Ajouter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de détails du jour */}
+      <Dialog open={showDayDetailsDialog} onOpenChange={setShowDayDetailsDialog}>
+        <DialogContent className="sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
+              <CalendarDays className="h-6 w-6 text-red-600" />
+              <span>
+                Horaires du {selectedDayForDetails && new Date(selectedDayForDetails).toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {selectedDayForDetails && (() => {
+              const daySchedules = getSchedulesForDate(selectedDayForDetails).sort((a, b) => {
+                return a.start_time.localeCompare(b.start_time)
+              })
+
+              if (daySchedules.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    <CalendarDays className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg">Aucun horaire pour ce jour</p>
+                  </div>
+                )
+              }
+
+              // Détection des conflits d'horaires
+              const hasConflicts = daySchedules.some((schedule, index) => {
+                if (index === 0) return false
+                const prevEnd = daySchedules[index - 1].end_time
+                const currentStart = schedule.start_time
+                return currentStart < prevEnd
+              })
+
+              return (
+                <>
+                  {hasConflicts && (
+                    <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-3 mb-4">
+                      <p className="text-yellow-800 font-medium flex items-center gap-2">
+                        <span className="text-yellow-600 text-xl">⚠️</span>
+                        Attention : Certains horaires se chevauchent
+                      </p>
+                    </div>
+                  )}
+                  {daySchedules.map((schedule) => {
+                    const userEmail = localStorage.getItem("userEmail")
+                    const isOwnSchedule = schedule.employee_email === userEmail
+                    const today = new Date().toISOString().split('T')[0]
+                    const isPast = schedule.work_date < today
+                    const canModify = isOwnSchedule && !isPast
+
+                    return (
+                      <Card
+                        key={schedule.id}
+                        className={`border-2 bg-white ${isOwnSchedule ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-4 h-4 ${getEmployeeColor(schedule.employee_email)} rounded`}></div>
+                              <h4 className="font-bold text-lg text-gray-900">{schedule.employee_name}</h4>
+                              {isOwnSchedule && (
+                                <span className="px-2 py-1 rounded text-xs font-medium bg-red-600 text-white">
+                                  Vous
+                                </span>
+                              )}
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium text-white ${
+                              schedule.status === "completed" ? "bg-green-600" :
+                              schedule.status === "confirmed" ? "bg-blue-600" : "bg-gray-600"
+                            }`}>
+                              {schedule.status === "completed" ? "Terminé" : 
+                               schedule.status === "confirmed" ? "Confirmé" : "Programmé"}
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-sm text-gray-600">
+                            <div className="flex items-center space-x-2">
+                              <Clock className="h-4 w-4" />
+                              <span className="font-medium">
+                                {schedule.start_time} - {schedule.end_time}
+                              </span>
+                            </div>
+                            {schedule.break_start_time && schedule.break_duration && (
+                              <p className="text-gray-600 text-xs mt-1">
+                                🕐 Pause : {schedule.break_start_time} ({schedule.break_duration} min)
+                              </p>
+                            )}
+                          </div>
+                          {canModify && (
+                            <div className="flex gap-2 mt-3">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setScheduleToEdit(schedule)
+                                  setNewSchedule({
+                                    start_time: schedule.start_time,
+                                    end_time: schedule.end_time,
+                                  })
+                                  setShowDayDetailsDialog(false)
+                                  setShowEditDialog(true)
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+                              >
+                                <Edit2 className="h-3 w-3 mr-1" />
+                                Modifier
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setScheduleToDelete(schedule)
+                                  setShowDayDetailsDialog(false)
+                                  setShowDeleteConfirmDialog(true)
+                                }}
+                                className="border-red-600 text-red-600 hover:bg-red-50 flex-1"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Supprimer
+                              </Button>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </>
+              )
+            })()}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setShowDayDetailsDialog(false)}
+              className="bg-gray-600 hover:bg-gray-700 text-white"
+            >
+              Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog d'édition de planning */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open)
+        if (!open) {
+          setScheduleToEdit(null)
+          setNewSchedule({ start_time: "", end_time: "" })
+          setAttemptedSubmit(false)
+          setErrorMessage("")
+        }
+      }}>
+        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+              <Edit2 className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
+              <span>Modifier l'Horaire de Travail</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm md:text-base text-gray-600">
+              {scheduleToEdit && (
+                <>
+                  {scheduleToEdit.employee_name} - {new Date(scheduleToEdit.work_date + 'T00:00:00').toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {errorMessage && (
+            <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mb-4">
+              <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Heure de début <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  value={newSchedule.start_time}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500 focus:border-red-600' : ''}`}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Heure de fin <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  value={newSchedule.end_time}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500 focus:border-red-600' : ''}`}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              className="flex-1 border-2 rounded-xl"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleEditSchedule}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+            >
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmation de suppression */}
+      <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              <span>Confirmer la suppression</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              Êtes-vous sûr de vouloir supprimer ce planning ?
+              {scheduleToDelete && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                  <p className="font-medium text-gray-900">{scheduleToDelete.employee_name}</p>
+                  <p className="text-sm text-gray-600">
+                    {new Date(scheduleToDelete.work_date + 'T00:00:00').toLocaleDateString("fr-FR")} - {scheduleToDelete.start_time} à {scheduleToDelete.end_time}
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirmDialog(false)}
+              className="flex-1 border-2 rounded-xl"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleDeleteSchedule}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl"
+            >
+              Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

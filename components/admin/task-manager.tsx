@@ -321,7 +321,6 @@ export function TaskManager() {
       const userId = localStorage.getItem("userId")
       
       if (!userId) {
-        alert("Erreur: Utilisateur non identifié. Veuillez vous reconnecter.")
         return
       }
 
@@ -366,7 +365,7 @@ export function TaskManager() {
       })
       setShowForm(false)
     } catch (error: any) {
-      alert(`Erreur lors de l'ajout de la tâche:\n${error.message || error}`)
+      console.error("Erreur lors de l'ajout de la tâche:", error)
     }
   }
 
@@ -418,7 +417,7 @@ export function TaskManager() {
         roleIds: [],
       })
     } catch (error: any) {
-      alert(`Erreur lors de la modification de la tâche:\n${error.message || error}`)
+      console.error("Erreur lors de la modification de la tâche:", error)
     }
   }
 
@@ -434,7 +433,7 @@ export function TaskManager() {
 
       setTasks(tasks.filter((task) => task.id !== id))
     } catch (error) {
-      alert("Erreur lors de la suppression")
+      console.error("Erreur lors de la suppression:", error)
     }
   }
 
@@ -471,7 +470,7 @@ export function TaskManager() {
       }
       loadTasks()
     } catch (error) {
-      alert("Erreur lors du déplacement de la tâche")
+      console.error("Erreur lors du déplacement de la tâche:", error)
       loadTasks() // Recharger en cas d'erreur
     }
   }

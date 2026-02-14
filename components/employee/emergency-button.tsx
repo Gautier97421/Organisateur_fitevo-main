@@ -29,7 +29,6 @@ export function EmergencyButton() {
       message: message || "Alerte d'urgence",
     })
 
-    alert("Alerte envoyée ! Les responsables ont été notifiés.")
     setMessage("")
     setIsOpen(false)
     setIsSending(false)

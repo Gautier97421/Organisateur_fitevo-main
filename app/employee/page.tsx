@@ -42,6 +42,7 @@ export default function EmployeePage() {
   const [showGymSelectionDialog, setShowGymSelectionDialog] = useState(false)
   const [showNoTasksDialog, setShowNoTasksDialog] = useState(false)
   const [noTasksPeriodName, setNoTasksPeriodName] = useState("")
+  const [showNoGymDialog, setShowNoGymDialog] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -247,7 +248,7 @@ export default function EmployeePage() {
   const requestPeriodSelection = (period: "matin" | "aprem" | "journee") => {
     // Vérifier si l'employé a des salles assignées
     if (assignedGyms.length === 0) {
-      alert("Aucune salle ne vous est assignée. Contactez un administrateur.")
+      setShowNoGymDialog(true)
       return
     }
 
@@ -563,6 +564,16 @@ export default function EmployeePage() {
                   </div>
                 </div>
               )}
+
+              {/* Section Pointage Simple (pour les employés sans accès aux périodes de travail) */}
+              {!hasWorkPeriodAccess && (
+                <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-200">
+                  <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
+                    Pointage
+                  </h3>
+                  <SimpleTimeTracker />
+                </div>
+              )}
               </div>
             </CardContent>
           </Card>
@@ -705,6 +716,44 @@ export default function EmployeePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog "Aucune salle assignée" */}
+        <Dialog open={showNoGymDialog} onOpenChange={setShowNoGymDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <Building className="h-6 w-6 text-red-600" />
+                <span>Aucune salle assignée</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm md:text-base text-gray-600 mb-3">
+                Aucune salle de sport ne vous est actuellement assignée.
+              </p>
+              <p className="text-sm text-gray-500">
+                Pour démarrer une période de travail, vous devez d'abord être assigné à une salle. Veuillez contacter un administrateur pour plus d'informations.
+              </p>
+            </div>
+            <DialogFooter className="flex gap-2">
+              {whatsappLink && (
+                <Button
+                  onClick={() => window.open(whatsappLink, '_blank')}
+                  variant="outline"
+                  className="border-2 border-green-500 text-green-600 hover:bg-green-50"
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  WhatsApp
+                </Button>
+              )}
+              <Button
+                onClick={() => setShowNoGymDialog(false)}
+                className="bg-red-600 hover:bg-red-700 flex-1"
+              >
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -752,7 +801,8 @@ export default function EmployeePage() {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
-          <CalendarView hasWorkScheduleAccess={hasWorkScheduleAccess} />
+          {hasCalendarAccess && <CalendarView hasWorkScheduleAccess={hasWorkScheduleAccess} hasCalendarAccess={hasCalendarAccess} />}
+          {!hasCalendarAccess && hasWorkScheduleAccess && <WorkScheduleCalendar />}
         </div>
       </div>
     )

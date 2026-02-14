@@ -88,7 +88,6 @@ export function GymManager() {
   const addGym = async () => {
     if (!newGym.name || !newGym.location) return
     if (newGym.wifi_restricted && (!newGym.wifi_ssid || !newGym.ip_address)) {
-      alert("Veuillez renseigner le SSID et l'adresse IP pour un réseau restreint.")
       return
     }
 
@@ -129,9 +128,8 @@ export function GymManager() {
         qr_code_enabled: false
       })
       setIsAddingGym(false)
-      alert("Salle ajoutée avec succès !")
     } catch (error) {
-      alert(`Erreur lors de l'ajout de la salle:\n${error}`)
+      console.error("Erreur lors de l'ajout de la salle:", error)
     }
   }
 
@@ -159,7 +157,6 @@ export function GymManager() {
     if (!editGym) return
     if (!editGym.name || !editGym.location) return
     if (editGym.wifi_restricted && (!editGym.wifi_ssid || !editGym.ip_address)) {
-      alert("Veuillez renseigner le SSID et l'adresse IP pour un réseau restreint.")
       return
     }
 
@@ -189,9 +186,8 @@ export function GymManager() {
       }
       setIsEditingGym(false)
       setEditGym(null)
-      alert("Salle modifiée avec succès !")
     } catch (error) {
-      alert(`Erreur lors de la modification: ${error}`)
+      console.error("Erreur lors de la modification:", error)
     }
   }
 
@@ -211,9 +207,8 @@ export function GymManager() {
       setGyms(gyms.filter((gym) => gym.id !== selectedGym.id))
       setShowDeleteDialog(false)
       setSelectedGym(null)
-      alert("Salle supprimée avec succès")
     } catch (error) {
-      alert(`Erreur lors de la suppression: ${error}`)
+      console.error("Erreur lors de la suppression:", error)
     }
   }
 
@@ -235,7 +230,7 @@ export function GymManager() {
 
       setGyms(gyms.map((g) => (g.id === id ? { ...g, is_active: !g.is_active } : g)))
     } catch (error) {
-      alert(`Erreur: ${error}`)
+      console.error("Erreur lors de la mise à jour:", error)
     }
   }
 
