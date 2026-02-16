@@ -133,32 +133,32 @@ export function BreakManager({
   }
 
   return (
-    <div className="text-center">
+    <div className="w-full">
       {accumulatedBreakTime > 0 && !isBreakComplete ? (
         // Reprendre une pause en cours
-        <div className="space-y-2">
-          <Button onClick={handleResumeBreak} className="text-lg px-6 py-3 h-auto bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2">
-            <Coffee className="h-5 w-5" /> Reprendre la pause
+        <div className="space-y-2 w-full">
+          <Button onClick={handleResumeBreak} size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
+            <Coffee className="h-4 w-4" /> Reprendre la pause
           </Button>
           <p className="text-xs text-red-600 flex items-center justify-center gap-1">
-            <Clock className="h-4 w-4" /> {remainingBreakTime} min restantes ({accumulatedBreakTime} min déjà prises)
+            <Clock className="h-3 w-3" /> {remainingBreakTime} min restantes ({accumulatedBreakTime} prises)
           </p>
         </div>
       ) : isBreakComplete ? (
         // Pause terminée
-        <div className="space-y-2">
-          <Button disabled className="text-lg px-6 py-3 h-auto bg-green-600 flex items-center justify-center gap-2">
+        <div className="space-y-2 w-full">
+          <Button disabled size="sm" className="bg-green-600 text-white shadow-lg text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
             <CheckCircle className="h-5 w-5" /> Pause effectuée
           </Button>
           <p className="text-xs text-green-600 dark:text-green-400">Pause de {REQUIRED_BREAK_MINUTES} min terminée</p>
         </div>
       ) : (
         // Commencer une nouvelle pause
-        <div className="space-y-2">
+        <div className="space-y-2 w-full">
           <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="text-lg px-6 py-3 h-auto border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2">
-                <Coffee className="h-5 w-5" /> Prendre une pause
+              <Button variant="outline" size="sm" className="border-2 border-gray-300 hover:bg-gray-50 bg-white text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
+                <Coffee className="h-4 w-4" /> Prendre une pause
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md bg-white">
@@ -186,7 +186,7 @@ export function BreakManager({
             </DialogContent>
           </Dialog>
           <p className="text-xs text-red-600 mt-1 flex items-center justify-center gap-1">
-            <AlertTriangle className="h-4 w-4" /> Pause de {REQUIRED_BREAK_MINUTES} min obligatoire
+            <AlertTriangle className="h-3 w-3" /> Pause de {REQUIRED_BREAK_MINUTES} min obligatoire
           </p>
         </div>
       )}

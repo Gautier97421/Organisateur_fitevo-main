@@ -19,6 +19,8 @@ const tableMapping: { [key: string]: string } = {
   user_gyms: 'userGym',
   new_member_instruction_items: 'newMemberInstructionItem',
   app_config: 'appConfig',
+  custom_pages: 'customPage',
+  custom_page_items: 'customPageItem',
 }
 
 // Mapper les champs du schéma Prisma vers les noms attendus par le client
@@ -195,6 +197,42 @@ function mapFieldsToClient(table: string, data: any): any {
   if (mapped.updatedAt !== undefined) {
     mapped.updated_at = mapped.updatedAt
     delete mapped.updatedAt
+  }
+  
+  // Mapper les champs de custom_pages
+  if (table === 'custom_pages') {
+    if (mapped.orderIndex !== undefined) {
+      mapped.order_index = mapped.orderIndex
+      delete mapped.orderIndex
+    }
+    if (mapped.isActive !== undefined) {
+      mapped.is_active = mapped.isActive
+      delete mapped.isActive
+    }
+    if (mapped.visibleTo !== undefined) {
+      mapped.visible_to = mapped.visibleTo
+      delete mapped.visibleTo
+    }
+    if (mapped.createdBy !== undefined) {
+      mapped.created_by = mapped.createdBy
+      delete mapped.createdBy
+    }
+  }
+  
+  // Mapper les champs de custom_page_items
+  if (table === 'custom_page_items') {
+    if (mapped.pageId !== undefined) {
+      mapped.page_id = mapped.pageId
+      delete mapped.pageId
+    }
+    if (mapped.orderIndex !== undefined) {
+      mapped.order_index = mapped.orderIndex
+      delete mapped.orderIndex
+    }
+    if (mapped.isActive !== undefined) {
+      mapped.is_active = mapped.isActive
+      delete mapped.isActive
+    }
   }
   
   // Pour les users qui sont des admins/employees, mapper le role vers is_super_admin

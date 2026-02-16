@@ -365,6 +365,21 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const completedTasksData = tasks.filter((task) => task.completed)
       const userId = localStorage.getItem("userId") || ""
       const today = new Date().toISOString().split('T')[0]
+      
+      // Récupérer le temps de pause depuis le localStorage
+      const breakState = localStorage.getItem("employeeBreakState")
+      let totalBreakTime = 0
+      if (breakState) {
+        const parsed = JSON.parse(breakState)
+        totalBreakTime = parsed.accumulatedBreakTime || 0
+        // Si une pause est en cours, ajouter sa durée
+        if (parsed.isOnBreak && parsed.breakStartTime) {
+          const now = new Date()
+          const breakStart = new Date(parsed.breakStartTime)
+          const currentBreakDuration = Math.floor((now.getTime() - breakStart.getTime()) / 1000 / 60)
+          totalBreakTime += currentBreakDuration
+        }
+      }
 
       // Mettre à jour work_schedules pour marquer la fin de la session
       const scheduleResponse = await fetch(`/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`)
@@ -378,12 +393,14 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
         )
         
         if (activeSchedule) {
-          // Mettre à jour avec l'heure de fin
+          // Mettre à jour avec l'heure de fin et le temps de pause
+          const updatedNotes = activeSchedule.notes + ` | Pause: ${totalBreakTime} min`
           await fetch(`/api/db/work_schedules/${activeSchedule.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              end_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+              end_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              notes: updatedNotes
             })
           })
         }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TodoList } from "@/components/employee/todo-list"
@@ -10,8 +11,16 @@ import { CalendarView } from "@/components/employee/calendar-view"
 import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
+import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, HardHat, AlertTriangle, Home, Lock, Sunrise, Sunset, Sun, Calendar } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, HardHat, AlertTriangle, Home, Lock, Sunrise, Sunset, Sun, Calendar, ChevronDown } from "lucide-react"
+import * as Icons from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -43,6 +52,12 @@ export default function EmployeePage() {
   const [showNoTasksDialog, setShowNoTasksDialog] = useState(false)
   const [noTasksPeriodName, setNoTasksPeriodName] = useState("")
   const [showNoGymDialog, setShowNoGymDialog] = useState(false)
+  const [showWifiRestrictionDialog, setShowWifiRestrictionDialog] = useState(false)
+  const [showLogoutBlockedDialog, setShowLogoutBlockedDialog] = useState(false)
+  const [sessionCompleted, setSessionCompleted] = useState(false)
+  const [customPages, setCustomPages] = useState<any[]>([])
+  const [selectedCustomPage, setSelectedCustomPage] = useState<any | null>(null)
+  const [showCustomPageDialog, setShowCustomPageDialog] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -92,6 +107,13 @@ export default function EmployeePage() {
               const period = periodMatch[1] as 'matin' | 'aprem' | 'journee'
               setSelectedPeriod(period)
               setCurrentView('tasks')
+              
+              // Restaurer aussi la salle depuis la note ou le localStorage
+              const gymIdMatch = activeSchedule.notes?.match(/GymId:\s*([a-zA-Z0-9-]+)/)
+              if (gymIdMatch && gymIdMatch[1]) {
+                // La salle sera chargée par loadAssignedGyms qui restaure depuis localStorage
+                localStorage.setItem(`employee_${email}_selectedGym`, gymIdMatch[1])
+              }
               return
             }
           }
@@ -128,6 +150,9 @@ export default function EmployeePage() {
 
     // Charger les instructions de nouveau adhérent
     loadInstructions()
+    
+    // Charger les pages personnalisées
+    loadCustomPages()
   }, [])
   const loadUserPermissions = async (email: string) => {
     try {
@@ -194,6 +219,44 @@ export default function EmployeePage() {
     }
   }
 
+  const loadCustomPages = async () => {
+    try {
+      const response = await fetch("/api/db/custom_pages?is_active=true&orderBy=order_index&orderDir=asc")
+      if (response.ok) {
+        const result = await response.json()
+        const pages = result.data || []
+        console.log('Custom pages loaded:', pages)
+        
+        // Charger les items pour chaque page
+        const pagesWithItems = await Promise.all(
+          pages.map(async (page: any) => {
+            const itemsResponse = await fetch(`/api/db/custom_page_items?page_id=${page.id}&is_active=true&orderBy=order_index&orderDir=asc`)
+            if (itemsResponse.ok) {
+              const itemsResult = await itemsResponse.json()
+              console.log(`Items for page ${page.id}:`, itemsResult.data)
+              return { ...page, items: itemsResult.data || [] }
+            }
+            return { ...page, items: [] }
+          })
+        )
+        
+        console.log('Pages with items:', pagesWithItems)
+        
+        // Ne garder que les pages avec au moins un item actif
+        const pagesWithActiveItems = pagesWithItems.filter(page => page.items.length > 0)
+        console.log('Pages with active items:', pagesWithActiveItems)
+        setCustomPages(pagesWithActiveItems)
+      }
+    } catch (error) {
+      console.error('Error loading custom pages:', error)
+    }
+  }
+
+  const handleOpenCustomPage = (page: any) => {
+    setSelectedCustomPage(page)
+    setShowCustomPageDialog(true)
+  }
+
   // Sauvegarder l'état quand il change
   useEffect(() => {
     if (currentView !== "menu") {
@@ -217,6 +280,12 @@ export default function EmployeePage() {
   }, [isOnBreak, accumulatedBreakTime, breakStartTime])
 
   const handleLogout = () => {
+    // Bloquer la déconnexion si une période de travail est active et non terminée
+    if (selectedPeriod && !sessionCompleted) {
+      setShowLogoutBlockedDialog(true)
+      return
+    }
+    
     // Nettoyer l'état de session
     localStorage.removeItem("employeeCurrentView")
     localStorage.removeItem("employeeSelectedPeriod")
@@ -260,7 +329,30 @@ export default function EmployeePage() {
     setShowGymSelectionDialog(true)
   }
 
-  const selectGymAndContinue = (gym: any) => {
+  const selectGymAndContinue = async (gym: any) => {
+    // Vérifier la restriction WiFi si la salle l'exige
+    if (gym.wifi_restricted) {
+      try {
+        const response = await fetch('/api/network-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gymId: gym.id })
+        })
+        const data = await response.json()
+        
+        if (!data.allowed) {
+          setShowGymSelectionDialog(false)
+          setShowWifiRestrictionDialog(true)
+          return
+        }
+      } catch (error) {
+        // En cas d'erreur réseau, bloquer par sécurité
+        setShowGymSelectionDialog(false)
+        setShowWifiRestrictionDialog(true)
+        return
+      }
+    }
+    
     setSelectedGym(gym)
     localStorage.setItem(`employee_${userEmail}_selectedGym`, gym.id)
     setShowGymSelectionDialog(false)
@@ -369,7 +461,7 @@ export default function EmployeePage() {
               start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
               end_time: '',
               type: 'work',
-              notes: `Période: ${pendingPeriod}`
+              notes: `Période: ${pendingPeriod}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
             }
           })
         })
@@ -377,6 +469,8 @@ export default function EmployeePage() {
         // Stocker aussi en localStorage comme backup
         localStorage.setItem(`employee_${userId}_period`, pendingPeriod)
         localStorage.setItem(`employee_${userId}_sessionDate`, today)
+        // Réinitialiser le flag de session terminée pour la nouvelle période
+        setSessionCompleted(false)
       } catch (error) {
         // Erreur silencieuse
       }
@@ -396,12 +490,21 @@ export default function EmployeePage() {
   }
 
   const handleSessionEnd = () => {
+    // Marquer la session comme terminée pour permettre la déconnexion
+    setSessionCompleted(true)
+    
     // Réinitialiser l'état de l'employé et revenir au menu
     setSelectedPeriod(null)
     setCurrentView("menu")
     setAccumulatedBreakTime(0)
     setIsOnBreak(false)
     setBreakStartTime(null)
+    setSelectedGym(null)
+    
+    // Nettoyer les données de session du localStorage
+    const userId = localStorage.getItem("userId") || ""
+    localStorage.removeItem(`employee_${userId}_period`)
+    localStorage.removeItem(`employee_${userId}_sessionDate`)
   }
 
   const getPeriodEmoji = (period: "matin" | "aprem" | "journee") => {
@@ -717,6 +820,62 @@ export default function EmployeePage() {
           </DialogContent>
         </Dialog>
 
+        {/* Dialog "Restriction WiFi" */}
+        <Dialog open={showWifiRestrictionDialog} onOpenChange={setShowWifiRestrictionDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <Lock className="h-6 w-6 text-red-600" />
+                <span>Accès réseau requis</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm md:text-base text-gray-600 mb-3">
+                Cette salle nécessite que vous soyez connecté au réseau WiFi de l'établissement.
+              </p>
+              <p className="text-sm text-gray-500">
+                Veuillez vous connecter au WiFi de la salle et réessayer. Si vous pensez être déjà connecté au bon réseau, contactez un administrateur.
+              </p>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button
+                onClick={() => setShowWifiRestrictionDialog(false)}
+                className="bg-red-600 hover:bg-red-700 flex-1"
+              >
+                Compris
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog "Déconnexion bloquée" */}
+        <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-6 w-6 text-orange-500" />
+                <span>Déconnexion impossible</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm md:text-base text-gray-600 mb-3">
+                Vous avez une période de travail en cours qui n'est pas terminée.
+              </p>
+              <p className="text-sm text-gray-500">
+                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
+              </p>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button
+                onClick={() => setShowLogoutBlockedDialog(false)}
+                className="bg-red-600 hover:bg-red-700 flex-1"
+              >
+                Retour aux tâches
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Dialog "Aucune salle assignée" */}
         <Dialog open={showNoGymDialog} onOpenChange={setShowNoGymDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
@@ -780,14 +939,26 @@ export default function EmployeePage() {
               </div>
             </div>
             <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto">
-              <Button
-                onClick={() => setCurrentView("menu")}
-                variant="outline"
-                size="sm"
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-              >
-                🏠 Menu
-              </Button>
+              {/* Si période en cours, bouton retour aux tâches, sinon menu */}
+              {selectedPeriod ? (
+                <Button
+                  onClick={() => setCurrentView("tasks")}
+                  variant="outline"
+                  size="sm"
+                  className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
+                >
+                  ← Tâches
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setCurrentView("menu")}
+                  variant="outline"
+                  size="sm"
+                  className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
+                >
+                  🏠 Menu
+                </Button>
+              )}
               <Button
                 onClick={handleLogout}
                 variant="outline"
@@ -804,6 +975,34 @@ export default function EmployeePage() {
           {hasCalendarAccess && <CalendarView hasWorkScheduleAccess={hasWorkScheduleAccess} hasCalendarAccess={hasCalendarAccess} />}
           {!hasCalendarAccess && hasWorkScheduleAccess && <WorkScheduleCalendar />}
         </div>
+
+        {/* Dialog "Déconnexion bloquée" (vue calendrier) */}
+        <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-6 w-6 text-orange-500" />
+                <span>Déconnexion impossible</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm md:text-base text-gray-600 mb-3">
+                Vous avez une période de travail en cours qui n'est pas terminée.
+              </p>
+              <p className="text-sm text-gray-500">
+                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter.
+              </p>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button
+                onClick={() => setShowLogoutBlockedDialog(false)}
+                className="bg-red-600 hover:bg-red-700 flex-1"
+              >
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -815,10 +1014,15 @@ export default function EmployeePage() {
       <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
           <div className="flex items-center space-x-3 md:space-x-4">
-            <div
-              className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg"
-            >
-              {selectedPeriod ? getPeriodEmoji(selectedPeriod) : <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />}
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg overflow-hidden p-1.5">
+              <Image
+                src="/Logo-removebg-preview.png"
+                alt="FitEvo Logo"
+                width={48}
+                height={48}
+                className="object-contain"
+                priority
+              />
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">
@@ -829,8 +1033,19 @@ export default function EmployeePage() {
               </p>
             </div>
           </div>
-          <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto">
-            {/* Pas de bouton Menu ici - l'employé ne peut plus changer de période */}
+          <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto flex-wrap gap-2">
+            {/* Bouton Calendrier si accès */}
+            {(hasCalendarAccess || hasWorkScheduleAccess) && (
+              <Button
+                onClick={() => setCurrentView("calendar")}
+                variant="outline"
+                size="sm"
+                className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
+              >
+                <Calendar className="w-4 h-4 mr-1" />
+                Calendrier
+              </Button>
+            )}
             <Button
               onClick={handleLogout}
               variant="outline"
@@ -849,7 +1064,15 @@ export default function EmployeePage() {
           <div className="flex flex-col gap-4">
             {/* Titre et salle */}
             <div className="flex items-center gap-3">
-              <span className="text-3xl md:text-4xl lg:text-5xl">{selectedPeriod && getPeriodEmoji(selectedPeriod)}</span>
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 p-2">
+                <Image
+                  src="/Logo-removebg-preview.png"
+                  alt="FitEvo Logo"
+                  width={64}
+                  height={64}
+                  className="object-contain"
+                />
+              </div>
               <div className="flex-1">
                 <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">
                   To-Do List {selectedPeriod && getPeriodText(selectedPeriod)}
@@ -873,14 +1096,50 @@ export default function EmployeePage() {
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto lg:flex-shrink-0">
-                <Button
-                  onClick={() => setShowInstructionsDialog(true)}
-                  size="sm"
-                  className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
-                >
-                  <UserPlus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                  Nouveau Adhérent
-                </Button>
+                {/* Affichage dynamique des pages personnalisées */}
+                {customPages.length === 1 ? (
+                  // Une seule page : afficher un bouton direct
+                  <Button
+                    onClick={() => handleOpenCustomPage(customPages[0])}
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
+                  >
+                    {(() => {
+                      const IconComponent = (Icons as any)[customPages[0].icon] || Icons.FileText
+                      return <IconComponent className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                    })()}
+                    {customPages[0].title}
+                  </Button>
+                ) : customPages.length > 1 ? (
+                  // Plusieurs pages : afficher un dropdown
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
+                      >
+                        <Icons.FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                        Pages d'aide
+                        <ChevronDown className="w-3 h-3 md:w-4 md:h-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {customPages.map((page) => {
+                        const IconComponent = (Icons as any)[page.icon] || Icons.FileText
+                        return (
+                          <DropdownMenuItem
+                            key={page.id}
+                            onClick={() => handleOpenCustomPage(page)}
+                            className="cursor-pointer"
+                          >
+                            <IconComponent className="w-4 h-4 mr-2" />
+                            {page.title}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
                 <BreakManager
                   isOnBreak={isOnBreak}
                   breakStartTime={breakStartTime}
@@ -904,6 +1163,46 @@ export default function EmployeePage() {
         open={showInstructionsDialog}
         onOpenChange={setShowInstructionsDialog}
       />
+
+      {/* Dialog pour afficher une page personnalisée */}
+      {selectedCustomPage && (
+        <CustomPageDialog
+          pageTitle={selectedCustomPage.title}
+          pageIcon={selectedCustomPage.icon}
+          pageDescription={selectedCustomPage.description}
+          items={selectedCustomPage.items}
+          open={showCustomPageDialog}
+          onOpenChange={setShowCustomPageDialog}
+        />
+      )}
+
+      {/* Dialog "Déconnexion bloquée" (vue tâches) */}
+      <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+              <AlertTriangle className="h-6 w-6 text-orange-500" />
+              <span>Déconnexion impossible</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm md:text-base text-gray-600 mb-3">
+              Vous avez une période de travail en cours qui n'est pas terminée.
+            </p>
+            <p className="text-sm text-gray-500">
+              Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              onClick={() => setShowLogoutBlockedDialog(false)}
+              className="bg-red-600 hover:bg-red-700 flex-1"
+            >
+              Retour aux tâches
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
