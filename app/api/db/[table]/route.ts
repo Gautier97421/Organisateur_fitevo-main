@@ -21,6 +21,7 @@ const tableMapping: { [key: string]: string } = {
   app_config: 'appConfig',
   custom_pages: 'customPage',
   custom_page_items: 'customPageItem',
+  roles: 'role',
 }
 
 // Mapper les champs du schéma Prisma vers les noms attendus par le client
@@ -209,9 +210,9 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.is_active = mapped.isActive
       delete mapped.isActive
     }
-    if (mapped.visibleTo !== undefined) {
-      mapped.visible_to = mapped.visibleTo
-      delete mapped.visibleTo
+    if (mapped.roleIds !== undefined) {
+      mapped.role_ids = mapped.roleIds
+      delete mapped.roleIds
     }
     if (mapped.createdBy !== undefined) {
       mapped.created_by = mapped.createdBy

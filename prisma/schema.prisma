@@ -280,7 +280,7 @@ model CustomPage {
   description String?  @db.Text
   orderIndex  Int      @map("order_index")
   isActive    Boolean  @default(true) @map("is_active")
-  visibleTo   String   @default("admin") @map("visible_to") // "admin" ou "superadmin"
+  roleIds     Json?    @map("role_ids") // IDs des rôles autorisés à voir cette page
   createdBy   String   @map("created_by")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

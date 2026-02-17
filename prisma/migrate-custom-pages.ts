@@ -20,7 +20,7 @@ async function main() {
           description: 'Procédure d\'inscription d\'un nouveau membre',
           orderIndex: 1,
           isActive: true,
-          visibleTo: 'admin',
+          roleIds: null, // Accessible à tous par défaut
           createdBy: 'system'
         }
       })

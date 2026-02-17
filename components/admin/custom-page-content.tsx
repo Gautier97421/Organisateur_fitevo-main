@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { Loader2, Plus, Trash2, Check, X, Edit, GripVertical, Eye, EyeOff } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Loader2, Plus, Trash2, Check, X, Edit, GripVertical, Eye, EyeOff, Users, Shield } from "lucide-react"
 import * as LucideIcons from "lucide-react"
 import {
   DndContext,
@@ -34,6 +35,12 @@ interface CustomPageItem {
   description: string | null
   orderIndex: number
   isActive: boolean
+}
+
+interface Role {
+  id: string
+  name: string
+  color: string
 }
 
 interface CustomPageContentProps {
@@ -209,6 +216,9 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
   const [newDescription, setNewDescription] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [roles, setRoles] = useState<Role[]>([])
+  const [pageRoleIds, setPageRoleIds] = useState<string[]>([])
+  const [showRolesDialog, setShowRolesDialog] = useState(false)
 
   const IconComponent = (LucideIcons as any)[pageIcon]
 
@@ -226,8 +236,39 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     }
   }
 
+  const loadRoles = async () => {
+    try {
+      const response = await fetch("/api/db/roles?orderBy=name")
+      if (response.ok) {
+        const result = await response.json()
+        setRoles(Array.isArray(result.data) ? result.data : [])
+      }
+    } catch (error) {
+      console.error("Error loading roles:", error)
+    }
+  }
+
+  const loadPageRoles = async () => {
+    try {
+      const response = await fetch(`/api/custom-pages?id=${pageId}`)
+      if (response.ok) {
+        const result = await response.json()
+        const page = result.data
+        if (page && page.roleIds) {
+          setPageRoleIds(Array.isArray(page.roleIds) ? page.roleIds : [])
+        } else {
+          setPageRoleIds([])
+        }
+      }
+    } catch (error) {
+      console.error("Error loading page roles:", error)
+    }
+  }
+
   useEffect(() => {
     loadItems()
+    loadRoles()
+    loadPageRoles()
   }, [pageId])
 
   useAutoRefresh(loadItems, 30000)
@@ -328,6 +369,48 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     }
   }
 
+  const toggleRoleInPage = (roleId: string) => {
+    setPageRoleIds(prev => {
+      if (prev.includes(roleId)) {
+        return prev.filter(id => id !== roleId)
+      } else {
+        return [...prev, roleId]
+      }
+    })
+  }
+
+  const handleUpdatePageRoles = async () => {
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/custom-pages?id=${pageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleIds: pageRoleIds })
+      })
+
+      if (response.ok) {
+        setShowRolesDialog(false)
+        await loadPageRoles()
+      }
+    } catch (error) {
+      console.error("Error updating page roles:", error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const getRoleColor = (color: string) => {
+    const colorMap: { [key: string]: string } = {
+      rouge: "bg-red-100 text-red-800 border-red-300",
+      bleu: "bg-blue-100 text-blue-800 border-blue-300",
+      vert: "bg-green-100 text-green-800 border-green-300",
+      jaune: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      orange: "bg-orange-100 text-orange-800 border-orange-300",
+      mauve: "bg-purple-100 text-purple-800 border-purple-300",
+    }
+    return colorMap[color.toLowerCase()] || "bg-gray-100 text-gray-800 border-gray-300"
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -384,14 +467,24 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
             {IconComponent && <IconComponent className="w-5 h-5 md:w-6 md:h-6 text-red-600" />}
             {pageTitle}
           </CardTitle>
-          <Button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
-            size="sm"
-          >
-            <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-            Ajouter une étape
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              onClick={() => setShowRolesDialog(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-initial"
+              size="sm"
+            >
+              <Users className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              Assignation aux rôles
+            </Button>
+            <Button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-initial"
+              size="sm"
+            >
+              <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              Ajouter une étape
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-3 md:p-6 space-y-3 md:space-y-4">
@@ -517,6 +610,79 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
           </AlertDialogContent>
         </AlertDialog>
       </CardContent>
+
+      {/* Dialog d'assignation des rôles */}
+      <Dialog open={showRolesDialog} onOpenChange={setShowRolesDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-600" />
+              Assignation aux rôles
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Sélectionnez les rôles qui auront accès à cette page personnalisée. Si aucun rôle n'est sélectionné, tous les employés auront accès.
+            </p>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {roles.map((role) => (
+                <div
+                  key={role.id}
+                  onClick={() => toggleRoleInPage(role.id)}
+                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    pageRoleIds.includes(role.id)
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <div className="flex-shrink-0">
+                    {pageRoleIds.includes(role.id) ? (
+                      <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <span className={`text-sm font-medium px-2 py-1 rounded-md border ${
+                      getRoleColor(role.color)
+                    }`}>
+                      {role.name}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setShowRolesDialog(false)}
+              variant="outline"
+              disabled={isSaving}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdatePageRoles}
+              disabled={isSaving}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Enregistrer
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle } from "lucide-react"
+import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle, Wifi, Loader2 } from "lucide-react"
 import { supabase, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { QRCodeDisplay } from "./qr-code-display"
@@ -34,6 +34,7 @@ export function GymManager() {
   })
   const [isAddingGym, setIsAddingGym] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingIp, setIsLoadingIp] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedGym, setSelectedGym] = useState<{ id: string; name: string } | null>(null)
   const [isEditingGym, setIsEditingGym] = useState(false)
@@ -48,6 +49,34 @@ export function GymManager() {
     is_active: boolean
     qr_code_enabled: boolean
   } | null>(null)
+
+  // Fonction pour récupérer l'IP actuelle
+  const fetchCurrentIp = async (isEdit: boolean = false) => {
+    setIsLoadingIp(true)
+    try {
+      const response = await fetch('/api/get-ip')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.ip && result.ip !== "unknown") {
+          if (isEdit && editGym) {
+            setEditGym({ ...editGym, ip_address: result.ip })
+          } else {
+            setNewGym(prev => ({ ...prev, ip_address: result.ip }))
+          }
+          if (result.isLocal) {
+            alert("⚠️ Vous êtes en réseau local. En production, l'IP publique de la salle sera détectée automatiquement.")
+          }
+        } else {
+          alert("Impossible de détecter l'adresse IP. Vérifiez votre connexion.")
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching IP:", error)
+      alert("Erreur lors de la récupération de l'adresse IP")
+    } finally {
+      setIsLoadingIp(false)
+    }
+  }
 
   const loadGyms = async () => {
     try {
@@ -309,7 +338,7 @@ export function GymManager() {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="gym-wifi-ssid" className="dark:text-gray-300">Nom du réseau (SSID)</Label>
                       <Input
@@ -321,25 +350,37 @@ export function GymManager() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="gym-ip" className="flex items-center gap-2 dark:text-gray-300">
-                        Adresse IP
-                        <a
-                          href="https://whatismyipaddress.com/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 flex hover:text-blue-700 dark:hover:text-blue-300"
-                          title="Trouver votre adresse IP"
-                        > Lien pour trouver son IP
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
+                      <Label htmlFor="gym-ip" className="dark:text-gray-300">
+                        Adresse IP de la salle
                       </Label>
-                      <Input
-                        id="gym-ip"
-                        value={newGym.ip_address}
-                        onChange={(e) => setNewGym({ ...newGym, ip_address: e.target.value })}
-                        placeholder="192.168.1.1"
-                        className="border-2 rounded-xl"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          id="gym-ip"
+                          value={newGym.ip_address}
+                          onChange={(e) => setNewGym({ ...newGym, ip_address: e.target.value })}
+                          placeholder="Ex: 90.123.45.67"
+                          className="border-2 rounded-xl flex-1"
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => fetchCurrentIp(false)}
+                          disabled={isLoadingIp}
+                          className="bg-green-600 hover:bg-green-700 text-white rounded-xl whitespace-nowrap"
+                          title="Utiliser l'adresse IP de votre connexion actuelle"
+                        >
+                          {isLoadingIp ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Wifi className="h-4 w-4 mr-1" />
+                              Mon IP
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer automatiquement son adresse IP.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -528,7 +569,7 @@ export function GymManager() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
                     </p>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="dark:text-gray-300">Nom du réseau (SSID)</Label>
                         <Input
@@ -538,23 +579,36 @@ export function GymManager() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="flex items-center gap-2 dark:text-gray-300">
-                          Adresse IP
-                          <a
-                            href="https://whatismyipaddress.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 flex hover:text-blue-700 dark:hover:text-blue-300"
-                            title="Trouver votre adresse IP"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
+                        <Label className="dark:text-gray-300">
+                          Adresse IP de la salle
                         </Label>
-                        <Input
-                          value={editGym.ip_address}
-                          onChange={(e) => setEditGym({ ...editGym, ip_address: e.target.value })}
-                          className="border-2 rounded-xl"
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            value={editGym.ip_address}
+                            onChange={(e) => setEditGym({ ...editGym, ip_address: e.target.value })}
+                            placeholder="Ex: 90.123.45.67"
+                            className="border-2 rounded-xl flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => fetchCurrentIp(true)}
+                            disabled={isLoadingIp}
+                            className="bg-green-600 hover:bg-green-700 text-white rounded-xl whitespace-nowrap"
+                            title="Utiliser l'adresse IP de votre connexion actuelle"
+                          >
+                            {isLoadingIp ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Wifi className="h-4 w-4 mr-1" />
+                                Mon IP
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer automatiquement son adresse IP.
+                        </p>
                       </div>
                     </div>
                   </div>

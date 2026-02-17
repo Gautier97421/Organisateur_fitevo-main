@@ -227,9 +227,25 @@ export default function EmployeePage() {
         const pages = result.data || []
         console.log('Custom pages loaded:', pages)
         
-        // Charger les items pour chaque page
+        // Filtrer les pages selon le rôle de l'utilisateur
+        const filteredPages = pages.filter((page: any) => {
+          // Si roleIds est null ou vide, la page est accessible à tous
+          if (!page.roleIds || (Array.isArray(page.roleIds) && page.roleIds.length === 0)) {
+            return true
+          }
+          // Si l'utilisateur a un roleId, vérifier s'il est dans la liste
+          if (userRoleId && Array.isArray(page.roleIds)) {
+            return page.roleIds.includes(userRoleId)
+          }
+          // Par défaut, ne pas afficher la page
+          return false
+        })
+        
+        console.log('Filtered pages by role:', filteredPages)
+        
+        // Charger les items pour chaque page filtrée
         const pagesWithItems = await Promise.all(
-          pages.map(async (page: any) => {
+          filteredPages.map(async (page: any) => {
             const itemsResponse = await fetch(`/api/db/custom_page_items?page_id=${page.id}&is_active=true&orderBy=order_index&orderDir=asc`)
             if (itemsResponse.ok) {
               const itemsResult = await itemsResponse.json()
@@ -577,8 +593,8 @@ export default function EmployeePage() {
         <div className="max-w-4xl mx-auto p-3 md:p-8">
           <Card className="shadow-2xl border border-gray-200 bg-white">
             <CardHeader className="text-center pb-4 md:pb-8">
-              <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-full flex items-center justify-center mb-3 md:mb-4 shadow-lg">
-                <Home className="h-7 w-7 md:h-9 md:w-9 text-white" />
+              <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-white/10 backdrop-blur rounded-2xl flex items-center justify-center mb-3 md:mb-4 shadow-lg">
+                <Home className="h-7 w-7 md:h-9 md:w-9 text-gray-900" />
               </div>
               <CardTitle className="text-2xl md:text-3xl text-gray-900">
                 Que souhaitez-vous faire ?
@@ -926,8 +942,8 @@ export default function EmployeePage() {
         <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
             <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg">
+                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-gray-900" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-900">
@@ -1014,7 +1030,7 @@ export default function EmployeePage() {
       <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
           <div className="flex items-center space-x-3 md:space-x-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg overflow-hidden p-1.5">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-black/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg overflow-hidden p-1.5">
               <Image
                 src="/Logo-removebg-preview.png"
                 alt="FitEvo Logo"
@@ -1064,7 +1080,7 @@ export default function EmployeePage() {
           <div className="flex flex-col gap-4">
             {/* Titre et salle */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 p-2">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-black/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 p-2">
                 <Image
                   src="/Logo-removebg-preview.png"
                   alt="FitEvo Logo"

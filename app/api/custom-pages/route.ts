@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma"
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const visibleTo = searchParams.get("visibleTo")
     const includeInactive = searchParams.get("includeInactive") === "true"
     
     const where: any = {}
@@ -12,10 +11,6 @@ export async function GET(request: NextRequest) {
     // Si on ne demande pas spécifiquement les inactives, on ne prend que les actives
     if (!includeInactive) {
       where.isActive = true
-    }
-    
-    if (visibleTo) {
-      where.visibleTo = visibleTo
     }
 
     const pages = await prisma.customPage.findMany({
@@ -41,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, icon, description, visibleTo, createdBy } = body
+    const { title, icon, description, roleIds, createdBy } = body
 
     // Récupérer le dernier orderIndex
     const lastPage = await prisma.customPage.findFirst({
@@ -54,7 +49,7 @@ export async function POST(request: NextRequest) {
         title,
         icon,
         description,
-        visibleTo: visibleTo || "admin",
+        roleIds: roleIds || null,
         createdBy,
         orderIndex: nextOrder,
         isActive: true

@@ -19,7 +19,7 @@ async function main() {
           description: 'Procédure complète d\'inscription d\'un nouveau membre',
           orderIndex: 1,
           isActive: true,
-          visibleTo: 'admin',
+          roleIds: null,
           createdBy: 'system',
           items: {
             create: [
@@ -75,7 +75,7 @@ async function main() {
           description: 'Étapes à suivre pour fermer la salle en fin de journée',
           orderIndex: 2,
           isActive: true,
-          visibleTo: 'admin',
+          roleIds: null,
           createdBy: 'system',
           items: {
             create: [
@@ -137,7 +137,7 @@ async function main() {
           description: 'Étapes à suivre pour ouvrir la salle en début de journée',
           orderIndex: 3,
           isActive: true,
-          visibleTo: 'admin',
+          roleIds: null,
           createdBy: 'system',
           items: {
             create: [

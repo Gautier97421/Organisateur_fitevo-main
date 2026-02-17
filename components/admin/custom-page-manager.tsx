@@ -9,8 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { Save, Loader2, Plus, Trash2, Check, X, Edit, LayoutDashboard, Eye, EyeOff } from "lucide-react"
+import { Save, Loader2, Plus, Trash2, Check, X, Edit, LayoutDashboard, Eye, EyeOff, Users, Shield } from "lucide-react"
 import * as LucideIcons from "lucide-react"
+
+interface Role {
+  id: string
+  name: string
+  color: string
+}
 
 interface CustomPage {
   id: string
@@ -19,7 +25,7 @@ interface CustomPage {
   description: string | null
   orderIndex: number
   isActive: boolean
-  visibleTo: string
+  roleIds: string[] | null
   createdBy: string
   items?: Array<{
     id: number
@@ -32,16 +38,19 @@ interface CustomPage {
 
 export function CustomPageManager() {
   const [pages, setPages] = useState<CustomPage[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [showRolesDialog, setShowRolesDialog] = useState<string | null>(null)
   
   // Form fields
   const [formTitle, setFormTitle] = useState("")
   const [formIcon, setFormIcon] = useState("FileText")
   const [formDescription, setFormDescription] = useState("")
+  const [formRoleIds, setFormRoleIds] = useState<string[]>([])
 
   const loadPages = async () => {
     try {
@@ -58,8 +67,22 @@ export function CustomPageManager() {
     }
   }
 
+  const loadRoles = async () => {
+    try {
+      const response = await fetch("/api/db/roles?orderBy=name")
+      if (response.ok) {
+        const result = await response.json()
+        const rolesData = Array.isArray(result.data) ? result.data : []
+        setRoles(rolesData)
+      }
+    } catch (error) {
+      console.error("Error loading roles:", error)
+    }
+  }
+
   useEffect(() => {
     loadPages()
+    loadRoles()
   }, [])
 
   useAutoRefresh(loadPages, 30000)
@@ -68,6 +91,7 @@ export function CustomPageManager() {
     setFormTitle("")
     setFormIcon("FileText")
     setFormDescription("")
+    setFormRoleIds([])
     setEditingId(null)
     setShowAddForm(false)
   }
@@ -86,7 +110,7 @@ export function CustomPageManager() {
           title: formTitle,
           icon: formIcon,
           description: formDescription || null,
-          visibleTo: "admin",
+          roleIds: formRoleIds.length > 0 ? formRoleIds : null,
           createdBy: userEmail
         })
       })
@@ -107,6 +131,7 @@ export function CustomPageManager() {
     setFormTitle(page.title)
     setFormIcon(page.icon)
     setFormDescription(page.description || "")
+    setFormRoleIds(Array.isArray(page.roleIds) ? page.roleIds : [])
     setShowAddForm(true)
   }
 
@@ -121,7 +146,8 @@ export function CustomPageManager() {
         body: JSON.stringify({
           title: formTitle,
           icon: formIcon,
-          description: formDescription || null
+          description: formDescription || null,
+          roleIds: formRoleIds.length > 0 ? formRoleIds : null
         })
       })
 
@@ -134,6 +160,50 @@ export function CustomPageManager() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleUpdateRoles = async (pageId: string, newRoleIds: string[]) => {
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/custom-pages?id=${pageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleIds: newRoleIds.length > 0 ? newRoleIds : null
+        })
+      })
+
+      if (response.ok) {
+        await loadPages()
+        setShowRolesDialog(null)
+      }
+    } catch (error) {
+      console.error("Error updating roles:", error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const toggleRoleInForm = (roleId: string) => {
+    setFormRoleIds(prev => 
+      prev.includes(roleId) 
+        ? prev.filter(id => id !== roleId)
+        : [...prev, roleId]
+    )
+  }
+
+  const getRoleById = (roleId: string) => roles.find(r => r.id === roleId)
+
+  const getRoleColor = (color: string) => {
+    const colors: Record<string, string> = {
+      rouge: "bg-red-100 text-red-700 border-red-300",
+      bleu: "bg-blue-100 text-blue-700 border-blue-300",
+      vert: "bg-green-100 text-green-700 border-green-300",
+      jaune: "bg-yellow-100 text-yellow-700 border-yellow-300",
+      orange: "bg-orange-100 text-orange-700 border-orange-300",
+      mauve: "bg-purple-100 text-purple-700 border-purple-300"
+    }
+    return colors[color] || "bg-gray-100 text-gray-700 border-gray-300"
   }
 
   const confirmDelete = async () => {
@@ -272,6 +342,44 @@ export function CustomPageManager() {
                 />
               </div>
 
+              {/* Sélecteur de rôles */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  Rôles autorisés
+                </Label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Sélectionnez les rôles qui peuvent voir cette page. Laissez vide pour que tous les employés y aient accès.
+                </p>
+                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {roles.length === 0 ? (
+                    <span className="text-sm text-gray-500 italic">Aucun rôle créé</span>
+                  ) : (
+                    roles.map(role => (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => toggleRoleInForm(role.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                          formRoleIds.includes(role.id)
+                            ? getRoleColor(role.color) + " ring-2 ring-offset-1 ring-gray-400"
+                            : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                        }`}
+                      >
+                        {formRoleIds.includes(role.id) && <Check className="w-3 h-3 inline mr-1" />}
+                        {role.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+                {formRoleIds.length === 0 && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    Accessible à tous les employés
+                  </p>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <Button
                   onClick={editingId ? handleUpdate : handleAdd}
@@ -315,6 +423,7 @@ export function CustomPageManager() {
             pages.map((page) => {
               const IconComponent = (LucideIcons as any)[page.icon]
               const itemCount = (page as any).items?.length || 0
+              const pageRoleIds = Array.isArray(page.roleIds) ? page.roleIds : []
               return (
                 <Card key={page.id} className={`border ${page.isActive ? 'border-gray-200' : 'border-gray-300 bg-gray-100 opacity-60'}`}>
                   <CardContent className="p-4">
@@ -331,17 +440,40 @@ export function CustomPageManager() {
                           {page.description && (
                             <p className="text-sm text-gray-600 mt-1">{page.description}</p>
                           )}
-                          <div className="flex gap-2 mt-2 text-xs text-gray-500">
+                          <div className="flex flex-wrap gap-2 mt-2 text-xs">
                             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
                               📋 {itemCount} étape{itemCount !== 1 ? 's' : ''}
                             </span>
-                            <span className="px-2 py-1 bg-gray-100 rounded">
-                              {page.visibleTo === "admin" ? "👤 Admins" : "⭐ Superadmins"}
-                            </span>
+                            {/* Affichage des rôles autorisés */}
+                            {pageRoleIds.length === 0 ? (
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded flex items-center gap-1">
+                                <Users className="w-3 h-3" /> Tous les employés
+                              </span>
+                            ) : (
+                              pageRoleIds.map(roleId => {
+                                const role = getRoleById(roleId)
+                                if (!role) return null
+                                return (
+                                  <span key={roleId} className={`px-2 py-1 rounded ${getRoleColor(role.color)}`}>
+                                    {role.name}
+                                  </span>
+                                )
+                              })
+                            )}
                           </div>
                         </div>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
+                        {/* Bouton pour modifier les rôles */}
+                        <Button
+                          onClick={() => setShowRolesDialog(page.id)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                          title="Gérer les accès"
+                        >
+                          <Shield className="w-4 h-4" />
+                        </Button>
                         <Button
                           onClick={() => handleEdit(page)}
                           variant="ghost"
@@ -390,6 +522,77 @@ export function CustomPageManager() {
               <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
                 Supprimer
               </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Dialog de gestion des rôles */}
+        <AlertDialog open={showRolesDialog !== null} onOpenChange={(open) => !open && setShowRolesDialog(null)}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-purple-600" />
+                Gérer les accès
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Sélectionnez les rôles qui peuvent voir cette page. Si aucun rôle n'est sélectionné, tous les employés y auront accès.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              {(() => {
+                const currentPage = pages.find(p => p.id === showRolesDialog)
+                if (!currentPage) return null
+                const currentRoleIds = Array.isArray(currentPage.roleIds) ? currentPage.roleIds : []
+                
+                return (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 min-h-[80px]">
+                      {roles.length === 0 ? (
+                        <span className="text-sm text-gray-500 italic">Aucun rôle créé. Créez des rôles dans l'onglet "Rôles".</span>
+                      ) : (
+                        roles.map(role => {
+                          const isSelected = currentRoleIds.includes(role.id)
+                          return (
+                            <button
+                              key={role.id}
+                              type="button"
+                              onClick={() => {
+                                const newRoleIds = isSelected
+                                  ? currentRoleIds.filter(id => id !== role.id)
+                                  : [...currentRoleIds, role.id]
+                                handleUpdateRoles(showRolesDialog!, newRoleIds)
+                              }}
+                              disabled={isSaving}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                                isSelected
+                                  ? getRoleColor(role.color) + " ring-2 ring-offset-1 ring-gray-400"
+                                  : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3 inline mr-1" />}
+                              {role.name}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                    {currentRoleIds.length === 0 ? (
+                      <p className="text-sm text-green-600 flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        Actuellement accessible à tous les employés
+                      </p>
+                    ) : (
+                      <p className="text-sm text-purple-600 flex items-center gap-1">
+                        <Shield className="w-4 h-4" />
+                        Accessible uniquement aux {currentRoleIds.length} rôle{currentRoleIds.length > 1 ? 's' : ''} sélectionné{currentRoleIds.length > 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Fermer</AlertDialogCancel>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -21,7 +21,7 @@ interface CustomPage {
   description: string | null
   orderIndex: number
   isActive: boolean
-  visibleTo: string
+  roleIds: any
 }
 
 export default function AdminPage() {
@@ -44,14 +44,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     const loadCustomPages = async () => {
-      // Ne charger les pages personnalisées que pour les admins (pas les superadmins)
+      // Charger toutes les pages actives
       if (userRole === "superadmin") {
         setIsLoadingPages(false)
         return
       }
       
       try {
-        const response = await fetch("/api/custom-pages?visibleTo=admin")
+        const response = await fetch("/api/custom-pages")
         if (response.ok) {
           const result = await response.json()
           setCustomPages(result.data || [])
