@@ -32,7 +32,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Prisma CLI + engines + schema for auto-migration at startup
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-RUN npm install --no-save prisma@6 && chown -R nextjs:nodejs ./node_modules/prisma ./node_modules/@prisma
+RUN npm install --no-save --legacy-peer-deps prisma@6 && chown -R nextjs:nodejs ./node_modules/prisma ./node_modules/@prisma
 
 # Entrypoint (migration + start)
 COPY --chown=nextjs:nodejs entrypoint.sh ./
