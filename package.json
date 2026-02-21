@@ -11,7 +11,13 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "docker:prod:build": "docker compose -f docker-compose.prod.yml build",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up -d",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose -f docker-compose.prod.yml logs -f",
+    "docker:prod:migrate": "docker exec fitevo-web npx prisma db push --skip-generate",
+    "docker:prod:seed": "docker exec fitevo-web npx prisma db seed"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

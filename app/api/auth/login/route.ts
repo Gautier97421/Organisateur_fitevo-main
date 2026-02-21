@@ -4,10 +4,22 @@ import { verifyPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
 import { isValidEmail, isValidString } from '@/lib/validation'
 
-// Rate limiting simple en mémoire (en production utiliser Redis)
+// Rate limiting en mémoire — suffisant pour une instance unique (standalone)
+// Les compteurs sont perdus au redémarrage, ce qui est acceptable
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>()
 const MAX_ATTEMPTS = 5
 const LOCKOUT_TIME = 15 * 60 * 1000 // 15 minutes
+const CLEANUP_INTERVAL = 60 * 60 * 1000 // 1 heure
+
+// Nettoyage périodique pour éviter les fuites mémoire
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, value] of loginAttempts.entries()) {
+    if (now - value.lastAttempt > LOCKOUT_TIME) {
+      loginAttempts.delete(key)
+    }
+  }
+}, CLEANUP_INTERVAL)
 
 function checkRateLimit(identifier: string): { allowed: boolean; remainingTime?: number } {
   const now = Date.now()

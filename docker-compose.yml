@@ -1,3 +1,7 @@
+# Docker Compose - Configuration DÉVELOPPEMENT
+# Pour la production, utilisez docker-compose.prod.yml
+version: '3.8'
+
 services:
   postgres:
     image: postgres:15-alpine

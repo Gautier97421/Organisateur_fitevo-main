@@ -29,13 +29,7 @@ export async function GET(request: NextRequest) {
       isLocal: isLocalIp,
       message: isLocalIp 
         ? "Vous êtes en réseau local. En production, l'IP publique sera détectée automatiquement."
-        : "IP publique détectée avec succès.",
-      headers: {
-        "x-forwarded-for": forwardedFor,
-        "x-real-ip": realIp,
-        "cf-connecting-ip": cfConnectingIp,
-        "true-client-ip": trueClientIp
-      }
+        : "IP publique détectée avec succès."
     })
   } catch (error) {
     console.error("[API] Error getting client IP:", error)
