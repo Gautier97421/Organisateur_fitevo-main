@@ -75,9 +75,6 @@ const nextConfig = {
       '@radix-ui/react-tooltip',
     ],
   },
-  
-  // Configuration pour reverse proxy (NPM)
-  output: 'standalone',
 }
 
 module.exports = nextConfig

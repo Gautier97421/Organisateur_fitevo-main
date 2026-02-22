@@ -17,7 +17,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN pnpm build
 
-# Stage 3: Production (standalone)
+# Stage 3: Production
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl dumb-init && apk upgrade --no-cache
 WORKDIR /app
@@ -25,14 +25,15 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-# Standalone output (server.js + minimal node_modules)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Prisma CLI + engines + schema for auto-migration at startup
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/next.config.js ./
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-RUN npm install --no-save --legacy-peer-deps prisma@6 && chown -R nextjs:nodejs ./node_modules/prisma ./node_modules/@prisma
 
 # Entrypoint (migration + start)
 COPY --chown=nextjs:nodejs entrypoint.sh ./
