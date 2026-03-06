@@ -65,12 +65,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
   // S'assurer que activeView est correct selon les permissions
   useEffect(() => {
-    if (!hasWorkScheduleAccess && activeView === "schedule") {
-      setActiveView("events")
-    }
-    if (!hasCalendarAccess && activeView === "events") {
-      setActiveView("schedule")
-    }
+    // Par défaut, afficher la vue events si on a accès, sinon schedule
+    // Mais on ne force pas le changement si l'utilisateur a déjà choisi une vue
   }, [hasWorkScheduleAccess, hasCalendarAccess, activeView])
 
   const loadEvents = async () => {
@@ -326,6 +322,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   }
 
   const handleDateClick = (date: Date) => {
+    if (!hasCalendarAccess) return // Ignorer si pas de permission
     setSelectedDate(date)
     setShowEventDialog(true)
   }
@@ -405,57 +402,37 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          {hasCalendarAccess && hasWorkScheduleAccess && (
-            <>
-              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
-              Calendrier & Planning
-            </>
-          )}
-          {!hasCalendarAccess && hasWorkScheduleAccess && (
-            <>
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
-              Planning de Travail
-            </>
-          )}
-          {hasCalendarAccess && !hasWorkScheduleAccess && (
-            <>
-              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
-              Calendrier d'Événements
-            </>
-          )}
+          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
+          Calendrier & Planning
         </h2>
       </div>
 
       {/* Navigation entre vues */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-        {hasCalendarAccess && (
-          <Button
-            variant={activeView === "events" ? "default" : "outline"}
-            onClick={() => setActiveView("events")}
-            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-              activeView === "events"
-                ? "bg-red-600 text-white shadow-lg"
-                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-            }`}
-          >
-            <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-            Événements Annuels
-          </Button>
-        )}
-        {hasWorkScheduleAccess && (
-          <Button
-            variant={activeView === "schedule" ? "default" : "outline"}
-            onClick={() => setActiveView("schedule")}
-            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-              activeView === "schedule"
-                ? "bg-red-600 text-white shadow-lg"
-                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-            }`}
-          >
-            <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-            Planning de Travail
-          </Button>
-        )}
+        <Button
+          variant={activeView === "events" ? "default" : "outline"}
+          onClick={() => setActiveView("events")}
+          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+            activeView === "events"
+              ? "bg-red-600 text-white shadow-lg"
+              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+          }`}
+        >
+          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+          Événements Annuels
+        </Button>
+        <Button
+          variant={activeView === "schedule" ? "default" : "outline"}
+          onClick={() => setActiveView("schedule")}
+          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+            activeView === "schedule"
+              ? "bg-red-600 text-white shadow-lg"
+              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+          }`}
+        >
+          <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+          Planning de Travail
+        </Button>
       </div>
 
       {activeView === "events" ? (
@@ -628,11 +605,11 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                               +{dayEvents.length - 2} autre(s)
                             </div>
                           )}
-                          {dayEvents.length === 0 && dayInfo.isCurrentMonth && !isPast && (
+                          {dayEvents.length === 0 && dayInfo.isCurrentMonth && !isPast && hasCalendarAccess && (
                             <div className="text-xs text-gray-400 italic">Cliquer pour ajouter</div>
                           )}
                         </div>
-                        {dayInfo.isCurrentMonth && !isPast && (
+                        {dayInfo.isCurrentMonth && !isPast && hasCalendarAccess && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -830,7 +807,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     const isOwnEvent = event.created_by_email === userEmail
                     const today = new Date().toISOString().split('T')[0]
                     const isPast = event.event_date < today
-                    const canModify = isOwnEvent && event.status === "pending" && !isPast
+                    const canModify = hasCalendarAccess && isOwnEvent && event.status === "pending" && !isPast && hasCalendarAccess
 
                     return (
                       <Card
@@ -1083,7 +1060,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         </>
       ) : (
         /* Vue Planning de Travail */
-        <WorkScheduleCalendar />
+        <WorkScheduleCalendar hasWorkScheduleAccess={hasWorkScheduleAccess} />
       )}
     </div>
   )

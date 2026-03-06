@@ -78,6 +78,12 @@ function mapFieldsToClient(table: string, data: any): any {
     delete mapped.roleIds
   }
   
+  // Mapper subPeriod -> sub_period pour tasks
+  if (table === 'tasks' && mapped.subPeriod !== undefined) {
+    mapped.sub_period = mapped.subPeriod
+    delete mapped.subPeriod
+  }
+  
   // Mapper isFirstLogin -> is_first_login pour users
   if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.isFirstLogin !== undefined) {
     mapped.is_first_login = mapped.isFirstLogin
@@ -140,13 +146,34 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.end_time = mapped.endTime
       delete mapped.endTime
     }
-    if (mapped.breakDuration !== undefined) {
-      mapped.break_duration = mapped.breakDuration
-      delete mapped.breakDuration
+    if (mapped.gymId !== undefined) {
+      mapped.gym_id = mapped.gymId
+      delete mapped.gymId
     }
-    if (mapped.breakStartTime !== undefined) {
-      mapped.break_start_time = mapped.breakStartTime
-      delete mapped.breakStartTime
+    if (mapped.isTemporary !== undefined) {
+      mapped.is_temporary = mapped.isTemporary
+      delete mapped.isTemporary
+    }
+    if (mapped.tasksCompleted !== undefined) {
+      mapped.tasks_completed = mapped.tasksCompleted
+      delete mapped.tasksCompleted
+    }
+    if (mapped.totalTasks !== undefined) {
+      mapped.total_tasks = mapped.totalTasks
+      delete mapped.totalTasks
+    }
+    // Note: breakDuration et breakStartTime ne sont pas dans le schéma Prisma
+  }
+  
+  // Mapper les champs de user_gyms
+  if (table === 'user_gyms') {
+    if (mapped.userId !== undefined) {
+      mapped.user_id = mapped.userId
+      delete mapped.userId
+    }
+    if (mapped.gymId !== undefined) {
+      mapped.gym_id = mapped.gymId
+      delete mapped.gymId
     }
   }
   
@@ -406,6 +433,11 @@ export async function POST(
     const { data } = await request.json()
     const prismaModel = tableMapping[table] || table
     
+    // Logging pour debug
+    if (table === 'work_schedules') {
+      console.log('[WORK_SCHEDULES] POST - données reçues:', JSON.stringify(data, null, 2))
+    }
+    
     if (!data) {
       return NextResponse.json(
         { data: null, error: { message: 'Aucune donnée fournie' } },
@@ -419,6 +451,7 @@ export async function POST(
     for (const item of items) {
       const validation = validateTableData(table, item)
       if (!validation.valid) {
+        console.log(`[WORK_SCHEDULES] Validation échouée pour ${table}:`, validation.errors)
         return NextResponse.json(
           { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
           { status: 400 }
@@ -440,9 +473,19 @@ export async function POST(
           camelKey = 'address' // gyms utilise 'address' dans le schéma
         }
         
+        // Mapper work_date -> date pour work_schedules (le schéma Prisma utilise 'date')
+        if (table === 'work_schedules' && camelKey === 'workDate') {
+          camelKey = 'date'
+        }
+        
         // Mapper role_ids -> roleIds pour tasks
         if (table === 'tasks' && camelKey === 'roleIds') {
           camelKey = 'roleIds'
+        }
+        
+        // Mapper sub_period -> subPeriod pour tasks
+        if (table === 'tasks' && camelKey === 'subPeriod') {
+          camelKey = 'subPeriod'
         }
         
         // Mapper les champs WiFi de snake_case vers camelCase pour Prisma
@@ -484,6 +527,10 @@ export async function POST(
             (camelKey === 'employeeRole' || camelKey === 'roleColor')) {
           continue
         }
+        // Ignorer break_duration et break_start_time car ils n'existent pas dans le schéma WorkSchedule
+        if (table === 'work_schedules' && (camelKey === 'breakDuration' || camelKey === 'breakStartTime')) {
+          continue
+        }
         
         converted[camelKey] = value
       }
@@ -506,11 +553,14 @@ export async function POST(
       
       // Convertir les dates simples en DateTime ISO-8601 pour work_schedules
       if (table === 'work_schedules' && converted.date) {
+        console.log(`[WORK_SCHEDULES] Conversion date: ${converted.date} (type: ${typeof converted.date})`)
         // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
         if (typeof converted.date === 'string' && !converted.date.includes('T')) {
           converted.date = new Date(`${converted.date}T00:00:00.000Z`)
+          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
         } else if (typeof converted.date === 'string') {
           converted.date = new Date(converted.date)
+          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
         }
       }
       
@@ -524,10 +574,36 @@ export async function POST(
           if (admin) converted.userId = admin.id
         }
       }
-      if (!converted.userId && (table === 'tasks' || table === 'work_schedules')) {
+      if (!converted.userId && table === 'work_schedules') {
+        // Pour work_schedules, utiliser l'email de l'employé
+        if (converted.employeeEmail) {
+          console.log(`[WORK_SCHEDULES] Recherche utilisateur avec email: ${converted.employeeEmail}`)
+          const user = await prisma.user.findUnique({ where: { email: converted.employeeEmail } })
+          if (user) {
+            converted.userId = user.id
+            console.log(`[WORK_SCHEDULES] Utilisateur trouvé avec ID: ${user.id}`)
+          } else {
+            console.log(`[WORK_SCHEDULES] Utilisateur non trouvé pour email: ${converted.employeeEmail}, utilisation d'un admin`)
+            // Si l'utilisateur n'existe pas, utiliser un admin par défaut
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
+            if (admin) {
+              converted.userId = admin.id
+              console.log(`[WORK_SCHEDULES] Admin utilisé avec ID: ${admin.id}`)
+            } else {
+              console.log('[WORK_SCHEDULES] ERREUR - Aucun admin trouvé dans la base de données!')
+            }
+          }
+        } else {
+          console.log('[WORK_SCHEDULES] ATTENTION - Aucun employeeEmail fourni')
+          const user = await prisma.user.findFirst({ where: { role: 'admin' } })
+          if (user) converted.userId = user.id
+        }
+      }
+      if (!converted.userId && table === 'tasks') {
         const user = await prisma.user.findFirst({ where: { role: 'admin' } })
         if (user) converted.userId = user.id
       }
+
       
       // Nettoyer createdBy s'il est vide
       if (converted.createdBy === '') {
@@ -544,17 +620,25 @@ export async function POST(
       // convertir userId en relation connect
       const data = { ...item }
       
+      // Logging pour debug work_schedules AVANT conversion
+      if (table === 'work_schedules') {
+        console.log('[WORK_SCHEDULES] Données AVANT conversion:', JSON.stringify(data, null, 2))
+        console.log('[WORK_SCHEDULES] data.gymId existe ?', !!data.gymId, 'valeur:', data.gymId)
+      }
+      
       if ((table === 'tasks' || table === 'work_schedules') && data.userId) {
         const userId = data.userId
         delete data.userId
         data.user = { connect: { id: userId } }
       }
       
-      // De même pour gymId dans tasks
-      if (table === 'tasks' && data.gymId) {
+      // De même pour gymId dans tasks et work_schedules
+      if ((table === 'tasks' || table === 'work_schedules') && data.gymId) {
+        console.log('[WORK_SCHEDULES] Conversion gymId:', data.gymId)
         const gymId = data.gymId
         delete data.gymId
         data.gym = { connect: { id: gymId } }
+        console.log('[WORK_SCHEDULES] Après conversion, data.gymId:', data.gymId, 'data.gym:', data.gym)
       }
       
       // Nettoyer createdBy s'il est vide (doit être fait après la copie de convertedItems)
@@ -567,8 +651,19 @@ export async function POST(
         data.password = await hashPassword(data.password)
       }
       
-      const result = await (prisma as any)[prismaModel].create({ data })
-      results.push(result)
+      // Logging pour debug work_schedules
+      if (table === 'work_schedules') {
+        console.log('[WORK_SCHEDULES] Données finales avant création:', JSON.stringify(data, null, 2))
+      }
+      
+      try {
+        const result = await (prisma as any)[prismaModel].create({ data })
+        results.push(result)
+      } catch (createError: any) {
+        console.log(`[WORK_SCHEDULES] ERREUR Prisma lors de la création dans ${table}:`, createError.message || createError)
+        console.log('[WORK_SCHEDULES] Erreur complète:', JSON.stringify(createError, null, 2))
+        throw new Error(`Échec de la création: ${createError.message || 'Erreur inconnue'}`)
+      }
     }
     
     return NextResponse.json({ data: results, error: null })

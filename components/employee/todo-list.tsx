@@ -31,6 +31,7 @@ interface Task {
   validated: boolean
   validated_at?: string
   value?: string
+  sub_period?: "debut" | "milieu" | "fin" // Sous-créneau
 }
 
 interface TodoListProps {
@@ -150,21 +151,32 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
             const userData = await userResponse.json()
             const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
             
+            console.log('Tâches templates:', dbTasks.length)
+            console.log('Tâches complétées:', userTasks.length)
+            
             // Mettre à jour le statut des tâches selon les données utilisateur
             const mergedTasks = dbTasks.map(task => {
               // Chercher si l'utilisateur a complété une tâche avec le même titre
-              const userTask = userTasks.find((t: any) => t.title === task.title && t.gym_id === gymId)
+              // On compare juste par titre car c'est l'identifiant unique le plus fiable
+              const userTask = userTasks.find((t: any) => {
+                // Comparaison flexible : même titre ET même période
+                return t.title === task.title
+              })
+              
               if (userTask && userTask.status === 'completed') {
+                console.log(`Tâche "${task.title}" trouvée comme complétée`)
                 return {
                   ...task,
                   completed: true,
                   validated: true,
-                  validated_at: userTask.updated_at
+                  validated_at: userTask.updated_at,
+                  value: userTask.value || ''
                 }
               }
               return task
             })
             
+            console.log('Tâches fusionnées:', mergedTasks.filter(t => t.completed).length, 'complétées sur', mergedTasks.length)
             setTasks(mergedTasks)
           } else {
             setTasks(dbTasks)
@@ -174,6 +186,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
           setTasks([])
         }
       } catch (error) {
+        console.error('Erreur chargement tâches:', error)
         // En cas d'erreur, afficher également "Aucune tâche"
         setTasks([])
       } finally {
@@ -263,6 +276,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       const validationTime = new Date().toISOString()
       const userAgent = navigator.userAgent
       const userId = localStorage.getItem("userId") || ""
+      const today = new Date().toISOString().split('T')[0]
 
       // Sauvegarder dans la base de données
       const taskData = {
@@ -318,38 +332,7 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
       setShowValidationDialog(false)
       setTaskToValidate(null)
       
-      // Forcer un rechargement après un court délai pour s'assurer que la BDD est à jour
-      setTimeout(() => {
-        const loadTasksFromDb = async () => {
-          const userId = localStorage.getItem("userId") || ""
-          try {
-            const dbTasks = await getTasksForPeriod(period)
-            if (dbTasks.length > 0) {
-              const userResponse = await fetch(`/api/db/tasks?user_id=${userId}&period=${period}`)
-              if (userResponse.ok) {
-                const userData = await userResponse.json()
-                const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
-                const mergedTasks = dbTasks.map(task => {
-                  const userTask = userTasks.find((t: any) => t.title === task.title)
-                  if (userTask && userTask.status === 'completed') {
-                    return {
-                      ...task,
-                      completed: true,
-                      validated: true,
-                      validated_at: userTask.updated_at
-                    }
-                  }
-                  return task
-                })
-                setTasks(mergedTasks)
-              }
-            }
-          } catch (error) {
-            // Erreur silencieuse
-          }
-        }
-        loadTasksFromDb()
-      }, 500)
+      console.log('Tâche validée et sauvegardée en BDD:', taskToValidate.title)
     } catch (error) {
       console.error("Erreur lors de la validation:", error)
     }
@@ -525,6 +508,11 @@ export function TodoList({ period, isBlocked, gymId, roleId, onSessionEnd }: Tod
                       {task.required && (
                         <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
                           Obligatoire
+                        </span>
+                      )}
+                      {task.sub_period && (
+                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                          {task.sub_period === "debut" ? "Début" : task.sub_period === "milieu" ? "Milieu" : "Fin"}
                         </span>
                       )}
                       {task.validated && (

@@ -36,6 +36,7 @@ interface TaskItem {
   description?: string
   status: string
   period: "matin" | "aprem" | "journee"
+  sub_period?: "debut" | "milieu" | "fin" // Sous-créneau (seulement pour matin/aprem)
   order_index: number
   gym_id: string
   role_ids?: string[] // IDs des rôles autorisés
@@ -89,6 +90,11 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
                 #{index + 1}
               </div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white truncate">{task.title}</h3>
+              {task.sub_period && (
+                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
+                  {task.sub_period === "debut" ? "Début" : task.sub_period === "milieu" ? "Milieu" : "Fin"}
+                </span>
+              )}
               {task.required && (
                 <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
                   Obligatoire
@@ -175,6 +181,7 @@ export function TaskManager() {
     options: string[]
     required: boolean
     roleIds: string[] // IDs des rôles sélectionnés
+    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
   }>({
     title: "",
     description: "",
@@ -182,6 +189,7 @@ export function TaskManager() {
     options: [],
     required: true,
     roleIds: [],
+    subPeriod: undefined,
   })
   const [editTask, setEditTask] = useState<{
     title: string
@@ -190,6 +198,7 @@ export function TaskManager() {
     options: string[]
     required: boolean
     roleIds: string[]
+    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
   }>({
     title: "",
     description: "",
@@ -197,6 +206,7 @@ export function TaskManager() {
     options: [],
     required: true,
     roleIds: [],
+    subPeriod: undefined,
   })
 
   // Configuration drag and drop
@@ -255,12 +265,19 @@ export function TaskManager() {
         role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
       }))
       
-      // Trier côté client par period puis order_index
+      // Trier côté client par period puis sub_period puis order_index
       const sortedTasks = parsedTasks.sort((a: any, b: any) => {
         const periodOrder: any = { matin: 1, aprem: 2, journee: 3 }
         if (a.period !== b.period) {
           return (periodOrder[a.period] || 0) - (periodOrder[b.period] || 0)
         }
+        
+        // Trier par sous-créneau à l'intérieur de chaque période
+        const subPeriodOrder: any = { debut: 1, milieu: 2, fin: 3, undefined: 4, null: 4 }
+        if (a.sub_period !== b.sub_period) {
+          return (subPeriodOrder[a.sub_period] || 4) - (subPeriodOrder[b.sub_period] || 4)
+        }
+        
         return a.order_index - b.order_index
       })
       
@@ -333,6 +350,7 @@ export function TaskManager() {
             description: newTask.description,
             type: newTask.type,
             period: activePeriod,
+            sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
             options: newTask.type === "qcm" ? JSON.stringify(newTask.options) : null,
             required: newTask.required,
             order_index: maxOrder + 1,
@@ -362,6 +380,7 @@ export function TaskManager() {
         options: [],
         required: true,
         roleIds: [],
+        subPeriod: undefined,
       })
       setShowForm(false)
     } catch (error: any) {
@@ -378,6 +397,7 @@ export function TaskManager() {
       options: task.options || [],
       required: task.required || true,
       roleIds: task.role_ids || [],
+      subPeriod: task.sub_period,
     })
     setShowEditForm(true)
     setShowForm(false)
@@ -397,6 +417,7 @@ export function TaskManager() {
           options: editTask.type === "qcm" ? JSON.stringify(editTask.options) : null,
           required: editTask.required,
           role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
+          sub_period: (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriod : null,
         })
       })
 
@@ -690,6 +711,27 @@ export function TaskManager() {
                   </div>
                 </div>
 
+                {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
+                {editingTask && (editingTask.period === "matin" || editingTask.period === "aprem") && (
+                  <div className="space-y-2">
+                    <Label className="text-lg font-medium">Sous-créneau :</Label>
+                    <Select
+                      value={editTask.subPeriod || "none"}
+                      onValueChange={(value) => setEditTask({ ...editTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
+                    >
+                      <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
+                        <SelectValue placeholder="Sélectionner un sous-créneau" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Aucun</SelectItem>
+                        <SelectItem value="debut">Début (ouverture)</SelectItem>
+                        <SelectItem value="milieu">Milieu</SelectItem>
+                        <SelectItem value="fin">Fin (fermeture)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
                   <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
@@ -817,6 +859,27 @@ export function TaskManager() {
                     </label>
                   </div>
                 </div>
+
+                {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
+                {(activePeriod === "matin" || activePeriod === "aprem") && (
+                  <div className="space-y-2">
+                    <Label className="text-lg font-medium">Sous-créneau :</Label>
+                    <Select
+                      value={newTask.subPeriod || "none"}
+                      onValueChange={(value) => setNewTask({ ...newTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
+                    >
+                      <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
+                        <SelectValue placeholder="Sélectionner un sous-créneau" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Aucun</SelectItem>
+                        <SelectItem value="debut">Début (ouverture)</SelectItem>
+                        <SelectItem value="milieu">Milieu</SelectItem>
+                        <SelectItem value="fin">Fin (fermeture)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>

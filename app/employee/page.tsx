@@ -464,23 +464,36 @@ export default function EmployeePage() {
         const today = new Date().toISOString().split('T')[0]
         const userId = localStorage.getItem("userId") || ""
         
-        // Créer ou mettre à jour le work_schedule
-        await fetch('/api/db/work_schedules', {
+        const workScheduleData = {
+          user_id: userId,
+          employee_email: userEmail,
+          employee_name: userName,
+          date: today,
+          start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          end_time: '',
+          type: 'work',
+          is_temporary: true, // Marquer comme période temporaire (sera nettoyée automatiquement)
+          notes: `Période: ${pendingPeriod}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
+        }
+        
+        console.log('📝 Création de la période de travail:', workScheduleData)
+        
+        // Créer ou mettre à jour le work_schedule avec isTemporary = true
+        const response = await fetch('/api/db/work_schedules', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            data: {
-              user_id: userId,
-              employee_email: userEmail,
-              employee_name: userName,
-              date: today,
-              start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-              end_time: '',
-              type: 'work',
-              notes: `Période: ${pendingPeriod}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
-            }
+            data: workScheduleData
           })
         })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('✅ Période de travail créée avec succès:', result.data)
+        } else {
+          const error = await response.json()
+          console.error('❌ Erreur création période:', error)
+        }
         
         // Stocker aussi en localStorage comme backup
         localStorage.setItem(`employee_${userId}_period`, pendingPeriod)
@@ -604,30 +617,20 @@ export default function EmployeePage() {
             <CardContent className="space-y-4 md:space-y-6 pb-6 md:pb-8">
               <div className="grid gap-4 md:gap-6">
                 {/* Bouton Calendrier */}
-                {(hasCalendarAccess || hasWorkScheduleAccess) && (
-                  <Button
-                    onClick={() => setCurrentView("calendar")}
-                    className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                  >
-                    <Calendar className="w-8 h-8 md:w-10 md:h-10" />
-                    <div className="text-left">
-                      <div className="font-bold text-base md:text-xl">
-                        {hasCalendarAccess && hasWorkScheduleAccess
-                          ? "Calendrier & Planning"
-                          : hasCalendarAccess
-                          ? "Planning"
-                          : "Calendrier événement"}
-                      </div>
-                      <div className="text-xs md:text-sm opacity-90">
-                        {hasCalendarAccess && hasWorkScheduleAccess
-                          ? "Événements et horaires de travail"
-                          : hasCalendarAccess
-                          ? "Événements et activités"
-                          : "Horaires de travail"}
-                      </div>
+                <Button
+                  onClick={() => setCurrentView("calendar")}
+                  className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                >
+                  <Calendar className="w-8 h-8 md:w-10 md:h-10" />
+                  <div className="text-left">
+                    <div className="font-bold text-base md:text-xl">
+                      Calendrier & Planning
                     </div>
-                  </Button>
-                )}
+                    <div className="text-xs md:text-sm opacity-90">
+                      Événements et horaires de travail
+                    </div>
+                  </div>
+                </Button>
 
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
@@ -988,8 +991,10 @@ export default function EmployeePage() {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
-          {hasCalendarAccess && <CalendarView hasWorkScheduleAccess={hasWorkScheduleAccess} hasCalendarAccess={hasCalendarAccess} />}
-          {!hasCalendarAccess && hasWorkScheduleAccess && <WorkScheduleCalendar />}
+          <CalendarView 
+            hasWorkScheduleAccess={hasWorkScheduleAccess} 
+            hasCalendarAccess={hasCalendarAccess} 
+          />
         </div>
 
         {/* Dialog "Déconnexion bloquée" (vue calendrier) */}
@@ -1050,18 +1055,16 @@ export default function EmployeePage() {
             </div>
           </div>
           <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto flex-wrap gap-2">
-            {/* Bouton Calendrier si accès */}
-            {(hasCalendarAccess || hasWorkScheduleAccess) && (
-              <Button
-                onClick={() => setCurrentView("calendar")}
-                variant="outline"
-                size="sm"
-                className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
-              >
-                <Calendar className="w-4 h-4 mr-1" />
-                Calendrier
-              </Button>
-            )}
+            {/* Bouton Calendrier */}
+            <Button
+              onClick={() => setCurrentView("calendar")}
+              variant="outline"
+              size="sm"
+              className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              Calendrier
+            </Button>
             <Button
               onClick={handleLogout}
               variant="outline"

@@ -597,7 +597,7 @@ export function EmployeeManager() {
       </div>
 
       {/* Section Lien WhatsApp */}
-      <Card className="border border-red-200 bg-white">
+      {/* <Card className="border border-red-200 bg-white">
         <CardContent className="p-3 md:p-4">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
             <div className="flex items-center gap-2 text-red-600">
@@ -634,7 +634,7 @@ export function EmployeeManager() {
             Ce lien sera affiché sur l'écran d'accueil des employés pour qu'ils puissent accéder au groupe
           </p>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Section URL du site (Super Admin uniquement) */}
       {isSuperAdmin && (

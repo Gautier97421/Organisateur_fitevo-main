@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2, CalendarDays, Plus, XCircle, Clock } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2, CalendarDays, Plus, XCircle, Clock, Building2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ interface WorkSchedule {
   work_date: string
   start_time: string
   end_time: string
+  gym_id?: string
   break_duration?: number
   break_start_time?: string
   status: "scheduled" | "confirmed" | "completed"
@@ -35,10 +37,18 @@ interface Employee {
   role?: string
 }
 
+interface Gym {
+  id: string
+  name: string
+  is_active: boolean
+}
+
 export function WorkScheduleManager() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [schedules, setSchedules] = useState<WorkSchedule[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [gyms, setGyms] = useState<Gym[]>([])
+  const [selectedGymId, setSelectedGymId] = useState<string>("all")
   const [conflicts, setConflicts] = useState<string[]>([])
   const [selectedSchedule, setSelectedSchedule] = useState<WorkSchedule | null>(null)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
@@ -48,9 +58,11 @@ export function WorkScheduleManager() {
   const [showDayDetailsDialog, setShowDayDetailsDialog] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState<string>("")
+  const [addDialogGymId, setAddDialogGymId] = useState<string>("all") // Salle sélectionnée dans le dialog d'ajout
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
   const [scheduleToDelete, setScheduleToDelete] = useState<string | null>(null)
+  const [employeeGyms, setEmployeeGyms] = useState<Gym[]>([])
   const [newSchedule, setNewSchedule] = useState({
     start_time: "",
     end_time: "",
@@ -74,8 +86,21 @@ export function WorkScheduleManager() {
   useEffect(() => {
     const role = localStorage.getItem("userRole") || ""
     setCurrentUserRole(role)
+    loadGyms()
     loadData()
-  }, [currentDate])
+  }, [currentDate, selectedGymId])
+
+  const loadGyms = async () => {
+    try {
+      const response = await fetch("/api/db/gyms?is_active=true")
+      if (response.ok) {
+        const result = await response.json()
+        setGyms(result.data || [])
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des salles:", error)
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -99,10 +124,13 @@ export function WorkScheduleManager() {
           userRoles.set(user.email, user.role)
         })
         
-        // Filtrer pour garder les plannings des employés ET des admins
+        // Récupérer l'email de l'admin connecté
+        const userEmail = localStorage.getItem("userEmail") || ""
+        
+        // Filtrer pour garder les plannings des employés + le planning de l'admin lui-même
         return schedules.filter(schedule => {
           const role = userRoles.get(schedule.employee_email)
-          return role === 'employee' || role === 'admin'
+          return role === 'employee' || schedule.employee_email === userEmail
         })
       }
       return schedules
@@ -120,7 +148,14 @@ export function WorkScheduleManager() {
       const startDate = startOfMonth.toISOString().split("T")[0]
       const endDate = endOfMonth.toISOString().split("T")[0]
 
-      const response = await fetch(`/api/db/work_schedules?work_date_gte=${startDate}&work_date_lte=${endDate}`)
+      let url = `/api/db/work_schedules?work_date_gte=${startDate}&work_date_lte=${endDate}`
+      
+      // Filtrer par salle si une salle spécifique est sélectionnée
+      if (selectedGymId !== "all") {
+        url += `&gym_id=${selectedGymId}`
+      }
+
+      const response = await fetch(url)
       
       if (response.ok) {
         const result = await response.json()
@@ -163,15 +198,16 @@ export function WorkScheduleManager() {
         
         // Filtrer selon le rôle de l'utilisateur actuel
         const userRole = localStorage.getItem("userRole") || ""
+        const userEmail = localStorage.getItem("userEmail") || ""
         let filteredData = data
         
         if (userRole === "admin") {
-          // Les admins voient les employés ET les autres admins
+          // Les admins voient les employés + eux-mêmes UNIQUEMENT (pas les autres admins)
           filteredData = data.filter((user: any) => 
-            user.role === 'employee' || user.role === 'admin'
+            user.role === 'employee' || user.email === userEmail
           )
         } else if (userRole === "superadmin") {
-          // Les superadmins voient les employés et les admins
+          // Les superadmins voient les employés et tous les admins
           filteredData = data.filter((user: any) => 
             user.role === 'employee' || user.role === 'admin'
           )
@@ -216,7 +252,12 @@ export function WorkScheduleManager() {
           const schedule1 = daySchedules[i]
           const schedule2 = daySchedules[j]
 
-          // Vérifier si les horaires se chevauchent
+          // Vérifier uniquement si c'est la MÊME personne
+          if (schedule1.employee_email !== schedule2.employee_email) {
+            continue
+          }
+
+          // Vérifier si les horaires se chevauchent pour la même personne
           const start1 = new Date(`2000-01-01T${schedule1.start_time}`)
           const end1 = new Date(`2000-01-01T${schedule1.end_time}`)
           const start2 = new Date(`2000-01-01T${schedule2.start_time}`)
@@ -286,6 +327,8 @@ export function WorkScheduleManager() {
     setSelectedDate(date)
     setAttemptedSubmit(false)
     setSelectedEmployeeEmail("")
+    setEmployeeGyms([])
+    setAddDialogGymId("all") // Réinitialiser la salle du dialog
     setNewSchedule({
       start_time: "",
       end_time: "",
@@ -293,6 +336,70 @@ export function WorkScheduleManager() {
       break_start_time: ""
     })
     setShowAddDialog(true)
+  }
+
+  const loadEmployeeGyms = async (employeeEmail: string) => {
+    try {
+      console.log('[loadEmployeeGyms] Chargement pour email:', employeeEmail)
+      console.log('[loadEmployeeGyms] Salles disponibles:', gyms.length)
+      
+      // Trouver l'userId de l'employé
+      const response = await fetch(`/api/db/users?email=${encodeURIComponent(employeeEmail)}`)
+      if (!response.ok) {
+        console.log('[loadEmployeeGyms] Erreur réponse users:', response.status)
+        return
+      }
+      
+      const result = await response.json()
+      const userData = Array.isArray(result.data) ? result.data[0] : result.data
+      console.log('[loadEmployeeGyms] Données utilisateur:', userData)
+      
+      if (!userData) {
+        console.log('[loadEmployeeGyms] Aucun utilisateur trouvé')
+        return
+      }
+
+      // Si c'est un admin ou superadmin, il a accès à TOUTES les salles
+      if (userData.role === 'admin' || userData.role === 'superadmin') {
+        console.log('[loadEmployeeGyms] User est admin/superadmin, accès à toutes les salles')
+        const allActiveGyms = gyms.filter((gym: any) => gym.is_active)
+        console.log('[loadEmployeeGyms] Salles actives pour admin:', allActiveGyms.length)
+        setEmployeeGyms(allActiveGyms)
+        return
+      }
+
+      // Pour les employés, charger les salles accessibles via user_gyms
+      console.log('[loadEmployeeGyms] User est employé, chargement user_gyms pour userId:', userData.id)
+      const userGymsResponse = await fetch(`/api/db/user_gyms?user_id=${userData.id}`)
+      if (!userGymsResponse.ok) {
+        console.log('[loadEmployeeGyms] Erreur réponse user_gyms:', userGymsResponse.status)
+        setEmployeeGyms([])
+        return
+      }
+
+      const userGymsResult = await userGymsResponse.json()
+      const userGymData = Array.isArray(userGymsResult.data) ? userGymsResult.data : (userGymsResult.data ? [userGymsResult.data] : [])
+      console.log('[loadEmployeeGyms] user_gyms trouvés:', userGymData.length, userGymData)
+
+      // Charger les informations complètes des salles
+      // Gérer à la fois gym_id (snake_case) et gymId (camelCase)
+      const gymIds = userGymData.map((ug: any) => ug.gym_id || ug.gymId)
+      console.log('[loadEmployeeGyms] IDs des salles accessibles:', gymIds)
+      
+      if (gymIds.length === 0) {
+        console.log('[loadEmployeeGyms] Aucune salle accessible pour cet employé')
+        setEmployeeGyms([])
+        return
+      }
+
+      // Filtrer pour ne garder que les salles accessibles et actives
+      const accessibleGyms = gyms.filter((gym: any) => gymIds.includes(gym.id) && gym.is_active)
+      console.log('[loadEmployeeGyms] Salles accessibles et actives:', accessibleGyms.length, accessibleGyms)
+      setEmployeeGyms(accessibleGyms)
+    } catch (error) {
+      console.error("[loadEmployeeGyms] Erreur lors du chargement des salles de l'employé:", error)
+      setEmployeeGyms([])
+    }
   }
 
   const addSchedule = async () => {
@@ -303,21 +410,35 @@ export function WorkScheduleManager() {
       return
     }
 
+    // Validation de la salle obligatoire
+    if (addDialogGymId === "all") {
+      console.error("Veuillez sélectionner une salle spécifique")
+      alert("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
+      return
+    }
+
     try {
-      const scheduleData = {
+      // Trouver le nom de l'employé sélectionné
+      const selectedEmployee = employees.find(emp => emp.email === selectedEmployeeEmail)
+      if (!selectedEmployee) {
+        console.error("Employé introuvable")
+        return
+      }
+
+      const scheduleData: any = {
         employee_email: selectedEmployeeEmail,
+        employee_name: selectedEmployee.name,
         work_date: selectedDate.toISOString().split("T")[0],
         start_time: newSchedule.start_time,
         end_time: newSchedule.end_time,
-        break_duration: newSchedule.break_duration || 0,
-        break_start_time: newSchedule.break_start_time || null,
-        status: "scheduled"
+        status: "scheduled",
+        gym_id: addDialogGymId // Toujours ajouter la salle sélectionnée dans le dialog
       }
 
       const response = await fetch("/api/db/work_schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scheduleData)
+        body: JSON.stringify({ data: [scheduleData] })
       })
 
       if (!response.ok) {
@@ -330,6 +451,8 @@ export function WorkScheduleManager() {
       setShowAddDialog(false)
       setSelectedDate(null)
       setSelectedEmployeeEmail("")
+      setAddDialogGymId("all")
+      setEmployeeGyms([])
       setAttemptedSubmit(false)
       setNewSchedule({
         start_time: "",
@@ -467,6 +590,31 @@ export function WorkScheduleManager() {
           </Badge>
         )}
       </div>
+
+      {/* Sélecteur de salle */}
+      <Card className="border-0 shadow-lg bg-white dark:bg-gray-800">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filtrer par salle :
+            </label>
+            <Select value={selectedGymId} onValueChange={setSelectedGymId}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Toutes les salles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les salles</SelectItem>
+                {gyms.map((gym) => (
+                  <SelectItem key={gym.id} value={gym.id}>
+                    {gym.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Navigation du calendrier */}
       <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
@@ -624,7 +772,7 @@ export function WorkScheduleManager() {
 
       {/* Dialog de détails */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-white">
               <User className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -641,6 +789,9 @@ export function WorkScheduleManager() {
                   </p>
                   <p>
                     <strong>Horaires :</strong> {(selectedSchedule as any).start_time || 'N/A'} - {(selectedSchedule as any).end_time || 'N/A'}
+                  </p>
+                  <p>
+                    <strong>Salle :</strong> {gyms.find(g => g.id === selectedSchedule.gym_id)?.name || 'Non spécifiée'}
                   </p>
                   <p>
                     <strong>Pause :</strong> {(selectedSchedule as any).break_duration || 0} min
@@ -668,29 +819,29 @@ export function WorkScheduleManager() {
               </DialogDescription>
             )}
           </DialogHeader>
-          <DialogFooter className="flex space-x-3">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={() => setShowDetailsDialog(false)}
-              className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50"
+              className="w-full sm:w-auto text-base sm:text-lg px-4 sm:px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
             >
               Fermer
             </Button>
             {selectedSchedule && selectedSchedule.status === "scheduled" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "confirmed")}
-                className="bg-green-600 hover:bg-green-700 text-white text-lg px-6 flex items-center gap-2"
+                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
               >
-                <CheckCircle className="h-5 w-5" /> Confirmer
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Confirmer
               </Button>
             )}
             {selectedSchedule && (
               <Button
                 onClick={() => confirmDeleteSchedule(selectedSchedule.id)}
                 variant="outline"
-                className="border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-lg px-6 flex items-center gap-2"
+                className="w-full sm:w-auto border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2 dark:bg-gray-700 dark:hover:bg-red-900/20"
               >
-                <Trash2 className="h-5 w-5" /> Supprimer
+                <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" /> Supprimer
               </Button>
             )}
           </DialogFooter>
@@ -699,7 +850,7 @@ export function WorkScheduleManager() {
 
       {/* Dialog d'ajout de planning */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800">
           <DialogHeader>
             <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900 dark:text-white">
               <CalendarDays className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -721,7 +872,16 @@ export function WorkScheduleManager() {
               </label>
               <select
                 value={selectedEmployeeEmail}
-                onChange={(e) => setSelectedEmployeeEmail(e.target.value)}
+                onChange={(e) => {
+                  setSelectedEmployeeEmail(e.target.value)
+                  if (e.target.value) {
+                    loadEmployeeGyms(e.target.value)
+                  } else {
+                    setEmployeeGyms([])
+                  }
+                  // Réinitialiser la salle du dialog
+                  setAddDialogGymId("all")
+                }}
                 className={`w-full border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2 ${
                   attemptedSubmit && !selectedEmployeeEmail ? "border-red-500 focus:border-red-600" : "border-gray-300 dark:border-gray-600"
                 }`}
@@ -733,6 +893,34 @@ export function WorkScheduleManager() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                Salle <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={addDialogGymId}
+                onChange={(e) => setAddDialogGymId(e.target.value)}
+                disabled={!selectedEmployeeEmail || employeeGyms.length === 0}
+                className={`w-full border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2 ${
+                  attemptedSubmit && addDialogGymId === "all" ? "border-red-500 focus:border-red-600" : "border-gray-300 dark:border-gray-600"
+                } ${!selectedEmployeeEmail || employeeGyms.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <option value="all" disabled>Sélectionner une salle</option>
+                {employeeGyms.length === 0 && selectedEmployeeEmail && (
+                  <option value="" disabled>Aucune salle accessible</option>
+                )}
+                {employeeGyms.map((gym) => (
+                  <option key={gym.id} value={gym.id}>
+                    {gym.name}
+                  </option>
+                ))}
+              </select>
+              {selectedEmployeeEmail && employeeGyms.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Cet employé n'a accès à aucune salle
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -788,7 +976,7 @@ export function WorkScheduleManager() {
               </div>
             </div>
           </div>
-          <DialogFooter className="flex space-x-3">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={() => {
@@ -797,15 +985,15 @@ export function WorkScheduleManager() {
                 setSelectedEmployeeEmail("")
                 setAttemptedSubmit(false)
               }}
-              className="text-lg px-6 border border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2"
+              className="w-full sm:w-auto text-base sm:text-lg px-4 sm:px-6 py-2 border border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center gap-2"
             >
-              <XCircle className="h-5 w-5" /> Annuler
+              <XCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Annuler
             </Button>
             <Button
               onClick={addSchedule}
-              className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2"
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
             >
-              <CheckCircle className="h-5 w-5" /> Ajouter
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Ajouter
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -813,7 +1001,7 @@ export function WorkScheduleManager() {
 
       {/* Dialog de détails du jour */}
       <Dialog open={showDayDetailsDialog} onOpenChange={setShowDayDetailsDialog}>
-        <DialogContent className="sm:max-w-2xl bg-white dark:bg-gray-800 max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-2xl bg-white dark:bg-gray-800 max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900 dark:text-white">
               <CalendarDays className="h-7 w-7 text-red-600 dark:text-red-400" />
@@ -922,7 +1110,7 @@ export function WorkScheduleManager() {
 
       {/* Dialog de confirmation de suppression */}
       <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-white">
               <Trash2 className="h-6 w-6 text-red-600" />

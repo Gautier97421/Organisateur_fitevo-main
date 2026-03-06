@@ -160,9 +160,10 @@ model Gym {
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
   
-  tasks       Task[]
-  timeEntries TimeEntry[]
-  userGyms    UserGym[]
+  tasks         Task[]
+  timeEntries   TimeEntry[]
+  userGyms      UserGym[]
+  workSchedules WorkSchedule[]
   
   @@map("gyms")
 }
@@ -173,6 +174,7 @@ model Task {
   description String?
   type        String    @default("checkbox") // checkbox, text, qcm
   period      String?   // matin, aprem, journee
+  subPeriod   String?   @map("sub_period") // debut, milieu, fin (pour matin et aprem uniquement)
   options     Json?     // Pour les QCM
   required    Boolean   @default(true)
   status      String    @default("pending") // pending, in_progress, completed
@@ -198,16 +200,21 @@ model WorkSchedule {
   userId           String   @map("user_id")
   employeeEmail    String   @map("employee_email")
   employeeName     String   @map("employee_name")
+  gymId            String?  @map("gym_id")
   date             DateTime @map("work_date")
   startTime        String   @map("start_time")
   endTime          String   @map("end_time")
   type             String   @default("work") // work, break, absence
   status           String   @default("scheduled") // scheduled, confirmed, completed
   notes            String?
+  isTemporary      Boolean  @default(false) @map("is_temporary") // true = période lancée par employé, false = calendrier permanent
+  tasksCompleted   Int      @default(0) @map("tasks_completed") // Nombre de tâches complétées en temps réel
+  totalTasks       Int      @default(0) @map("total_tasks") // Nombre total de tâches pour cette période
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   
-  user User @relation(fields: [userId], references: [id])
+  user User  @relation(fields: [userId], references: [id])
+  gym  Gym?  @relation(fields: [gymId], references: [id])
   
   @@map("work_schedules")
 }

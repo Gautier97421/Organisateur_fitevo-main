@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Plus, CalendarDays, Edit2, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Plus, CalendarDays, Edit2, Trash2, AlertTriangle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ interface WorkSchedule {
   work_date: string
   start_time: string
   end_time: string
+  gym_id?: string
   break_duration?: number
   break_start_time?: string
   status: "scheduled" | "confirmed" | "completed"
@@ -34,10 +35,22 @@ interface Employee {
   color: string
 }
 
-export function WorkScheduleCalendar() {
+interface Gym {
+  id: string
+  name: string
+}
+
+interface WorkScheduleCalendarProps {
+  hasWorkScheduleAccess?: boolean
+}
+
+export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkScheduleCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [schedules, setSchedules] = useState<WorkSchedule[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [userGyms, setUserGyms] = useState<Gym[]>([])
+  const [selectedGymId, setSelectedGymId] = useState<string>("all")
+  const [conflicts, setConflicts] = useState<string[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
@@ -68,28 +81,156 @@ export function WorkScheduleCalendar() {
   ]
 
   useEffect(() => {
+    loadUserGyms()
     loadSchedules()
     loadEmployees()
-  }, [currentDate])
+  }, [currentDate, selectedGymId])
+
+  const loadUserGyms = async () => {
+    try {
+      const userId = localStorage.getItem("userId")
+      if (!userId) return
+
+      // Charger les salles accessibles par l'utilisateur
+      const response = await fetch(`/api/db/user_gyms?user_id=${userId}`)
+      if (!response.ok) return
+
+      const result = await response.json()
+      const userGymData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+
+      // Charger uniquement les informations des salles spécifiques auxquelles l'utilisateur a accès
+      const gymIds = userGymData.map((ug: any) => ug.gym_id)
+      if (gymIds.length === 0) {
+        setUserGyms([])
+        return
+      }
+
+      // Charger chaque salle individuellement pour éviter d'exposer les autres salles
+      const gymsPromises = gymIds.map(async (gymId: string) => {
+        try {
+          const gymResponse = await fetch(`/api/db/gyms/${gymId}`)
+          if (!gymResponse.ok) return null
+          const gymResult = await gymResponse.json()
+          return gymResult.data
+        } catch {
+          return null
+        }
+      })
+
+      const gyms = await Promise.all(gymsPromises)
+      const accessibleGyms = gyms.filter((gym: any) => gym !== null && gym.is_active !== false)
+      setUserGyms(accessibleGyms)
+    } catch (error) {
+      console.error("Erreur lors du chargement des salles:", error)
+      setUserGyms([])
+    }
+  }
 
   const loadSchedules = async () => {
     try {
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
-      const response = await fetch(
-        `/api/db/work_schedules?work_date_gte=${startOfMonth.toISOString().split("T")[0]}&work_date_lte=${endOfMonth.toISOString().split("T")[0]}&orderBy=work_date`
-      )
+      let url = `/api/db/work_schedules?work_date_gte=${startOfMonth.toISOString().split("T")[0]}&work_date_lte=${endOfMonth.toISOString().split("T")[0]}&orderBy=work_date`
+
+      // Si l'utilisateur n'a aucune salle assignée, ne rien charger
+      if (userGyms.length === 0) {
+        setSchedules([])
+        setConflicts([])
+        return
+      }
+
+      // Si l'utilisateur a des salles spécifiques, filtrer par ces salles
+      if (selectedGymId === "all") {
+        // Charger les plannings de toutes les salles accessibles
+        // Note: L'API ne supporte pas les filtres multiples, donc on filtre côté client
+      } else {
+        // Filtrer par salle spécifique
+        url += `&gym_id=${selectedGymId}`
+      }
+
+      const response = await fetch(url)
       
       if (!response.ok) throw new Error('Erreur lors du chargement')
       
       const result = await response.json()
-      const schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      let schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      
+      // Toujours filtrer côté client pour ne garder que les salles accessibles
+      const gymIds = userGyms.map(g => g.id)
+      schedulesData = schedulesData.filter((s: WorkSchedule) => 
+        s.gym_id && gymIds.includes(s.gym_id)
+      )
+      
+      // Récupérer les infos utilisateurs pour filtrer les admins
+      const usersResponse = await fetch('/api/db/users')
+      if (usersResponse.ok) {
+        const usersResult = await usersResponse.json()
+        const users = usersResult.data || []
+        
+        // Créer un map email -> rôle
+        const userRoles = new Map<string, string>()
+        users.forEach((user: any) => {
+          userRoles.set(user.email, user.role)
+        })
+        
+        // Filtrer pour ne garder que les plannings des employés (exclure admins et superadmins)
+        schedulesData = schedulesData.filter((schedule: WorkSchedule) => {
+          const role = userRoles.get(schedule.employee_email)
+          return role === 'employee'
+        })
+      }
       
       setSchedules(schedulesData)
+      detectConflicts(schedulesData)
     } catch (error) {
       // Erreur silencieuse - l'interface affichera un état vide
     }
+  }
+
+  const detectConflicts = (schedules: WorkSchedule[]) => {
+    const conflictDates: string[] = []
+
+    // Grouper par date
+    const schedulesByDate = schedules.reduce(
+      (acc, schedule) => {
+        if (!acc[schedule.work_date]) {
+          acc[schedule.work_date] = []
+        }
+        acc[schedule.work_date].push(schedule)
+        return acc
+      },
+      {} as Record<string, WorkSchedule[]>,
+    )
+
+    // Vérifier les conflits pour chaque date
+    Object.entries(schedulesByDate).forEach(([date, daySchedules]) => {
+      for (let i = 0; i < daySchedules.length; i++) {
+        for (let j = i + 1; j < daySchedules.length; j++) {
+          const schedule1 = daySchedules[i]
+          const schedule2 = daySchedules[j]
+
+          // Vérifier uniquement si c'est la MÊME personne
+          if (schedule1.employee_email !== schedule2.employee_email) {
+            continue
+          }
+
+          // Vérifier si les horaires se chevauchent pour la même personne
+          const start1 = new Date(`2000-01-01T${schedule1.start_time}`)
+          const end1 = new Date(`2000-01-01T${schedule1.end_time}`)
+          const start2 = new Date(`2000-01-01T${schedule2.start_time}`)
+          const end2 = new Date(`2000-01-01T${schedule2.end_time}`)
+
+          if (start1 < end2 && end1 > start2) {
+            if (!conflictDates.includes(date)) {
+              conflictDates.push(date)
+            }
+          }
+        }
+      }
+    })
+
+    setConflicts(conflictDates)
   }
 
   const loadEmployees = async () => {
@@ -101,15 +242,62 @@ export function WorkScheduleCalendar() {
       const result = await response.json()
       const employeesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
 
-      const employeesWithColors = employeesData.map((emp: any, index: number) => ({
-        email: emp.email,
-        name: emp.name,
-        color: employeeColors[index % employeeColors.length],
-      }))
+      // Si l'utilisateur n'a pas de salles assignées, ne montrer aucun employé
+      if (userGyms.length === 0) {
+        setEmployees([])
+        return
+      }
 
-      setEmployees(employeesWithColors)
+      // Filtrer les employés pour ne garder que ceux des salles accessibles
+      const gymIds = userGyms.map(g => g.id)
+      
+      // Charger les associations user_gyms pour filtrer les employés
+      const userGymsResponse = await fetch('/api/db/user_gyms')
+      if (userGymsResponse.ok) {
+        const userGymsResult = await userGymsResponse.json()
+        const allUserGyms = userGymsResult.data || []
+        
+        // Créer un Set des IDs utilisateurs qui ont accès aux mêmes salles
+        const employeeIdsWithAccess = new Set<string>()
+        allUserGyms.forEach((ug: any) => {
+          if (gymIds.includes(ug.gym_id)) {
+            employeeIdsWithAccess.add(ug.user_id)
+          }
+        })
+        
+        // Charger tous les utilisateurs pour mapper user_id -> email
+        const usersResponse = await fetch('/api/db/users')
+        if (usersResponse.ok) {
+          const usersResult = await usersResponse.json()
+          const allUsers = usersResult.data || []
+          const userIdToEmail = new Map<string, string>()
+          allUsers.forEach((u: any) => {
+            userIdToEmail.set(u.id, u.email)
+          })
+          
+          // Filtrer les employés pour ne garder que ceux qui ont accès aux mêmes salles
+          const filteredEmployees = employeesData.filter((emp: any) => {
+            // Trouver le user_id correspondant à l'email
+            const userId = [...userIdToEmail.entries()].find(([id, email]) => email === emp.email)?.[0]
+            return userId && employeeIdsWithAccess.has(userId)
+          })
+          
+          const employeesWithColors = filteredEmployees.map((emp: any, index: number) => ({
+            email: emp.email,
+            name: emp.name,
+            color: employeeColors[index % employeeColors.length],
+          }))
+
+          setEmployees(employeesWithColors)
+          return
+        }
+      }
+
+      // En cas d'erreur, ne montrer aucun employé par sécurité
+      setEmployees([])
     } catch (error) {
-      // Erreur silencieuse
+      // Erreur silencieuse - ne montrer aucun employé par sécurité
+      setEmployees([])
     }
   }
 
@@ -121,6 +309,12 @@ export function WorkScheduleCalendar() {
     // Validation des champs obligatoires
     if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate || !selectedEmployee) {
       setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
+
+    // Validation de la salle si l'utilisateur a accès à plusieurs salles
+    if (userGyms.length > 1 && selectedGymId === "all") {
+      setErrorMessage("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
       return
     }
 
@@ -167,18 +361,28 @@ export function WorkScheduleCalendar() {
       }
 
       // Pas de conflit, on peut ajouter
+      const scheduleData: any = {
+        employee_email: selectedEmployee.email,
+        employee_name: selectedEmployee.name,
+        work_date: selectedDateStr,
+        start_time: newSchedule.start_time,
+        end_time: newSchedule.end_time,
+        status: "scheduled",
+      }
+
+      // Ajouter gym_id si une salle spécifique est sélectionnée
+      if (selectedGymId !== "all") {
+        scheduleData.gym_id = selectedGymId
+      } else if (userGyms.length === 1) {
+        // Si l'utilisateur n'a accès qu'à une seule salle, l'utiliser automatiquement
+        scheduleData.gym_id = userGyms[0].id
+      }
+
       const response = await fetch('/api/db/work_schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          data: [{
-            employee_email: selectedEmployee.email,
-            employee_name: selectedEmployee.name,
-            work_date: selectedDateStr,
-            start_time: newSchedule.start_time,
-            end_time: newSchedule.end_time,
-            status: "scheduled",
-          }]
+          data: [scheduleData]
         })
       })
 
@@ -323,7 +527,13 @@ export function WorkScheduleCalendar() {
   }
 
   const handleDateClick = (date: Date) => {
-    if (date < new Date()) return // Empêcher la sélection de dates passées
+    // Empêcher la sélection de dates passées (mais autoriser le jour actuel)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const selectedDay = new Date(date)
+    selectedDay.setHours(0, 0, 0, 0)
+    if (selectedDay < today) return
+    
     setSelectedDate(date)
     setAttemptedSubmit(false)
     setErrorMessage("")
@@ -349,6 +559,32 @@ export function WorkScheduleCalendar() {
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Sélecteur de salle (si plusieurs salles accessibles) */}
+      {userGyms.length > 1 && (
+        <Card className="border border-gray-200 shadow-lg bg-white">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700">
+                Filtrer par salle :
+              </label>
+              <Select value={selectedGymId} onValueChange={setSelectedGymId}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Toutes les salles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les salles</SelectItem>
+                  {userGyms.map((gym) => (
+                    <SelectItem key={gym.id} value={gym.id}>
+                      {gym.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Navigation du calendrier */}
       <Card className="border border-gray-200 shadow-xl bg-white">
         <CardHeader className="pb-3 md:pb-4">
@@ -390,6 +626,7 @@ export function WorkScheduleCalendar() {
               const daySchedules = getSchedulesForDate(dayInfo.date)
               const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
               const isPast = dayInfo.date < new Date() && dayInfo.isCurrentMonth
+              const hasConflict = conflicts.includes(dayInfo.date.toISOString().split("T")[0])
 
               return (
                 <div
@@ -410,13 +647,22 @@ export function WorkScheduleCalendar() {
                     ${
                       isToday
                         ? "border-red-500 bg-red-100"
+                        : hasConflict
+                        ? "border-yellow-500 bg-yellow-50"
                         : "border-gray-200"
                     }
                     ${dayInfo.isCurrentMonth ? "hover:shadow-md" : ""}
                   `}
                 >
-                  <div className="font-semibold text-[10px] md:text-sm mb-0.5 md:mb-1 text-gray-900">
-                    {dayInfo.date.getDate()}
+                  <div className="flex items-center justify-between mb-0.5 md:mb-1">
+                    <div className="font-semibold text-[10px] md:text-sm text-gray-900">
+                      {dayInfo.date.getDate()}
+                    </div>
+                    {hasConflict && (
+                      <span className="text-yellow-600" title="Conflit d'horaires">
+                        ⚠️
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-0.5 md:space-y-1">
                     {daySchedules.slice(0, 2).map((schedule) => (
@@ -435,7 +681,7 @@ export function WorkScheduleCalendar() {
                       </div>
                     )}
                   </div>
-                  {dayInfo.isCurrentMonth && !isPast && (
+                  {dayInfo.isCurrentMonth && !isPast && hasWorkScheduleAccess && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -466,6 +712,12 @@ export function WorkScheduleCalendar() {
               </div>
             ))}
           </div>
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center space-x-2">
+              <span className="text-yellow-600 text-lg">⚠️</span>
+              <span className="text-sm text-gray-700">Conflit d'horaires</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -479,7 +731,7 @@ export function WorkScheduleCalendar() {
           setSelectedEmployee(null)
         }
       }}>
-        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
               <Clock className="h-5 w-5 md:h-6 md:w-6 text-red-600" />
@@ -532,6 +784,41 @@ export function WorkScheduleCalendar() {
                 </SelectContent>
               </Select>
             </div>
+            {userGyms.length > 1 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Salle <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={selectedGymId}
+                  onValueChange={setSelectedGymId}
+                >
+                  <SelectTrigger className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && selectedGymId === 'all' ? 'border-red-500' : ''}`}>
+                    <SelectValue placeholder="Sélectionner une salle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userGyms.map((gym) => (
+                      <SelectItem key={gym.id} value={gym.id}>
+                        {gym.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {userGyms.length === 1 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Salle
+                </label>
+                <Input
+                  type="text"
+                  value={userGyms[0].name}
+                  disabled
+                  className="border-2 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -580,7 +867,7 @@ export function WorkScheduleCalendar() {
 
       {/* Dialog de détails du jour */}
       <Dialog open={showDayDetailsDialog} onOpenChange={setShowDayDetailsDialog}>
-        <DialogContent className="sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
               <CalendarDays className="h-6 w-6 text-red-600" />
@@ -632,7 +919,7 @@ export function WorkScheduleCalendar() {
                     const isOwnSchedule = schedule.employee_email === userEmail
                     const today = new Date().toISOString().split('T')[0]
                     const isPast = schedule.work_date < today
-                    const canModify = isOwnSchedule && !isPast
+                    const canModify = isOwnSchedule && !isPast && hasWorkScheduleAccess
 
                     return (
                       <Card
@@ -733,7 +1020,7 @@ export function WorkScheduleCalendar() {
           setErrorMessage("")
         }
       }}>
-        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
               <Edit2 className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
@@ -805,7 +1092,7 @@ export function WorkScheduleCalendar() {
 
       {/* Dialog de confirmation de suppression */}
       <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
           <DialogHeader>
             <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
               <Trash2 className="h-5 w-5 text-red-600" />
