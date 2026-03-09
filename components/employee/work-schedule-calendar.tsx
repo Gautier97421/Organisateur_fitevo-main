@@ -81,19 +81,24 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   ]
 
   useEffect(() => {
-    loadUserGyms()
-    loadSchedules()
-    loadEmployees()
+    const loadData = async () => {
+      const gyms = await loadUserGyms()
+      if (gyms) {
+        loadSchedules(gyms)
+        loadEmployees(gyms)
+      }
+    }
+    loadData()
   }, [currentDate, selectedGymId])
 
   const loadUserGyms = async () => {
     try {
       const userId = localStorage.getItem("userId")
-      if (!userId) return
+      if (!userId) return null
 
       // Charger les salles accessibles par l'utilisateur
       const response = await fetch(`/api/db/user_gyms?user_id=${userId}`)
-      if (!response.ok) return
+      if (!response.ok) return null
 
       const result = await response.json()
       const userGymData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
@@ -102,7 +107,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       const gymIds = userGymData.map((ug: any) => ug.gym_id)
       if (gymIds.length === 0) {
         setUserGyms([])
-        return
+        return []
       }
 
       // Charger chaque salle individuellement pour éviter d'exposer les autres salles
@@ -120,21 +125,26 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       const gyms = await Promise.all(gymsPromises)
       const accessibleGyms = gyms.filter((gym: any) => gym !== null && gym.is_active !== false)
       setUserGyms(accessibleGyms)
+      return accessibleGyms
     } catch (error) {
       console.error("Erreur lors du chargement des salles:", error)
       setUserGyms([])
+      return []
     }
   }
 
-  const loadSchedules = async () => {
+  const loadSchedules = async (gyms?: any[]) => {
     try {
+      // Utiliser les gyms passés en paramètre ou ceux du state
+      const gymsToUse = gyms || userGyms
+      
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
 
       let url = `/api/db/work_schedules?work_date_gte=${startOfMonth.toISOString().split("T")[0]}&work_date_lte=${endOfMonth.toISOString().split("T")[0]}&orderBy=work_date`
 
       // Si l'utilisateur n'a aucune salle assignée, ne rien charger
-      if (userGyms.length === 0) {
+      if (gymsToUse.length === 0) {
         setSchedules([])
         setConflicts([])
         return
@@ -157,9 +167,15 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       let schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
       
       // Toujours filtrer côté client pour ne garder que les salles accessibles
-      const gymIds = userGyms.map(g => g.id)
+      const gymIds = gymsToUse.map(g => g.id)
       schedulesData = schedulesData.filter((s: WorkSchedule) => 
         s.gym_id && gymIds.includes(s.gym_id)
+      )
+      
+      // Exclure les périodes de travail temporaires (celles créées par les employés)
+      // On ne garde que les plannings prévus (is_temporary = false ou undefined)
+      schedulesData = schedulesData.filter((s: any) => 
+        !s.is_temporary
       )
       
       // Récupérer les infos utilisateurs pour filtrer les admins
@@ -233,8 +249,11 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     setConflicts(conflictDates)
   }
 
-  const loadEmployees = async () => {
+  const loadEmployees = async (gyms?: any[]) => {
     try {
+      // Utiliser les gyms passés en paramètre ou ceux du state
+      const gymsToUse = gyms || userGyms
+      
       const response = await fetch('/api/db/employees?is_active=true')
       
       if (!response.ok) throw new Error('Erreur lors du chargement')
@@ -243,13 +262,13 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       const employeesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
 
       // Si l'utilisateur n'a pas de salles assignées, ne montrer aucun employé
-      if (userGyms.length === 0) {
+      if (gymsToUse.length === 0) {
         setEmployees([])
         return
       }
 
       // Filtrer les employés pour ne garder que ceux des salles accessibles
-      const gymIds = userGyms.map(g => g.id)
+      const gymIds = gymsToUse.map(g => g.id)
       
       // Charger les associations user_gyms pour filtrer les employés
       const userGymsResponse = await fetch('/api/db/user_gyms')
@@ -323,17 +342,33 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     
     try {
       // Récupérer les schedules du jour depuis l'API pour avoir les données fraîches
-      // Utiliser une plage de dates pour éviter les problèmes de fuseaux horaires
+      // Note: On charge TOUS les horaires du jour pour vérifier uniquement les conflits avec le même employé
       const checkResponse = await fetch(
-        `/api/db/work_schedules?work_date_gte=${selectedDateStr}&work_date_lte=${selectedDateStr}&employee_email=${encodeURIComponent(selectedEmployee.email)}`
+        `/api/db/work_schedules?work_date_gte=${selectedDateStr}&work_date_lte=${selectedDateStr}`
       )
       
       if (checkResponse.ok) {
         const checkResult = await checkResponse.json()
-        const existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
+        let existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
+        
+        console.log(`[Employee] Total schedules trouvés: ${existingSchedules.length}`)
+        console.log(`[Employee] Vérification pour employé: ${selectedEmployee.email} le ${selectedDateStr}`)
+        
+        // Filtrer côté client pour garantir qu'on vérifie uniquement les horaires du même employé ET du même jour (exclure les périodes temporaires)
+        existingSchedules = existingSchedules.filter((s: any) => {
+          const isSameEmployee = s.employee_email === selectedEmployee.email
+          // Normaliser les dates pour comparer (extraire juste YYYY-MM-DD)
+          const scheduleDate = s.work_date?.split('T')[0] || s.work_date
+          const isSameDate = scheduleDate === selectedDateStr
+          const isNotTemporary = !s.is_temporary
+          console.log(`  - Schedule: ${scheduleDate} ${s.employee_email} ${s.start_time}-${s.end_time}, sameEmp=${isSameEmployee}, sameDate=${isSameDate}, notTemp=${isNotTemporary}`)
+          return isSameEmployee && isSameDate && isNotTemporary
+        })
+        
+        console.log(`[Employee] Schedules du même employé: ${existingSchedules.length}`)
         
         if (existingSchedules.length > 0) {
-          // Vérifier les chevauchements d'horaires
+          // Vérifier les chevauchements d'horaires pour le même employé uniquement
           const newStart = newSchedule.start_time
           const newEnd = newSchedule.end_time
 
@@ -896,12 +931,25 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 )
               }
 
-              // Détection des conflits d'horaires
+              // Détection des conflits d'horaires (uniquement pour le même employé)
               const hasConflicts = daySchedules.some((schedule, index) => {
-                if (index === 0) return false
-                const prevEnd = daySchedules[index - 1].end_time
-                const currentStart = schedule.start_time
-                return currentStart < prevEnd
+                // Vérifier si cet horaire chevauche un autre horaire du même employé
+                return daySchedules.some((otherSchedule, otherIndex) => {
+                  if (index === otherIndex) return false // Ne pas se comparer à soi-même
+                  if (schedule.employee_email !== otherSchedule.employee_email) return false // Ignorer les autres employés
+                  
+                  // Vérifier le chevauchement d'horaires
+                  const start = schedule.start_time
+                  const end = schedule.end_time
+                  const otherStart = otherSchedule.start_time
+                  const otherEnd = otherSchedule.end_time
+                  
+                  return (
+                    (start >= otherStart && start < otherEnd) ||
+                    (end > otherStart && end <= otherEnd) ||
+                    (start <= otherStart && end >= otherEnd)
+                  )
+                })
               })
 
               return (
@@ -959,7 +1007,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                             )}
                           </div>
                           {canModify && (
-                            <div className="flex gap-2 mt-3">
+                            <div className="grid grid-cols-2 gap-2 mt-3">
                               <Button
                                 size="sm"
                                 onClick={() => {
@@ -971,7 +1019,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                                   setShowDayDetailsDialog(false)
                                   setShowEditDialog(true)
                                 }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
                               >
                                 <Edit2 className="h-3 w-3 mr-1" />
                                 Modifier
@@ -984,7 +1032,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                                   setShowDayDetailsDialog(false)
                                   setShowDeleteConfirmDialog(true)
                                 }}
-                                className="border-red-600 text-red-600 hover:bg-red-50 flex-1"
+                                className="border-red-600 text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="h-3 w-3 mr-1" />
                                 Supprimer

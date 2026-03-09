@@ -40,6 +40,19 @@ export default function AdminPage() {
     setUserEmail(email)
     setUserName(name)
     setUserRole(role)
+    
+    // Lancer le nettoyage des périodes temporaires en arrière-plan
+    // Cela supprime les work_schedules temporaires des jours précédents
+    fetch('/api/cleanup-temp-periods', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.count > 0) {
+          console.log(`🧹 Nettoyage automatique: ${data.count} périodes temporaires supprimées`)
+        }
+      })
+      .catch(err => {
+        console.error('Erreur lors du nettoyage automatique:', err)
+      })
   }, [])
 
   useEffect(() => {

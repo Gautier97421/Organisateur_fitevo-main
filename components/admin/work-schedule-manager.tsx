@@ -63,6 +63,7 @@ export function WorkScheduleManager() {
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
   const [scheduleToDelete, setScheduleToDelete] = useState<string | null>(null)
   const [employeeGyms, setEmployeeGyms] = useState<Gym[]>([])
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const [newSchedule, setNewSchedule] = useState({
     start_time: "",
     end_time: "",
@@ -166,6 +167,10 @@ export function WorkScheduleManager() {
           console.log('[WorkScheduleManager] employee_name:', data[0].employee_name)
           console.log('[WorkScheduleManager] employeeName:', data[0].employeeName)
         }
+        
+        // Exclure les périodes de travail temporaires (celles créées par les employés en temps réel)
+        // On ne garde que les plannings prévus (is_temporary = false ou undefined)
+        data = data.filter((schedule: any) => !schedule.is_temporary)
         
         // Filtrer selon le rôle
         const userRole = localStorage.getItem("userRole") || ""
@@ -404,16 +409,16 @@ export function WorkScheduleManager() {
 
   const addSchedule = async () => {
     setAttemptedSubmit(true)
+    setErrorMessage("")
 
     if (!selectedDate || !selectedEmployeeEmail || !newSchedule.start_time || !newSchedule.end_time) {
-      console.error("Veuillez remplir tous les champs obligatoires")
+      setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
       return
     }
 
     // Validation de la salle obligatoire
     if (addDialogGymId === "all") {
-      console.error("Veuillez sélectionner une salle spécifique")
-      alert("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
+      setErrorMessage("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
       return
     }
 
@@ -423,6 +428,61 @@ export function WorkScheduleManager() {
       if (!selectedEmployee) {
         console.error("Employé introuvable")
         return
+      }
+
+      // Vérifier les conflits d'horaires pour le même employé
+      const selectedDateStr = selectedDate.toISOString().split("T")[0]
+      const checkResponse = await fetch(
+        `/api/db/work_schedules?work_date_gte=${selectedDateStr}&work_date_lte=${selectedDateStr}`
+      )
+      
+      if (checkResponse.ok) {
+        const checkResult = await checkResponse.json()
+        let existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
+        
+        console.log(`[Admin] Total schedules trouvés: ${existingSchedules.length}`)
+        console.log(`[Admin] Vérification pour employé: ${selectedEmployeeEmail} le ${selectedDateStr}`)
+        
+        // Filtrer pour ne garder que les horaires du même employé ET du même jour (exclure les périodes temporaires)
+        existingSchedules = existingSchedules.filter((s: any) => {
+          const isSameEmployee = s.employee_email === selectedEmployeeEmail
+          // Normaliser les dates pour comparer (extraire juste YYYY-MM-DD)
+          const scheduleDate = s.work_date?.split('T')[0] || s.work_date
+          const isSameDate = scheduleDate === selectedDateStr
+          const isNotTemporary = !s.is_temporary
+          console.log(`  - Schedule: ${scheduleDate} ${s.employee_email} ${s.start_time}-${s.end_time}, sameEmp=${isSameEmployee}, sameDate=${isSameDate}, notTemp=${isNotTemporary}`)
+          return isSameEmployee && isSameDate && isNotTemporary
+        })
+        
+        console.log(`[Admin] Schedules du même employé: ${existingSchedules.length}`)
+        
+        if (existingSchedules.length > 0) {
+          // Vérifier les chevauchements d'horaires
+          const newStart = newSchedule.start_time
+          const newEnd = newSchedule.end_time
+
+          const hasConflict = existingSchedules.some((existing: any) => {
+            const existingStart = existing.start_time
+            const existingEnd = existing.end_time
+
+            // Vérifier si les horaires se chevauchent
+            const conflict = (
+              (newStart >= existingStart && newStart < existingEnd) || // Le début est dans un horaire existant
+              (newEnd > existingStart && newEnd <= existingEnd) ||      // La fin est dans un horaire existant
+              (newStart <= existingStart && newEnd >= existingEnd)      // L'horaire englobe un horaire existant
+            )
+            
+            console.log(`  - Conflit avec ${existingStart}-${existingEnd}? ${conflict}`)
+            return conflict
+          })
+
+          if (hasConflict) {
+            setErrorMessage(
+              `Conflit d'horaire : ${selectedEmployee.name} a déjà un planning sur cette plage horaire. Veuillez modifier ou supprimer l'horaire existant.`
+            )
+            return
+          }
+        }
       }
 
       const scheduleData: any = {
@@ -454,6 +514,7 @@ export function WorkScheduleManager() {
       setAddDialogGymId("all")
       setEmployeeGyms([])
       setAttemptedSubmit(false)
+      setErrorMessage("")
       setNewSchedule({
         start_time: "",
         end_time: "",
@@ -976,6 +1037,12 @@ export function WorkScheduleManager() {
               </div>
             </div>
           </div>
+          {errorMessage && (
+            <div className="flex items-center gap-2 p-3 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-lg text-sm">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Button
               variant="outline"
@@ -984,6 +1051,7 @@ export function WorkScheduleManager() {
                 setSelectedDate(null)
                 setSelectedEmployeeEmail("")
                 setAttemptedSubmit(false)
+                setErrorMessage("")
               }}
               className="w-full sm:w-auto text-base sm:text-lg px-4 sm:px-6 py-2 border border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center gap-2"
             >
