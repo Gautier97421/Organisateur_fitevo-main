@@ -632,6 +632,8 @@ export default function EmployeePage() {
                   </div>
                 </Button>
 
+
+
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
                   <Button

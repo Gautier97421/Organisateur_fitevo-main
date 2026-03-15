@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { AlertTriangle, FileText, XCircle, CheckCircle } from "lucide-react"
 import {
   Dialog,
@@ -16,11 +17,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+interface CashRegisterField {
+  id: string
+  label: string
+  fieldType: string
+  isRequired: boolean
+  orderIndex: number
+}
+
 interface CashRegisterData {
   cash_amount: number
   total_register: number
   coins_detail: string
   notes?: string
+  [key: string]: any
 }
 
 interface CashRegisterFormProps {
@@ -28,15 +38,20 @@ interface CashRegisterFormProps {
   onClose: () => void
   onSubmit: (data: CashRegisterData) => void
   period: "matin" | "aprem" | "journee"
+  gymId?: string
 }
 
-export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegisterFormProps) {
+export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: CashRegisterFormProps) {
   const [formData, setFormData] = useState<CashRegisterData>({
     cash_amount: 0,
     total_register: 0,
     coins_detail: "",
     notes: "",
   })
+
+  const [customFields, setCustomFields] = useState<CashRegisterField[]>([])
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({})
+  const [isLoadingFields, setIsLoadingFields] = useState(true)
 
   const [coinCounts, setCoinCounts] = useState({
     "0.01": 0,
@@ -55,6 +70,39 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
     "200.00": 0,
     "500.00": 0,
   })
+
+  // Charger les champs personnalisés
+  useEffect(() => {
+    const loadCustomFields = async () => {
+      try {
+        let url = "/api/db/cash-register-fields?period=" + period
+        if (gymId) {
+          url += "&gym_id=" + gymId
+        }
+        const response = await fetch(url)
+        if (response.ok) {
+          const data = await response.json()
+          const fields = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+          setCustomFields(fields)
+          
+          // Initialiser les valeurs des champs personnalisés
+          const initialValues: Record<string, any> = {}
+          fields.forEach((field: CashRegisterField) => {
+            initialValues[field.id] = field.fieldType === "checkbox" ? false : ""
+          })
+          setCustomFieldValues(initialValues)
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement des champs personnalisés:", error)
+      } finally {
+        setIsLoadingFields(false)
+      }
+    }
+    
+    if (isOpen) {
+      loadCustomFields()
+    }
+  }, [isOpen, period, gymId])
 
   const coinLabels = {
     "0.01": "1 centime",
@@ -109,6 +157,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
         .filter(([_, count]) => count > 0)
         .map(([value, count]) => `${coinLabels[value as keyof typeof coinLabels]}: ${count}`)
         .join(", "),
+      ...customFieldValues
     }
     onSubmit(finalData)
   }
@@ -225,6 +274,52 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period }: CashRegi
                     </p>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Champs personnalisés de caisse */}
+          {!isLoadingFields && customFields.length > 0 && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardHeader>
+                <CardTitle className="text-lg text-gray-900">📋 Informations supplémentaires</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {customFields.map((field) => (
+                  <div key={field.id} className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-900">
+                      {field.label}
+                      {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
+                    {field.fieldType === "checkbox" ? (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={customFieldValues[field.id] || false}
+                          onCheckedChange={(checked) =>
+                            setCustomFieldValues({
+                              ...customFieldValues,
+                              [field.id]: checked
+                            })
+                          }
+                        />
+                        <span className="text-sm text-gray-600">{field.label}</span>
+                      </div>
+                    ) : (
+                      <Input
+                        type={field.fieldType === "number" ? "number" : "text"}
+                        value={customFieldValues[field.id] || ""}
+                        onChange={(e) =>
+                          setCustomFieldValues({
+                            ...customFieldValues,
+                            [field.id]: field.fieldType === "number" ? Number(e.target.value) : e.target.value
+                          })
+                        }
+                        className="text-lg border-2 rounded-xl bg-white text-gray-900"
+                        placeholder={field.label}
+                      />
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
