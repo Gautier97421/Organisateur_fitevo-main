@@ -11,8 +11,9 @@ import { WorkScheduleManager } from "@/components/admin/work-schedule-manager"
 import { CustomPageManager } from "@/components/admin/custom-page-manager"
 import { CustomPageContent } from "@/components/admin/custom-page-content"
 import { CashRegisterFieldManager } from "@/components/admin/cash-register-field-manager"
+import { CashRecapManager } from "@/components/admin/cash-recap-manager"
 import { useRouter } from "next/navigation"
-import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, Shield, LogOut, LayoutDashboard, Banknote } from "lucide-react"
+import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, Shield, LogOut, LayoutDashboard, Banknote, BarChart3 } from "lucide-react"
 import * as LucideIcons from "lucide-react"
 
 interface CustomPage {
@@ -32,8 +33,6 @@ export default function AdminPage() {
   const [userRole, setUserRole] = useState("")
   const [customPages, setCustomPages] = useState<CustomPage[]>([])
   const [isLoadingPages, setIsLoadingPages] = useState(true)
-  const [employees, setEmployees] = useState<any[]>([])
-  const [roles, setRoles] = useState<any[]>([])
   const router = useRouter()
 
   useEffect(() => {
@@ -57,27 +56,6 @@ export default function AdminPage() {
         console.error('Erreur lors du nettoyage automatique:', err)
       })
 
-    // Charger les employés et les rôles
-    const loadEmployeesAndRoles = async () => {
-      try {
-        const [empResponse, rolesResponse] = await Promise.all([
-          fetch("/api/db/user"),
-          fetch("/api/db/role")
-        ])
-        if (empResponse.ok) {
-          const empData = await empResponse.json()
-          setEmployees(Array.isArray(empData.data) ? empData.data : (empData.data ? [empData.data] : []))
-        }
-        if (rolesResponse.ok) {
-          const rolesData = await rolesResponse.json()
-          setRoles(Array.isArray(rolesData.data) ? rolesData.data : (rolesData.data ? [rolesData.data] : []))
-        }
-      } catch (error) {
-        console.error("Erreur lors du chargement des employés/rôles:", error)
-      }
-    }
-    
-    loadEmployeesAndRoles()
   }, [])
 
   useEffect(() => {
@@ -117,8 +95,9 @@ export default function AdminPage() {
     { id: "gyms", label: "Salles", icon: Building2, component: <GymManager /> },
     { id: "employees", label: "Utilisateurs", icon: Users, component: <EmployeeManager /> },
     { id: "schedule", label: "Planning", icon: Calendar, component: <WorkScheduleManager /> },
-    { id: "cash-fields", label: "Champs Caisse", icon: Banknote, component: <CashRegisterFieldManager /> },
     { id: "calendar", label: "Événements", icon: CalendarDays, component: <CalendarManager /> },
+    { id: "cash-fields", label: "Champs Caisse", icon: Banknote, component: <CashRegisterFieldManager /> },
+    { id: "cash-recap", label: "Récap", icon: BarChart3, component: <CashRecapManager /> },
     { id: "monitor", label: "Suivi", icon: Activity, component: <RealTimeMonitor /> },
   ]
 

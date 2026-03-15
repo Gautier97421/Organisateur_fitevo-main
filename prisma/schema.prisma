@@ -333,6 +333,25 @@ model CashRegisterField {
   @@map("cash_register_fields")
 }
 
+model CashRegisterEntry {
+  id            String   @id @default(cuid())
+  entryDate     DateTime @map("entry_date")
+  entryMonth    String   @map("entry_month") // Format YYYY-MM pour comparaisons mensuelles
+  period        String   // matin, aprem, journee
+  gymId         String?  @map("gym_id")
+  userEmail     String   @map("user_email")
+  userName      String?  @map("user_name")
+  totalRegister Float    @map("total_register")
+  cashAmount    Float    @map("cash_amount")
+  coinsDetail   String?  @map("coins_detail") @db.Text
+  notes         String?  @db.Text
+  customValues  Json?    @map("custom_values")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("cash_register_entries")
+}
+
 model ScheduledEvent {
   id               String   @id @default(cuid())
   title            String
@@ -342,6 +361,8 @@ model ScheduledEvent {
   endTime          String?  @map("end_time")
   assignType       String?  @map("assign_type") // employee, role (optionnel)
   assignedTo       String?  @map("assigned_to") // ID employe ou role (optionnel)
+  assignedEmployeeEmail String? @map("assigned_employee_email")
+  assignedRoleId   String?  @map("assigned_role_id")
   requiresValidation Boolean @default(true) @map("requires_validation")
   status           String   @default("pending") // pending, moved (déplacé lendemain)
   createdByEmail   String   @map("created_by_email")

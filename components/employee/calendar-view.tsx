@@ -32,6 +32,20 @@ interface CalendarEvent {
   rejection_reason?: string
 }
 
+interface ScheduledEvent {
+  id: string
+  title: string
+  description?: string
+  event_date: string
+  start_time?: string
+  end_time?: string
+  assigned_employee_email?: string
+  assigned_role_id?: string
+  requires_validation: boolean
+  status: string
+  is_validated_by_current_user: boolean
+}
+
 interface CalendarViewProps {
   hasWorkScheduleAccess?: boolean
   hasCalendarAccess?: boolean
@@ -55,6 +69,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
   const [eventToEdit, setEventToEdit] = useState<CalendarEvent | null>(null)
   const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null)
+  const [scheduledEvents, setScheduledEvents] = useState<ScheduledEvent[]>([])
+  const [isValidatingEventId, setIsValidatingEventId] = useState<string | null>(null)
   const [newEvent, setNewEvent] = useState({
     title: "",
     description: "",
@@ -69,6 +85,54 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     // Mais on ne force pas le changement si l'utilisateur a déjà choisi une vue
   }, [hasWorkScheduleAccess, hasCalendarAccess, activeView])
 
+  const getCurrentUserRoleId = async () => {
+    const cachedRoleId = localStorage.getItem("roleId")
+    if (cachedRoleId) {
+      return cachedRoleId
+    }
+
+    const userEmail = localStorage.getItem("userEmail")
+    if (!userEmail) {
+      return ""
+    }
+
+    const result = await supabase.from("employees").select("role_id").eq("email", userEmail).single()
+    const roleId = result?.data?.role_id || ""
+    if (roleId) {
+      localStorage.setItem("roleId", roleId)
+    }
+    return roleId
+  }
+
+  const loadScheduledEventsForRange = async (startDate: Date, endDate: Date) => {
+    try {
+      const userEmail = localStorage.getItem("userEmail") || ""
+      const roleId = await getCurrentUserRoleId()
+
+      const params = new URLSearchParams({
+        start_date: startDate.toISOString().split("T")[0],
+        end_date: endDate.toISOString().split("T")[0],
+      })
+
+      if (userEmail) {
+        params.append("user_email", userEmail)
+      }
+      if (roleId) {
+        params.append("role_id", roleId)
+      }
+
+      const response = await fetch(`/api/db/scheduled-events?${params.toString()}`)
+      if (!response.ok) {
+        throw new Error("Erreur chargement événements planifiés")
+      }
+
+      const payload = await response.json()
+      setScheduledEvents(Array.isArray(payload.data) ? payload.data : [])
+    } catch (error) {
+      console.error("Erreur lors du chargement des événements à valider:", error)
+    }
+  }
+
   const loadEvents = async () => {
     try {
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1)
@@ -82,6 +146,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
       if (error) throw error
       setEvents(data || [])
+      await loadScheduledEventsForRange(startOfYear, endOfYear)
     } catch (error) {
       console.error("Erreur lors du chargement des événements:", error)
     }
@@ -102,8 +167,37 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
       if (error) throw error
       setEvents(data || [])
+      await loadScheduledEventsForRange(startOfMonth, endOfMonth)
     } catch (error) {
       // Erreur silencieuse
+    }
+  }
+
+  const validateScheduledEvent = async (eventId: string) => {
+    const userEmail = localStorage.getItem("userEmail") || ""
+    if (!userEmail) return
+
+    try {
+      setIsValidatingEventId(eventId)
+      const response = await fetch("/api/db/scheduled-event-validations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, userEmail }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Validation impossible")
+      }
+
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
+      }
+    } catch (error) {
+      console.error("Erreur validation événement planifié:", error)
+    } finally {
+      setIsValidatingEventId(null)
     }
   }
 
@@ -397,6 +491,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   ]
 
   const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+  const pendingScheduledEvents = scheduledEvents
+    .filter((event) => event.requires_validation && !event.is_validated_by_current_user)
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
 
   return (
     <div className="space-y-6">
@@ -606,7 +703,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                             </div>
                           )}
                           {dayEvents.length === 0 && dayInfo.isCurrentMonth && !isPast && hasCalendarAccess && (
-                            <div className="text-xs text-gray-400 italic">Cliquer pour ajouter</div>
+                            <div className="text-xs text-gray-400 italic">Cliquer sur le "+" pour ajouter</div>
                           )}
                         </div>
                         {dayInfo.isCurrentMonth && !isPast && hasCalendarAccess && (
@@ -646,6 +743,51 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                   <span className="text-gray-700">Refusé</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-orange-200 shadow-xl bg-orange-50">
+            <CardHeader>
+              <h3 className="text-lg font-bold text-orange-900">Événements à valider</h3>
+              <p className="text-sm text-orange-700">
+                Les événements avec restriction repassent automatiquement au lendemain tant qu'ils ne sont pas validés.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {pendingScheduledEvents.length === 0 ? (
+                <p className="text-sm text-orange-700">Aucune validation en attente.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingScheduledEvents.map((event) => (
+                    <div key={event.id} className="rounded-lg border border-orange-200 bg-white p-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-900">{event.title}</p>
+                          <p className="text-sm text-gray-600">
+                            {new Date(event.event_date).toLocaleDateString("fr-FR", {
+                              weekday: "long",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                            {event.start_time ? ` • ${event.start_time}` : ""}
+                          </p>
+                          <p className="text-xs text-orange-700 mt-1">
+                            Statut: {event.status === "moved" ? "Si non validée, reporté au lendemain" : event.status}
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => validateScheduledEvent(event.id)}
+                          disabled={isValidatingEventId === event.id}
+                          className="bg-orange-600 hover:bg-orange-700 text-white"
+                        >
+                          {isValidatingEventId === event.id ? "Validation..." : "Valider"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

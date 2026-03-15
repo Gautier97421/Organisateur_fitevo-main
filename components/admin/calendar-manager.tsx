@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle, CalendarDays, MapPin, Edit2 } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
@@ -34,6 +35,17 @@ interface CalendarEvent {
   created_at: string
 }
 
+interface EmployeeOption {
+  id: string
+  name: string
+  email: string
+}
+
+interface RoleOption {
+  id: string
+  name: string
+}
+
 export function CalendarManager() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -54,12 +66,17 @@ export function CalendarManager() {
   const [showEditEventDialog, setShowEditEventDialog] = useState(false)
   const [eventToEdit, setEventToEdit] = useState<CalendarEvent | null>(null)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [roles, setRoles] = useState<RoleOption[]>([])
   const [newEvent, setNewEvent] = useState({
     title: "",
     description: "",
     location: "",
     event_time: "",
     duration_minutes: 60,
+    assigned_employee_email: "",
+    assigned_role_id: "",
+    requires_validation: false,
   })
   const [reminderSettings, setReminderSettings] = useState({
     days_before: 1,
@@ -95,6 +112,25 @@ export function CalendarManager() {
     }
   }
 
+  const loadAssignmentOptions = async () => {
+    try {
+      const [employeesResult, rolesResult] = await Promise.all([
+        supabase.from("employees").select("id,name,email").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("roles").select("id,name").order("name", { ascending: true }),
+      ])
+
+      if (!employeesResult.error) {
+        setEmployees(Array.isArray(employeesResult.data) ? employeesResult.data : [])
+      }
+
+      if (!rolesResult.error) {
+        setRoles(Array.isArray(rolesResult.data) ? rolesResult.data : [])
+      }
+    } catch (error) {
+      console.error("Erreur chargement options d'assignation:", error)
+    }
+  }
+
   const loadMonthEvents = async () => {
     if (!selectedMonth) return
 
@@ -123,6 +159,10 @@ export function CalendarManager() {
       loadMonthEvents()
     }
   }, [currentDate, calendarView, selectedMonth])
+
+  useEffect(() => {
+    loadAssignmentOptions()
+  }, [])
 
   // Rafraîchissement automatique toutes les 15 secondes
   useAutoRefresh(() => {
@@ -169,6 +209,22 @@ export function CalendarManager() {
 
       if (error) throw error
 
+      await fetch("/api/db/scheduled-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newEvent.title,
+          description: newEvent.description,
+          eventDate: selectedDate.toISOString().split("T")[0],
+          startTime: newEvent.event_time || null,
+          durationMinutes: newEvent.duration_minutes,
+          assignedEmployeeEmail: newEvent.assigned_employee_email || null,
+          assignedRoleId: newEvent.assigned_role_id || null,
+          requiresValidation: newEvent.requires_validation,
+          createdByEmail: userEmail,
+        }),
+      })
+
       // Recharger les événements après l'ajout
       if (calendarView === "year") {
         await loadEvents()
@@ -182,6 +238,9 @@ export function CalendarManager() {
         location: "",
         event_time: "",
         duration_minutes: 60,
+        assigned_employee_email: "",
+        assigned_role_id: "",
+        requires_validation: false,
       })
       setShowAddEventDialog(false)
       setSelectedDate(null)
@@ -221,7 +280,16 @@ export function CalendarManager() {
 
       setShowEditEventDialog(false)
       setEventToEdit(null)
-      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+      setNewEvent({
+        title: "",
+        description: "",
+        location: "",
+        event_time: "",
+        duration_minutes: 60,
+        assigned_employee_email: "",
+        assigned_role_id: "",
+        requires_validation: false,
+      })
       setAttemptedSubmit(false)
     } catch (error) {
       console.error("Erreur lors de la modification:", error)
@@ -715,7 +783,7 @@ export function CalendarManager() {
                             </div>
                           )}
                           {dayEvents.length === 0 && dayInfo.isCurrentMonth && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer pour ajouter</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer sur le "+" pour ajouter</div>
                           )}
                         </div>
                         {dayInfo.isCurrentMonth && (
@@ -906,6 +974,16 @@ export function CalendarManager() {
         if (!open) {
           setAttemptedSubmit(false)
           setSelectedDate(null)
+          setNewEvent({
+            title: "",
+            description: "",
+            location: "",
+            event_time: "",
+            duration_minutes: 60,
+            assigned_employee_email: "",
+            assigned_role_id: "",
+            requires_validation: false,
+          })
         }
       }}>
         <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
@@ -989,6 +1067,72 @@ export function CalendarManager() {
                 />
               </div>
             </div>
+
+            <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+              <p className="text-sm font-semibold text-gray-800">Assignation (optionnelle)</p>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Employé assigné</label>
+                <Select
+                  value={newEvent.assigned_employee_email || "none"}
+                  onValueChange={(value) =>
+                    setNewEvent({ ...newEvent, assigned_employee_email: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                    <SelectValue placeholder="Aucun employé" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun employé</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.email}>
+                        {employee.name} ({employee.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Rôle assigné</label>
+                <Select
+                  value={newEvent.assigned_role_id || "none"}
+                  onValueChange={(value) =>
+                    setNewEvent({ ...newEvent, assigned_role_id: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                    <SelectValue placeholder="Aucun rôle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun rôle</SelectItem>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
+                <Checkbox
+                  id="requires_validation"
+                  checked={newEvent.requires_validation}
+                  onCheckedChange={(checked) =>
+                    setNewEvent({ ...newEvent, requires_validation: Boolean(checked) })
+                  }
+                />
+                <div>
+                  <label htmlFor="requires_validation" className="text-sm font-medium text-gray-800 cursor-pointer">
+                    Restriction de validation
+                  </label>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Si activé, l'événement passe au lendemain tant qu'il n'est pas validé.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:space-x-3">
             <Button
@@ -997,6 +1141,16 @@ export function CalendarManager() {
                 setShowAddEventDialog(false)
                 setSelectedDate(null)
                 setAttemptedSubmit(false)
+                setNewEvent({
+                  title: "",
+                  description: "",
+                  location: "",
+                  event_time: "",
+                  duration_minutes: 60,
+                  assigned_employee_email: "",
+                  assigned_role_id: "",
+                  requires_validation: false,
+                })
               }}
               className="text-sm md:text-lg px-4 md:px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 w-full sm:w-auto"
             >
@@ -1335,6 +1489,9 @@ export function CalendarManager() {
                         location: selectedEventForDetails.location,
                         event_time: selectedEventForDetails.event_time || "",
                         duration_minutes: selectedEventForDetails.duration_minutes,
+                        assigned_employee_email: "",
+                        assigned_role_id: "",
+                        requires_validation: false,
                       })
                       setShowEventDetailsDialog(false)
                       setShowEditEventDialog(true)
@@ -1367,7 +1524,16 @@ export function CalendarManager() {
         setShowEditEventDialog(open)
         if (!open) {
           setEventToEdit(null)
-          setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+          setNewEvent({
+            title: "",
+            description: "",
+            location: "",
+            event_time: "",
+            duration_minutes: 60,
+            assigned_employee_email: "",
+            assigned_role_id: "",
+            requires_validation: false,
+          })
           setAttemptedSubmit(false)
         }
       }}>

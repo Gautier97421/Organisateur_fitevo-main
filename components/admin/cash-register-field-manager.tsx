@@ -50,7 +50,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
     label: "",
     fieldType: "number",
     isRequired: false,
-    period: "",
+    period: "all",
   })
 
   // Charger les champs
@@ -79,7 +79,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         label: field.label,
         fieldType: field.fieldType,
         isRequired: field.isRequired,
-        period: field.period || "",
+        period: field.period || "all",
       })
       setIsEditing(true)
     } else {
@@ -88,7 +88,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         label: "",
         fieldType: "number",
         isRequired: false,
-        period: "",
+        period: "all",
       })
       setIsEditing(false)
     }
@@ -108,7 +108,8 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: selectedField.id,
-            ...formData
+            ...formData,
+            period: formData.period === "all" ? null : formData.period,
           })
         })
       } else {
@@ -118,6 +119,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...formData,
+            period: formData.period === "all" ? null : formData.period,
             createdBy: userEmail
           })
         })
@@ -294,7 +296,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Toutes les périodes</SelectItem>
+                  <SelectItem value="all">Toutes les périodes</SelectItem>
                   <SelectItem value="matin">Matin</SelectItem>
                   <SelectItem value="aprem">Après-midi</SelectItem>
                   <SelectItem value="journee">Journée</SelectItem>

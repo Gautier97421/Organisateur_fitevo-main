@@ -880,18 +880,18 @@ export function WorkScheduleManager() {
               </DialogDescription>
             )}
           </DialogHeader>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <DialogFooter className="flex flex-col gap-2">
             <Button
               variant="outline"
               onClick={() => setShowDetailsDialog(false)}
-              className="w-full sm:w-auto text-base sm:text-lg px-4 sm:px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+              className="w-full text-base sm:text-lg px-4 sm:px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
             >
               Fermer
             </Button>
             {selectedSchedule && selectedSchedule.status === "scheduled" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "confirmed")}
-                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
+                className="w-full bg-green-600 hover:bg-green-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
               >
                 <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Confirmer
               </Button>
@@ -900,7 +900,7 @@ export function WorkScheduleManager() {
               <Button
                 onClick={() => confirmDeleteSchedule(selectedSchedule.id)}
                 variant="outline"
-                className="w-full sm:w-auto border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2 dark:bg-gray-700 dark:hover:bg-red-900/20"
+                className="w-full border-2 border-red-600 text-red-600 hover:bg-red-50 bg-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2 dark:bg-gray-700 dark:hover:bg-red-900/20"
               >
                 <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" /> Supprimer
               </Button>

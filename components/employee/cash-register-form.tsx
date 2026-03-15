@@ -150,6 +150,21 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
 
   const handleSubmit = () => {
     generateCoinsDetail()
+
+    // Sécuriser les champs numériques personnalisés: jamais de valeur négative.
+    const sanitizedCustomValues: Record<string, any> = { ...customFieldValues }
+    customFields.forEach((field) => {
+      if (field.fieldType === "number") {
+        const raw = sanitizedCustomValues[field.id]
+        if (raw === "" || raw === null || raw === undefined) {
+          sanitizedCustomValues[field.id] = ""
+        } else {
+          const parsed = Number(raw)
+          sanitizedCustomValues[field.id] = Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+        }
+      }
+    })
+
     const finalData = {
       ...formData,
       cash_amount: calculateTotal(),
@@ -157,7 +172,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
         .filter(([_, count]) => count > 0)
         .map(([value, count]) => `${coinLabels[value as keyof typeof coinLabels]}: ${count}`)
         .join(", "),
-      ...customFieldValues
+      ...sanitizedCustomValues
     }
     onSubmit(finalData)
   }
@@ -308,12 +323,30 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
                       <Input
                         type={field.fieldType === "number" ? "number" : "text"}
                         value={customFieldValues[field.id] || ""}
-                        onChange={(e) =>
+                        min={field.fieldType === "number" ? 0 : undefined}
+                        onChange={(e) => {
+                          if (field.fieldType === "number") {
+                            if (e.target.value === "") {
+                              setCustomFieldValues({
+                                ...customFieldValues,
+                                [field.id]: ""
+                              })
+                              return
+                            }
+
+                            const parsed = Number(e.target.value)
+                            setCustomFieldValues({
+                              ...customFieldValues,
+                              [field.id]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+                            })
+                            return
+                          }
+
                           setCustomFieldValues({
                             ...customFieldValues,
-                            [field.id]: field.fieldType === "number" ? Number(e.target.value) : e.target.value
+                            [field.id]: e.target.value
                           })
-                        }
+                        }}
                         className="text-lg border-2 rounded-xl bg-white text-gray-900"
                         placeholder={field.label}
                       />

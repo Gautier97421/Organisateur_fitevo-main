@@ -28,6 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export default function EmployeePage() {
   const [userEmail, setUserEmail] = useState("")
@@ -38,11 +45,17 @@ export default function EmployeePage() {
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
+  const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
+  const [activeBreakType, setActiveBreakType] = useState<"short" | "lunch" | null>(null)
   const [breakStartTime, setBreakStartTime] = useState<Date | null>(null)
   const [accumulatedBreakTime, setAccumulatedBreakTime] = useState(0) // en minutes
+  const [shortBreakProgress, setShortBreakProgress] = useState(0) // en minutes pour la pause courte en cours
+  const [shortBreaksCompleted, setShortBreaksCompleted] = useState(0)
+  const [lunchBreakTaken, setLunchBreakTaken] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingPeriod, setPendingPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
+  const [pendingSubPeriod, setPendingSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false)
   const [instructions, setInstructions] = useState<any[]>([])
   const [whatsappLink, setWhatsappLink] = useState("")
@@ -50,6 +63,7 @@ export default function EmployeePage() {
   const [selectedGym, setSelectedGym] = useState<any | null>(null)
   const [showGymSelectionDialog, setShowGymSelectionDialog] = useState(false)
   const [showNoTasksDialog, setShowNoTasksDialog] = useState(false)
+  const [showSubPeriodRequiredDialog, setShowSubPeriodRequiredDialog] = useState(false)
   const [noTasksPeriodName, setNoTasksPeriodName] = useState("")
   const [showNoGymDialog, setShowNoGymDialog] = useState(false)
   const [showWifiRestrictionDialog, setShowWifiRestrictionDialog] = useState(false)
@@ -103,9 +117,13 @@ export default function EmployeePage() {
           
           if (activeSchedule && activeSchedule.notes?.includes('Période:')) {
             const periodMatch = activeSchedule.notes.match(/Période:\s*(matin|aprem|journee)/)
+            const subPeriodMatch = activeSchedule.notes.match(/Sous-créneau:\s*(debut|milieu|fin)/)
             if (periodMatch) {
               const period = periodMatch[1] as 'matin' | 'aprem' | 'journee'
               setSelectedPeriod(period)
+              if (subPeriodMatch) {
+                setSelectedSubPeriod(subPeriodMatch[1] as 'debut' | 'milieu' | 'fin')
+              }
               setCurrentView('tasks')
               
               // Restaurer aussi la salle depuis la note ou le localStorage
@@ -125,6 +143,10 @@ export default function EmployeePage() {
         
         if (storedPeriod && storedDate === today) {
           setSelectedPeriod(storedPeriod as 'matin' | 'aprem' | 'journee')
+          const storedSubPeriod = localStorage.getItem(`employee_${userId}_subPeriod`)
+          if (storedSubPeriod === 'debut' || storedSubPeriod === 'milieu' || storedSubPeriod === 'fin') {
+            setSelectedSubPeriod(storedSubPeriod)
+          }
           setCurrentView('tasks')
         }
       } catch (error) {
@@ -143,6 +165,10 @@ export default function EmployeePage() {
       const breakState = JSON.parse(savedBreakState)
       setIsOnBreak(breakState.isOnBreak)
       setAccumulatedBreakTime(breakState.accumulatedBreakTime)
+      setActiveBreakType(breakState.activeBreakType || null)
+      setShortBreakProgress(breakState.shortBreakProgress || 0)
+      setShortBreaksCompleted(breakState.shortBreaksCompleted || 0)
+      setLunchBreakTaken(Boolean(breakState.lunchBreakTaken))
       if (breakState.breakStartTime) {
         setBreakStartTime(new Date(breakState.breakStartTime))
       }
@@ -287,13 +313,23 @@ export default function EmployeePage() {
   }, [selectedPeriod])
 
   useEffect(() => {
+    if (selectedSubPeriod) {
+      localStorage.setItem("employeeSelectedSubPeriod", selectedSubPeriod)
+    }
+  }, [selectedSubPeriod])
+
+  useEffect(() => {
     const breakState = {
       isOnBreak,
+      activeBreakType,
       accumulatedBreakTime,
+      shortBreakProgress,
+      shortBreaksCompleted,
+      lunchBreakTaken,
       breakStartTime: breakStartTime?.toISOString() || null,
     }
     localStorage.setItem("employeeBreakState", JSON.stringify(breakState))
-  }, [isOnBreak, accumulatedBreakTime, breakStartTime])
+  }, [isOnBreak, activeBreakType, accumulatedBreakTime, shortBreakProgress, shortBreaksCompleted, lunchBreakTaken, breakStartTime])
 
   const handleLogout = () => {
     // Bloquer la déconnexion si une période de travail est active et non terminée
@@ -310,8 +346,9 @@ export default function EmployeePage() {
     router.push("/")
   }
 
-  const handleBreakStart = () => {
+  const handleBreakStart = (type: "short" | "lunch") => {
     setIsOnBreak(true)
+    setActiveBreakType(type)
     setBreakStartTime(new Date())
   }
 
@@ -320,13 +357,29 @@ export default function EmployeePage() {
       const now = new Date()
       const sessionDuration = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000 / 60)
       setAccumulatedBreakTime((prev) => prev + sessionDuration)
+
+      if (activeBreakType === "short") {
+        const nextShortBreakProgress = shortBreakProgress + sessionDuration
+        if (nextShortBreakProgress >= 20) {
+          setShortBreaksCompleted((prev) => prev + 1)
+          setShortBreakProgress(0)
+        } else {
+          setShortBreakProgress(nextShortBreakProgress)
+        }
+      }
+
+      if (activeBreakType === "lunch") {
+        setLunchBreakTaken(true)
+      }
     }
     setIsOnBreak(false)
     setBreakStartTime(null)
+    setActiveBreakType(null)
   }
 
-  const handleBreakResume = () => {
+  const handleBreakResume = (type: "short") => {
     setIsOnBreak(true)
+    setActiveBreakType(type)
     setBreakStartTime(new Date())
   }
 
@@ -339,6 +392,7 @@ export default function EmployeePage() {
 
     // Réinitialiser la salle sélectionnée à chaque nouvelle période
     setSelectedGym(null)
+    setPendingSubPeriod(null)
 
     // Toujours demander de choisir la salle (même si une seule)
     setPendingPeriod(period)
@@ -377,6 +431,11 @@ export default function EmployeePage() {
 
   const confirmPeriodSelection = async () => {
     if (pendingPeriod) {
+      if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && !pendingSubPeriod) {
+        setShowSubPeriodRequiredDialog(true)
+        return
+      }
+
       setShowConfirmDialog(false)
       
       // Vérifier d'abord si des tâches existent pour cette période/salle/rôle
@@ -437,6 +496,15 @@ export default function EmployeePage() {
               return roleArray.includes(userRoleId)
             })
           }
+
+          if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod) {
+            dbTasks = dbTasks.filter((task: any) => {
+              if (!task.sub_period) {
+                return true
+              }
+              return task.sub_period === pendingSubPeriod
+            })
+          }
           
           // Si aucune tâche trouvée, afficher un dialog et ne pas lancer la vue tâches
           if (dbTasks.length === 0) {
@@ -456,6 +524,7 @@ export default function EmployeePage() {
       
       // Si des tâches existent, procéder normalement
       setSelectedPeriod(pendingPeriod)
+      setSelectedSubPeriod((pendingPeriod === "matin" || pendingPeriod === "aprem") ? pendingSubPeriod : null)
       setCurrentView("tasks")
       setShowConfirmDialog(false)
       
@@ -469,11 +538,13 @@ export default function EmployeePage() {
           employee_email: userEmail,
           employee_name: userName,
           date: today,
+          period: pendingPeriod,
+          sub_period: (pendingPeriod === "matin" || pendingPeriod === "aprem") ? pendingSubPeriod : null,
           start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           end_time: '',
           type: 'work',
           is_temporary: true, // Marquer comme période temporaire (sera nettoyée automatiquement)
-          notes: `Période: ${pendingPeriod}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
+          notes: `Période: ${pendingPeriod}${(pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod ? ` | Sous-créneau: ${pendingSubPeriod}` : ''}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
         }
         
         console.log('📝 Création de la période de travail:', workScheduleData)
@@ -497,6 +568,11 @@ export default function EmployeePage() {
         
         // Stocker aussi en localStorage comme backup
         localStorage.setItem(`employee_${userId}_period`, pendingPeriod)
+        if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod) {
+          localStorage.setItem(`employee_${userId}_subPeriod`, pendingSubPeriod)
+        } else {
+          localStorage.removeItem(`employee_${userId}_subPeriod`)
+        }
         localStorage.setItem(`employee_${userId}_sessionDate`, today)
         // Réinitialiser le flag de session terminée pour la nouvelle période
         setSessionCompleted(false)
@@ -505,16 +581,22 @@ export default function EmployeePage() {
       }
       
       setPendingPeriod(null)
+      setPendingSubPeriod(null)
       // Reset break state for new period
       setAccumulatedBreakTime(0)
       setIsOnBreak(false)
+      setActiveBreakType(null)
       setBreakStartTime(null)
+      setShortBreakProgress(0)
+      setShortBreaksCompleted(0)
+      setLunchBreakTaken(false)
     }
   }
 
   const cancelPeriodSelection = () => {
     setShowConfirmDialog(false)
     setPendingPeriod(null)
+    setPendingSubPeriod(null)
     setSelectedGym(null)
   }
 
@@ -524,15 +606,21 @@ export default function EmployeePage() {
     
     // Réinitialiser l'état de l'employé et revenir au menu
     setSelectedPeriod(null)
+    setSelectedSubPeriod(null)
     setCurrentView("menu")
     setAccumulatedBreakTime(0)
     setIsOnBreak(false)
+    setActiveBreakType(null)
     setBreakStartTime(null)
+    setShortBreakProgress(0)
+    setShortBreaksCompleted(0)
+    setLunchBreakTaken(false)
     setSelectedGym(null)
     
     // Nettoyer les données de session du localStorage
     const userId = localStorage.getItem("userId") || ""
     localStorage.removeItem(`employee_${userId}_period`)
+    localStorage.removeItem(`employee_${userId}_subPeriod`)
     localStorage.removeItem(`employee_${userId}_sessionDate`)
   }
 
@@ -556,6 +644,16 @@ export default function EmployeePage() {
       case "journee":
         return "Journée entière"
     }
+  }
+
+  const getSubPeriodText = (subPeriod: "debut" | "milieu" | "fin", period: "matin" | "aprem") => {
+    if (subPeriod === "debut") {
+      return "Ouverture"
+    }
+    if (subPeriod === "milieu") {
+      return "Milieu"
+    }
+    return period === "matin" ? "Fin de matinée" : "Fin d'après-midi"
   }
 
   const getPeriodColor = (period: "matin" | "aprem" | "journee") => {
@@ -754,6 +852,31 @@ export default function EmployeePage() {
                   {selectedGym.address && <span className="text-sm"> - {selectedGym.address}</span>}
                 </div>
               )}
+              {(pendingPeriod === "matin" || pendingPeriod === "aprem") && (
+                <div className="space-y-2">
+                  <strong>Sous-créneau :</strong>
+                  <Select
+                    value={pendingSubPeriod || ""}
+                    onValueChange={(value) => setPendingSubPeriod(value as "debut" | "milieu" | "fin")}
+                  >
+                    <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                      <SelectValue placeholder="Choisir Ouverture, Milieu ou Fin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debut">Ouverture</SelectItem>
+                      <SelectItem value="milieu">Milieu</SelectItem>
+                      <SelectItem value="fin">
+                        {pendingPeriod === "matin" ? "Fin de matinée" : "Fin d'après-midi"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {selectedSubPeriod && selectedPeriod && selectedPeriod !== "journee" && (
+                <div>
+                  <strong>Sous-créneau actif :</strong> {getSubPeriodText(selectedSubPeriod, selectedPeriod)}
+                </div>
+              )}
               <div className="text-sm md:text-base text-red-700 bg-red-50 p-2 md:p-3 rounded-lg border border-red-200">
                 <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de période jusqu'à la fin
                 de votre session de travail.
@@ -836,6 +959,28 @@ export default function EmployeePage() {
                 className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
               >
                 OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showSubPeriodRequiredDialog} onOpenChange={setShowSubPeriodRequiredDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-6 w-6 text-orange-500" />
+                <span>Sous-créneau requis</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2 text-sm md:text-base text-gray-700">
+              Veuillez sélectionner un sous-créneau avant de commencer votre période: Ouverture, Milieu ou Fin.
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => setShowSubPeriodRequiredDialog(false)}
+                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+              >
+                Compris
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -947,8 +1092,8 @@ export default function EmployeePage() {
         <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
             <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg">
-                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-gray-900" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-900">
@@ -1162,9 +1307,14 @@ export default function EmployeePage() {
                   </DropdownMenu>
                 ) : null}
                 <BreakManager
+                  period={selectedPeriod || "matin"}
                   isOnBreak={isOnBreak}
+                  breakType={activeBreakType}
                   breakStartTime={breakStartTime}
                   accumulatedBreakTime={accumulatedBreakTime}
+                  shortBreaksCompleted={shortBreaksCompleted}
+                  shortBreakProgress={shortBreakProgress}
+                  lunchBreakTaken={lunchBreakTaken}
                   onBreakStart={handleBreakStart}
                   onBreakEnd={handleBreakEnd}
                   onBreakResume={handleBreakResume}
@@ -1175,7 +1325,7 @@ export default function EmployeePage() {
           </div>
         </div>
 
-        {selectedPeriod && <TodoList period={selectedPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} roleId={userRoleId} onSessionEnd={handleSessionEnd} />}
+        {selectedPeriod && <TodoList period={selectedPeriod} subPeriod={selectedSubPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} roleId={userRoleId} onSessionEnd={handleSessionEnd} />}
       </div>
 
       {/* Dialog pour afficher les instructions */}
