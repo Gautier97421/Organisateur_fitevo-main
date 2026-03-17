@@ -87,6 +87,10 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.dueDate = mapped.due_date
       delete mapped.due_date
     }
+    if (mapped.sub_period !== undefined) {
+      mapped.subPeriod = mapped.sub_period
+      delete mapped.sub_period
+    }
     if (mapped.role_ids !== undefined) {
       mapped.roleIds = mapped.role_ids
       delete mapped.role_ids

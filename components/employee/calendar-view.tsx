@@ -750,7 +750,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
             <CardHeader>
               <h3 className="text-lg font-bold text-orange-900">Événements à valider</h3>
               <p className="text-sm text-orange-700">
-                Les événements avec restriction repassent automatiquement au lendemain tant qu'ils ne sont pas validés.
+                Les événements avec restriction restent sur aujourd'hui, puis sont reportés au lendemain uniquement en fin de journée s'ils ne sont pas validés.
               </p>
             </CardHeader>
             <CardContent>
@@ -773,7 +773,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                             {event.start_time ? ` • ${event.start_time}` : ""}
                           </p>
                           <p className="text-xs text-orange-700 mt-1">
-                            Statut: {event.status === "moved" ? "Si non validée, reporté au lendemain" : event.status}
+                            Statut: {event.status === "moved" ? "Non validé: reporté sur aujourd'hui (puis au lendemain en fin de journée)" : event.status}
                           </p>
                         </div>
                         <Button

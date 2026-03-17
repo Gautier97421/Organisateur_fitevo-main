@@ -328,7 +328,7 @@ export function TaskManager() {
   }
 
   const addTask = async () => {
-    if (!newTask.title || !newTask.description || !selectedGym) return
+    if (!newTask.title || !selectedGym) return
 
     try {
       const currentTasks = getCurrentTasks()
@@ -347,7 +347,7 @@ export function TaskManager() {
         body: JSON.stringify({
           data: {
             title: newTask.title,
-            description: newTask.description,
+            description: newTask.description || null,
             type: newTask.type,
             period: activePeriod,
             sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
@@ -404,7 +404,7 @@ export function TaskManager() {
   }
 
   const updateTask = async () => {
-    if (!editingTask || !editTask.title || !editTask.description) return
+    if (!editingTask || !editTask.title) return
 
     try {
       const response = await fetch(`/api/db/tasks/${editingTask.id}`, {
@@ -412,7 +412,7 @@ export function TaskManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: editTask.title,
-          description: editTask.description,
+          description: editTask.description || null,
           type: editTask.type,
           options: editTask.type === "qcm" ? JSON.stringify(editTask.options) : null,
           required: editTask.required,

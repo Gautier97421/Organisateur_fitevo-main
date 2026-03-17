@@ -294,7 +294,7 @@ export function BreakManager({
                     <span>Confirmer la pause midi</span>
                   </DialogTitle>
                   <DialogDescription className="text-sm md:text-base text-gray-600 leading-relaxed">
-                    Cette pause midi est libre (pas de limite de temps), mais elle ne peut être prise qu'une seule fois pendant la journée.
+                    Cette pause midi est libre, mais elle ne peut être prise qu'une seule fois pendant la journée.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -313,7 +313,7 @@ export function BreakManager({
           <p className="text-xs text-red-600 mt-1 flex items-center justify-center gap-1">
             <AlertTriangle className="h-3 w-3" />
             {isJournee
-              ? `${maxShortBreaks} pauses de ${REQUIRED_BREAK_MINUTES} min + 1 pause midi (sans limite)`
+              ? `${maxShortBreaks} pauses de ${REQUIRED_BREAK_MINUTES} min + 1 pause midi`
               : `Pause de ${REQUIRED_BREAK_MINUTES} min obligatoire`}
           </p>
         </div>

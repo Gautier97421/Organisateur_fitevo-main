@@ -96,8 +96,6 @@ async function isEventValidated(event: ScheduledEventWithValidations): Promise<b
 async function moveOverdueUnvalidatedEvents() {
   const now = new Date()
   const todayStart = toDayStart(now)
-  const tomorrow = new Date(todayStart)
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
 
   const overdueEvents = await prisma.scheduledEvent.findMany({
     where: {
@@ -123,7 +121,8 @@ async function moveOverdueUnvalidatedEvents() {
       await prisma.scheduledEvent.update({
         where: { id: event.id },
         data: {
-          eventDate: tomorrow,
+          // Tant que la journée courante n'est pas terminée, l'événement doit rester sur aujourd'hui.
+          eventDate: todayStart,
           status: "moved",
         },
       })
