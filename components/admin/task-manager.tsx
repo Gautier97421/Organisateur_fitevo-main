@@ -172,6 +172,8 @@ export function TaskManager() {
   const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
   const [showForm, setShowForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
+  const [showCreateConflict, setShowCreateConflict] = useState(false)
+  const [showEditConflict, setShowEditConflict] = useState(false)
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [newTask, setNewTask] = useState<{
@@ -208,6 +210,8 @@ export function TaskManager() {
     roleIds: [],
     subPeriod: undefined,
   })
+  const [newOptionInput, setNewOptionInput] = useState("")
+  const [editOptionInput, setEditOptionInput] = useState("")
 
   // Configuration drag and drop
   const sensors = useSensors(
@@ -257,11 +261,33 @@ export function TaskManager() {
       
       const result = await response.json()
       const tasksData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+
+      const parseTaskOptions = (rawOptions: any): string[] => {
+        if (!rawOptions) return []
+        if (Array.isArray(rawOptions)) {
+          return rawOptions.map((opt) => String(opt))
+        }
+        if (typeof rawOptions === 'string') {
+          try {
+            const parsed = JSON.parse(rawOptions)
+            return Array.isArray(parsed) ? parsed.map((opt) => String(opt)) : []
+          } catch {
+            try {
+              const normalized = rawOptions.replace(/&quot;/g, '"')
+              const parsed = JSON.parse(normalized)
+              return Array.isArray(parsed) ? parsed.map((opt) => String(opt)) : []
+            } catch {
+              return []
+            }
+          }
+        }
+        return []
+      }
       
       // Parser les champs JSON et trier
       const parsedTasks = tasksData.map((task: any) => ({
         ...task,
-        options: task.options ? (typeof task.options === 'string' ? JSON.parse(task.options) : task.options) : [],
+        options: parseTaskOptions(task.options),
         role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
       }))
       
@@ -351,7 +377,7 @@ export function TaskManager() {
             type: newTask.type,
             period: activePeriod,
             sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
-            options: newTask.type === "qcm" ? JSON.stringify(newTask.options) : null,
+            options: newTask.type === "qcm" ? newTask.options.filter((opt) => opt.trim().length > 0) : null,
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
@@ -388,7 +414,67 @@ export function TaskManager() {
     }
   }
 
+  const addQcmOption = (mode: "new" | "edit") => {
+    const value = (mode === "new" ? newOptionInput : editOptionInput).trim()
+    if (!value) return
+
+    if (mode === "new") {
+      if (newTask.options.includes(value)) {
+        setNewOptionInput("")
+        return
+      }
+      setNewTask((prev) => ({ ...prev, options: [...prev.options, value] }))
+      setNewOptionInput("")
+      return
+    }
+
+    if (editTask.options.includes(value)) {
+      setEditOptionInput("")
+      return
+    }
+    setEditTask((prev) => ({ ...prev, options: [...prev.options, value] }))
+    setEditOptionInput("")
+  }
+
+  const removeQcmOption = (mode: "new" | "edit", optionIndex: number) => {
+    if (mode === "new") {
+      setNewTask((prev) => ({
+        ...prev,
+        options: prev.options.filter((_, idx) => idx !== optionIndex),
+      }))
+      return
+    }
+
+    setEditTask((prev) => ({
+      ...prev,
+      options: prev.options.filter((_, idx) => idx !== optionIndex),
+    }))
+  }
+
+  const updateQcmOption = (mode: "new" | "edit", index: number, value: string) => {
+    if (mode === "new") {
+      setNewTask((prev) => {
+        const updated = [...prev.options]
+        updated[index] = value
+        return { ...prev, options: updated }
+      })
+      return
+    }
+
+    setEditTask((prev) => {
+      const updated = [...prev.options]
+      updated[index] = value
+      return { ...prev, options: updated }
+    })
+  }
+
   const openEditTask = (task: TaskItem) => {
+    if (showForm) {
+      setShowEditConflict(true)
+      setTimeout(() => setShowEditConflict(false), 5000)
+      return
+    }
+
     setEditingTask(task)
     setEditTask({
       title: task.title,
@@ -401,6 +487,7 @@ export function TaskManager() {
     })
     setShowEditForm(true)
     setShowForm(false)
+    setShowCreateConflict(false)
   }
 
   const updateTask = async () => {
@@ -414,7 +501,7 @@ export function TaskManager() {
           title: editTask.title,
           description: editTask.description || null,
           type: editTask.type,
-          options: editTask.type === "qcm" ? JSON.stringify(editTask.options) : null,
+          options: editTask.type === "qcm" ? editTask.options.filter((opt) => opt.trim().length > 0) : null,
           required: editTask.required,
           role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
           sub_period: (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriod : null,
@@ -437,6 +524,7 @@ export function TaskManager() {
         required: true,
         roleIds: [],
       })
+      setEditOptionInput("")
     } catch (error: any) {
       console.error("Erreur lors de la modification de la tâche:", error)
     }
@@ -561,7 +649,15 @@ export function TaskManager() {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
         </div>
         <Button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showEditForm) {
+              setShowCreateConflict(true)
+              setTimeout(() => setShowCreateConflict(false), 5000)
+              return
+            }
+            setShowEditConflict(false)
+            setShowForm(!showForm)
+          }}
           className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 w-full sm:w-auto whitespace-nowrap"
         >
           <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -668,6 +764,12 @@ export function TaskManager() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 p-8">
+                {showCreateConflict && (
+                  <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
+                    ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant de créer une nouvelle tâche.
+                  </div>
+                )}
+
                 <Input
                   placeholder="Titre de la tâche"
                   value={editTask.title}
@@ -770,17 +872,57 @@ export function TaskManager() {
                 </div>
 
                 {editTask.type === "qcm" && (
-                  <Textarea
-                    placeholder="Options (une par ligne)&#10;Option 1&#10;Option 2&#10;Option 3"
-                    value={editTask.options.join("\n")}
-                    onChange={(e) =>
-                      setEditTask({
-                        ...editTask,
-                        options: e.target.value.split("\n").filter((opt) => opt.trim()),
-                      })
-                    }
-                    className="text-lg border-2 rounded-xl"
-                  />
+                  <div className="space-y-3">
+                    <Label className="text-lg font-medium">Options du QCM</Label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        placeholder="Nom de l'option"
+                        value={editOptionInput}
+                        onChange={(e) => setEditOptionInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            addQcmOption("edit")
+                          }
+                        }}
+                        className="text-lg h-12 border-2 rounded-xl"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => addQcmOption("edit")}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        Ajouter option
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {editTask.options.length === 0 ? (
+                        <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
+                      ) : (
+                        editTask.options.map((option, idx) => (
+                          <div key={`edit-option-${idx}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                            <div className="flex items-center gap-2 w-full mr-2">
+                              <span className="text-sm font-medium w-7">{idx + 1}.</span>
+                              <Input
+                                value={option}
+                                onChange={(e) => updateQcmOption("edit", idx, e.target.value)}
+                                className="h-9"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeQcmOption("edit", idx)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              Supprimer
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
@@ -817,6 +959,12 @@ export function TaskManager() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 p-8">
+                {showEditConflict && (
+                  <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
+                    ⚠️ Veuillez terminer ou annuler l'ajout de cette tâche avant de modifier une tâche existante.
+                  </div>
+                )}
+
                 <Input
                   placeholder="Titre de la tâche"
                   value={newTask.title}
@@ -919,17 +1067,57 @@ export function TaskManager() {
                 </div>
 
                 {newTask.type === "qcm" && (
-                  <Textarea
-                    placeholder="Options (une par ligne)&#10;Option 1&#10;Option 2&#10;Option 3"
-                    value={newTask.options.join("\n")}
-                    onChange={(e) =>
-                      setNewTask({
-                        ...newTask,
-                        options: e.target.value.split("\n").filter((opt) => opt.trim()),
-                      })
-                    }
-                    className="text-lg border-2 rounded-xl"
-                  />
+                  <div className="space-y-3">
+                    <Label className="text-lg font-medium">Options du QCM</Label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        placeholder="Nom de l'option"
+                        value={newOptionInput}
+                        onChange={(e) => setNewOptionInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            addQcmOption("new")
+                          }
+                        }}
+                        className="text-lg h-12 border-2 rounded-xl"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => addQcmOption("new")}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Ajouter option
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {newTask.options.length === 0 ? (
+                        <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
+                      ) : (
+                        newTask.options.map((option, idx) => (
+                          <div key={`new-option-${idx}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                            <div className="flex items-center gap-2 w-full mr-2">
+                              <span className="text-sm font-medium w-7">{idx + 1}.</span>
+                              <Input
+                                value={option}
+                                onChange={(e) => updateQcmOption("new", idx, e.target.value)}
+                                className="h-9"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeQcmOption("new", idx)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              Supprimer
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
