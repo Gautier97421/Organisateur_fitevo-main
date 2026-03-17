@@ -105,6 +105,9 @@ export function CashRecapManager() {
   const [fields, setFields] = useState<CashRegisterField[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [periodFilter, setPeriodFilter] = useState<"all" | "matin" | "aprem" | "journee">("all")
+  const [gymFilter, setGymFilter] = useState<string>("all")
+  const [employeeFilter, setEmployeeFilter] = useState<string>("all")
 
   const pieColors = [
     "#dc2626",
@@ -258,6 +261,37 @@ export function CashRecapManager() {
     return map
   }, [gyms])
 
+  const employeeOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const entry of entries) {
+      map.set(entry.user_email, entry.user_name || entry.user_email)
+    }
+    return Array.from(map.entries())
+      .map(([email, name]) => ({ email, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+  }, [entries])
+
+  const filteredEntries = useMemo(() => {
+    return entries.filter((entry) => {
+      if (periodFilter !== "all" && entry.period !== periodFilter) {
+        return false
+      }
+
+      if (gymFilter !== "all") {
+        const entryGymValue = entry.gym_id || "global"
+        if (entryGymValue !== gymFilter) {
+          return false
+        }
+      }
+
+      if (employeeFilter !== "all" && entry.user_email !== employeeFilter) {
+        return false
+      }
+
+      return true
+    })
+  }, [entries, periodFilter, gymFilter, employeeFilter])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -403,7 +437,7 @@ export function CashRecapManager() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <CalendarDays className="h-5 w-5 text-red-600" />
-            Détail du mois ({entries.length} ligne(s))
+            Détail du mois ({filteredEntries.length} ligne(s))
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -412,7 +446,55 @@ export function CashRecapManager() {
           ) : entries.length === 0 ? (
             <p className="text-gray-600">Aucune saisie de caisse sur ce mois.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Période</label>
+                  <select
+                    value={periodFilter}
+                    onChange={(e) => setPeriodFilter(e.target.value as "all" | "matin" | "aprem" | "journee")}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="all">Toutes</option>
+                    <option value="matin">Matin</option>
+                    <option value="aprem">Après-midi</option>
+                    <option value="journee">Journée</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Salle</label>
+                  <select
+                    value={gymFilter}
+                    onChange={(e) => setGymFilter(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="all">Toutes</option>
+                    {gyms.map((gym) => (
+                      <option key={gym.id} value={gym.id}>{gym.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Employé</label>
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="all">Tous</option>
+                    {employeeOptions.map((employee) => (
+                      <option key={employee.email} value={employee.email}>{employee.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {filteredEntries.length === 0 ? (
+                <p className="text-gray-600">Aucune ligne ne correspond aux filtres sélectionnés.</p>
+              ) : (
+                <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b bg-gray-50">
@@ -429,7 +511,7 @@ export function CashRecapManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((entry) => {
+                  {filteredEntries.map((entry) => {
                     const customValues = (entry.custom_values || {}) as Record<string, any>
                     const diff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
                     return (
@@ -455,6 +537,8 @@ export function CashRecapManager() {
                   })}
                 </tbody>
               </table>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

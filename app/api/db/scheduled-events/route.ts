@@ -9,6 +9,8 @@ type ScheduledEventWithValidations = {
   eventDate: Date
   startTime: string | null
   endTime: string | null
+  assignType: string | null
+  assignedTo: string | null
   assignedEmployeeEmail: string | null
   assignedRoleId: string | null
   requiresValidation: boolean
@@ -142,6 +144,8 @@ function mapToClient(event: ScheduledEventWithValidations, currentUserEmail?: st
     event_date: event.eventDate.toISOString(),
     start_time: event.startTime,
     end_time: event.endTime,
+    assign_type: event.assignType,
+    assigned_to: event.assignedTo,
     assigned_employee_email: event.assignedEmployeeEmail,
     assigned_role_id: event.assignedRoleId,
     requires_validation: event.requiresValidation,
@@ -239,6 +243,8 @@ export async function POST(request: NextRequest) {
       durationMinutes,
       assignedEmployeeEmail,
       assignedRoleId,
+      assignedEmployeeEmails,
+      assignedRoleIds,
       requiresValidation,
       createdByEmail,
     } = body
@@ -253,33 +259,151 @@ export async function POST(request: NextRequest) {
     const normalizedDate = normalizeDateInput(eventDate)
     const finalEndTime = endTime || buildEndTime(startTime || null, durationMinutes || 60)
 
-    const created = await prisma.scheduledEvent.create({
-      data: {
-        title,
-        description: description || null,
-        eventDate: normalizedDate,
-        startTime: startTime || null,
-        endTime: finalEndTime,
-        assignedEmployeeEmail: assignedEmployeeEmail || null,
-        assignedRoleId: assignedRoleId || null,
-        requiresValidation: Boolean(requiresValidation),
-        status: Boolean(requiresValidation) ? "pending" : "validated",
-        createdByEmail,
-      },
-      include: {
-        validations: {
-          select: {
-            userEmail: true,
-            validated: true,
-            validatedAt: true,
-          },
-        },
-      },
-    })
+    const employeeTargets = new Set<string>()
+    const roleTargets = new Set<string>()
 
-    return NextResponse.json({ data: mapToClient(created, null) }, { status: 201 })
+    if (Array.isArray(assignedEmployeeEmails)) {
+      for (const email of assignedEmployeeEmails) {
+        if (typeof email === "string" && email.trim()) {
+          employeeTargets.add(email.trim())
+        }
+      }
+    }
+
+    if (Array.isArray(assignedRoleIds)) {
+      for (const roleId of assignedRoleIds) {
+        if (typeof roleId === "string" && roleId.trim()) {
+          roleTargets.add(roleId.trim())
+        }
+      }
+    }
+
+    // Compatibilité avec l'ancien format (assignation unique).
+    if (typeof assignedEmployeeEmail === "string" && assignedEmployeeEmail.trim()) {
+      employeeTargets.add(assignedEmployeeEmail.trim())
+    }
+
+    if (typeof assignedRoleId === "string" && assignedRoleId.trim()) {
+      roleTargets.add(assignedRoleId.trim())
+    }
+
+    const targets: Array<{
+      assignType: string | null
+      assignedTo: string | null
+      assignedEmployeeEmail: string | null
+      assignedRoleId: string | null
+    }> = []
+
+    if (employeeTargets.size === 0 && roleTargets.size === 0) {
+      targets.push({
+        assignType: null,
+        assignedTo: null,
+        assignedEmployeeEmail: null,
+        assignedRoleId: null,
+      })
+    } else {
+      for (const email of employeeTargets) {
+        targets.push({
+          assignType: "employee",
+          assignedTo: email,
+          assignedEmployeeEmail: email,
+          assignedRoleId: null,
+        })
+      }
+      for (const roleId of roleTargets) {
+        targets.push({
+          assignType: "role",
+          assignedTo: roleId,
+          assignedEmployeeEmail: null,
+          assignedRoleId: roleId,
+        })
+      }
+    }
+
+    const createdEvents = await prisma.$transaction(
+      targets.map((target) =>
+        prisma.scheduledEvent.create({
+          data: {
+            title,
+            description: description || null,
+            eventDate: normalizedDate,
+            startTime: startTime || null,
+            endTime: finalEndTime,
+            assignType: target.assignType,
+            assignedTo: target.assignedTo,
+            assignedEmployeeEmail: target.assignedEmployeeEmail,
+            assignedRoleId: target.assignedRoleId,
+            requiresValidation: Boolean(requiresValidation),
+            status: Boolean(requiresValidation) ? "pending" : "validated",
+            createdByEmail,
+          },
+          include: {
+            validations: {
+              select: {
+                userEmail: true,
+                validated: true,
+                validatedAt: true,
+              },
+            },
+          },
+        }),
+      ),
+    )
+
+    return NextResponse.json(
+      {
+        data: createdEvents.map((event) => mapToClient(event, null)),
+        count: createdEvents.length,
+      },
+      { status: 201 },
+    )
   } catch (error) {
     console.error("Erreur création événement planifié:", error)
     return NextResponse.json({ error: "Impossible de créer l'événement planifié" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  }
+
+  try {
+    const body = await request.json()
+    const { title, eventDate, startTime, createdByEmail } = body || {}
+
+    if (!title || !eventDate) {
+      return NextResponse.json({ error: "title et eventDate sont obligatoires" }, { status: 400 })
+    }
+
+    const normalizedDate = normalizeDateInput(eventDate)
+    const dayStart = toDayStart(normalizedDate)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
+
+    const where: any = {
+      title,
+      eventDate: {
+        gte: dayStart,
+        lt: dayEnd,
+      },
+    }
+
+    const normalizedStartTime = typeof startTime === "string" ? startTime.trim() : ""
+    if (normalizedStartTime) {
+      where.startTime = normalizedStartTime
+    }
+
+    if (typeof createdByEmail === "string" && createdByEmail.trim()) {
+      where.createdByEmail = createdByEmail.trim()
+    }
+
+    const deleted = await prisma.scheduledEvent.deleteMany({ where })
+
+    return NextResponse.json({ deletedCount: deleted.count }, { status: 200 })
+  } catch (error) {
+    console.error("Erreur suppression événements planifiés:", error)
+    return NextResponse.json({ error: "Impossible de supprimer les événements planifiés" }, { status: 500 })
   }
 }

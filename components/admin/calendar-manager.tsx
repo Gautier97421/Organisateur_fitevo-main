@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle, CalendarDays, MapPin, Edit2 } from "lucide-react"
+import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle, CalendarDays, MapPin, Edit2, Trash2 } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   Dialog,
@@ -30,9 +30,27 @@ interface CalendarEvent {
   duration_minutes: number
   created_by_email: string
   created_by_name: string
-  status: "pending" | "approved" | "rejected"
+  status: "pending" | "approved" | "rejected" | "moved" | "validated" | string
+  requires_validation?: boolean
+  scheduled_status?: "pending" | "moved" | "validated" | string
+  scheduled_requires_validation?: boolean
+  scheduled_assigned_employee_emails?: string[]
+  scheduled_assigned_role_ids?: string[]
   rejection_reason?: string
   created_at: string
+}
+
+interface ScheduledEventApiItem {
+  title: string
+  event_date: string
+  start_time?: string | null
+  created_by_email?: string | null
+  assign_type?: string | null
+  assigned_to?: string | null
+  assigned_employee_email?: string | null
+  assigned_role_id?: string | null
+  status: string
+  requires_validation: boolean
 }
 
 interface EmployeeOption {
@@ -57,12 +75,17 @@ export function CalendarManager() {
   const [rejectionReason, setRejectionReason] = useState("")
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [showRejectionDialog, setShowRejectionDialog] = useState(false)
+  const [showApproveConfirmDialog, setShowApproveConfirmDialog] = useState(false)
+  const [eventToApprove, setEventToApprove] = useState<CalendarEvent | null>(null)
+  const [closeDialogsAfterApprove, setCloseDialogsAfterApprove] = useState(false)
   const [showAddEventDialog, setShowAddEventDialog] = useState(false)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
   const [showDayEventsDialog, setShowDayEventsDialog] = useState(false)
   const [selectedDayForDetails, setSelectedDayForDetails] = useState<Date | null>(null)
   const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false)
   const [selectedEventForDetails, setSelectedEventForDetails] = useState<CalendarEvent | null>(null)
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
+  const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null)
   const [showEditEventDialog, setShowEditEventDialog] = useState(false)
   const [eventToEdit, setEventToEdit] = useState<CalendarEvent | null>(null)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
@@ -74,8 +97,8 @@ export function CalendarManager() {
     location: "",
     event_time: "",
     duration_minutes: 60,
-    assigned_employee_email: "",
-    assigned_role_id: "",
+    assigned_employee_emails: [] as string[],
+    assigned_role_ids: [] as string[],
     requires_validation: false,
   })
   const [reminderSettings, setReminderSettings] = useState({
@@ -84,16 +107,334 @@ export function CalendarManager() {
     custom_message: "",
   })
 
+  const normalizeDateOnly = (value: string): string => {
+    if (!value) return ""
+    return value.includes("T") ? value.split("T")[0] : value
+  }
+
+  const toLocalDateOnly = (value: string): string => {
+    if (!value) return ""
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+      return normalizeDateOnly(value)
+    }
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, "0")
+    const day = String(parsed.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const getDateCandidates = (value: string): string[] => {
+    const utcDate = normalizeDateOnly(value)
+    const localDate = toLocalDateOnly(value)
+    return Array.from(new Set([utcDate, localDate].filter(Boolean)))
+  }
+
+  const normalizeTimeOnly = (value?: string | null): string => {
+    if (!value) return ""
+    const trimmed = value.trim()
+    return trimmed.length >= 5 ? trimmed.slice(0, 5) : trimmed
+  }
+
+  const normalizeTitle = (value: string): string => {
+    return value
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+  }
+
+  const buildEventKey = (
+    title: string,
+    date: string,
+    time: string,
+    createdByEmail: string,
+    includeTime: boolean,
+    includeEmail: boolean,
+  ): string => {
+    const normalizedEmail = createdByEmail.trim().toLowerCase()
+    return `${normalizeTitle(title)}|${date}|${includeTime ? time : "*"}|${includeEmail ? normalizedEmail : "*"}`
+  }
+
+  const getStatusPriority = (status: string): number => {
+    if (status === "moved") return 3
+    if (status === "validated") return 2
+    if (status === "pending") return 1
+    return 0
+  }
+
+  const getAuthHeaders = (): Record<string, string> => {
+    if (typeof window === "undefined") {
+      return {}
+    }
+
+    const userId = localStorage.getItem("userId") || ""
+    const userEmail = localStorage.getItem("userEmail") || ""
+    const headers: Record<string, string> = {}
+
+    if (userId) {
+      headers["x-user-id"] = userId
+    }
+
+    if (userEmail) {
+      headers["x-user-email"] = userEmail
+    }
+
+    return headers
+  }
+
+  const toggleArraySelection = (current: string[], value: string, checked: boolean): string[] => {
+    if (checked) {
+      if (current.includes(value)) return current
+      return [...current, value]
+    }
+    return current.filter((item) => item !== value)
+  }
+
+  const getAssignedDisplay = (event: CalendarEvent): string => {
+    const employeeEmails = event.scheduled_assigned_employee_emails || []
+    const roleIds = event.scheduled_assigned_role_ids || []
+
+    const employeeLabels = employeeEmails.map((value) => {
+      const employee = employees.find((item) => item.email === value || item.id === value)
+      return employee ? employee.name : value
+    })
+
+    const roleLabels = roleIds.map((roleId) => {
+      const role = roles.find((item) => item.id === roleId)
+      return role ? `Role: ${role.name}` : `Role: ${roleId}`
+    })
+
+    const labels = [...employeeLabels, ...roleLabels]
+    return labels.length > 0 ? labels.join(", ") : "Non assigne"
+  }
+
+  const mergeCalendarWithScheduledStatuses = (
+    calendarEvents: CalendarEvent[],
+    scheduledEvents: ScheduledEventApiItem[],
+  ): CalendarEvent[] => {
+    const statusMap = new Map<
+      string,
+      {
+        status: string
+        requires_validation: boolean
+        assigned_employee_emails: string[]
+        assigned_role_ids: string[]
+      }
+    >()
+
+    const statusFallbackMap = new Map<
+      string,
+      {
+        status: string
+        requires_validation: boolean
+        assigned_employee_emails: string[]
+        assigned_role_ids: string[]
+      }
+    >()
+
+    for (const item of scheduledEvents) {
+      const time = normalizeTimeOnly(item.start_time)
+      const email = (item.created_by_email || "").trim().toLowerCase()
+      const dateCandidates = getDateCandidates(item.event_date)
+
+      for (const date of dateCandidates) {
+        const keys = [
+          buildEventKey(item.title, date, time, email, true, true),
+          buildEventKey(item.title, date, time, email, true, false),
+          buildEventKey(item.title, date, time, email, false, true),
+          buildEventKey(item.title, date, time, email, false, false),
+        ]
+
+        const updateMap = (key: string) => {
+          const current = statusMap.get(key)
+          const mergedEmployeeEmails = new Set(current?.assigned_employee_emails || [])
+          const mergedRoleIds = new Set(current?.assigned_role_ids || [])
+
+          if (item.assigned_employee_email) {
+            mergedEmployeeEmails.add(item.assigned_employee_email)
+          }
+
+          if (item.assign_type === "employee" && item.assigned_to) {
+            mergedEmployeeEmails.add(item.assigned_to)
+          }
+
+          if (item.assigned_role_id) {
+            mergedRoleIds.add(item.assigned_role_id)
+          }
+
+          if (item.assign_type === "role" && item.assigned_to) {
+            mergedRoleIds.add(item.assigned_to)
+          }
+
+          const resolvedStatus =
+            !current || getStatusPriority(item.status) >= getStatusPriority(current.status)
+              ? item.status
+              : current.status
+
+          statusMap.set(key, {
+            status: resolvedStatus,
+            requires_validation: (current?.requires_validation || false) || Boolean(item.requires_validation),
+            assigned_employee_emails: Array.from(mergedEmployeeEmails),
+            assigned_role_ids: Array.from(mergedRoleIds),
+          })
+
+          const fallbackKey = `${normalizeTitle(item.title)}|${date}`
+          const fallbackCurrent = statusFallbackMap.get(fallbackKey)
+          const fallbackEmployees = new Set(fallbackCurrent?.assigned_employee_emails || [])
+          const fallbackRoles = new Set(fallbackCurrent?.assigned_role_ids || [])
+
+          for (const value of mergedEmployeeEmails) {
+            fallbackEmployees.add(value)
+          }
+
+          for (const value of mergedRoleIds) {
+            fallbackRoles.add(value)
+          }
+
+          const fallbackStatus =
+            !fallbackCurrent || getStatusPriority(item.status) >= getStatusPriority(fallbackCurrent.status)
+              ? item.status
+              : fallbackCurrent.status
+
+          statusFallbackMap.set(fallbackKey, {
+            status: fallbackStatus,
+            requires_validation:
+              (fallbackCurrent?.requires_validation || false) || Boolean(item.requires_validation),
+            assigned_employee_emails: Array.from(fallbackEmployees),
+            assigned_role_ids: Array.from(fallbackRoles),
+          })
+        }
+
+        for (const key of keys) {
+          updateMap(key)
+        }
+      }
+    }
+
+    return calendarEvents.map((event) => {
+      const date = normalizeDateOnly(event.event_date)
+      const time = normalizeTimeOnly(event.event_time)
+      const email = (event.created_by_email || "").trim().toLowerCase()
+
+      const match =
+        statusMap.get(buildEventKey(event.title, date, time, email, true, true)) ||
+        statusMap.get(buildEventKey(event.title, date, time, email, true, false)) ||
+        statusMap.get(buildEventKey(event.title, date, time, email, false, true)) ||
+        statusMap.get(buildEventKey(event.title, date, time, email, false, false)) ||
+        statusFallbackMap.get(`${normalizeTitle(event.title)}|${date}`)
+
+      if (!match) {
+        return event
+      }
+
+      return {
+        ...event,
+        scheduled_status: match.status,
+        scheduled_requires_validation: match.requires_validation,
+        scheduled_assigned_employee_emails: match.assigned_employee_emails,
+        scheduled_assigned_role_ids: match.assigned_role_ids,
+      }
+    })
+  }
+
+  const fetchScheduledEventsInRange = async (startDate: string, endDate: string): Promise<ScheduledEventApiItem[]> => {
+    try {
+      const response = await fetch(
+        `/api/db/scheduled-events?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&include_all=true`,
+        {
+          cache: "no-store",
+          headers: getAuthHeaders(),
+        },
+      )
+
+      if (!response.ok) {
+        console.warn("Impossible de charger les statuts des événements planifiés:", response.status)
+        return []
+      }
+
+      const payload = await response.json()
+      return Array.isArray(payload?.data) ? payload.data : []
+    } catch {
+      return []
+    }
+  }
+
+  const isEventPast = (eventDateRaw: string): boolean => {
+    const today = new Date().toISOString().split("T")[0]
+    const eventDate = normalizeDateOnly(eventDateRaw)
+    return eventDate < today
+  }
+
+  const requestDeleteEvent = (event: CalendarEvent) => {
+    if (isEventPast(event.event_date)) {
+      return
+    }
+    setEventToDelete(event)
+    setShowDeleteConfirmDialog(true)
+  }
+
+  const deleteEventConfirmed = async () => {
+    const event = eventToDelete
+    if (!event) {
+      return
+    }
+
+    try {
+      const { error } = await supabase.from("calendar_events").delete().eq("id", event.id)
+      if (error) {
+        throw error
+      }
+
+      const scheduledDeleteResponse = await fetch("/api/db/scheduled-events", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          title: event.title,
+          eventDate: normalizeDateOnly(event.event_date),
+          startTime: event.event_time || null,
+          createdByEmail: event.created_by_email || null,
+        }),
+      })
+
+      if (!scheduledDeleteResponse.ok) {
+        console.warn("Suppression scheduled-events echouee:", scheduledDeleteResponse.status)
+      }
+
+      if (calendarView === "year") {
+        await loadEvents()
+      } else if (selectedMonth) {
+        await loadMonthEvents()
+      }
+
+      if (selectedEventForDetails?.id === event.id) {
+        setShowEventDetailsDialog(false)
+        setSelectedEventForDetails(null)
+      }
+
+      setShowDeleteConfirmDialog(false)
+      setEventToDelete(null)
+    } catch (error) {
+      console.error("Erreur suppression evenement:", error)
+    }
+  }
+
   const loadEvents = async () => {
     try {
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1)
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31)
+      const startDate = toLocalDateOnly(startOfYear.toISOString())
+      const endDate = toLocalDateOnly(endOfYear.toISOString())
 
       const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
-        .gte("event_date", startOfYear.toISOString().split("T")[0])
-        .lte("event_date", endOfYear.toISOString().split("T")[0])
+        .gte("event_date", startDate)
+        .lte("event_date", endDate)
         .order("event_date", { ascending: true })
 
       if (error) throw error
@@ -104,7 +445,8 @@ export function CalendarManager() {
         console.log("Premier event - created_by_name:", data[0].created_by_name, "created_by_email:", data[0].created_by_email)
       }
       
-      setEvents(data || [])
+      const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
+      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
     } catch (error) {
       console.error("Erreur chargement events:", error)
     } finally {
@@ -137,16 +479,20 @@ export function CalendarManager() {
     try {
       const startOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
       const endOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0)
+      const startDate = toLocalDateOnly(startOfMonth.toISOString())
+      const endDate = toLocalDateOnly(endOfMonth.toISOString())
 
       const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
-        .gte("event_date", startOfMonth.toISOString().split("T")[0])
-        .lte("event_date", endOfMonth.toISOString().split("T")[0])
+        .gte("event_date", startDate)
+        .lte("event_date", endDate)
         .order("event_date", { ascending: true })
 
       if (error) throw error
-      setEvents(data || [])
+
+      const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
+      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
     } catch (error) {
       // Erreur silencieuse
     }
@@ -197,7 +543,7 @@ export function CalendarManager() {
             title: newEvent.title,
             description: newEvent.description,
             location: newEvent.location,
-            event_date: selectedDate.toISOString(), // DateTime ISO-8601 complet
+            event_date: toLocalDateOnly(selectedDate.toISOString()),
             event_time: newEvent.event_time || null,
             duration_minutes: newEvent.duration_minutes,
             created_by_email: userEmail,
@@ -209,21 +555,29 @@ export function CalendarManager() {
 
       if (error) throw error
 
-      await fetch("/api/db/scheduled-events", {
+      const scheduledResponse = await fetch("/api/db/scheduled-events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           title: newEvent.title,
           description: newEvent.description,
-          eventDate: selectedDate.toISOString().split("T")[0],
+          eventDate: toLocalDateOnly(selectedDate.toISOString()),
           startTime: newEvent.event_time || null,
           durationMinutes: newEvent.duration_minutes,
-          assignedEmployeeEmail: newEvent.assigned_employee_email || null,
-          assignedRoleId: newEvent.assigned_role_id || null,
+          assignedEmployeeEmails: newEvent.assigned_employee_emails,
+          assignedRoleIds: newEvent.assigned_role_ids,
           requiresValidation: newEvent.requires_validation,
           createdByEmail: userEmail,
         }),
       })
+
+      if (!scheduledResponse.ok) {
+        console.error("Creation scheduled-events echouee:", scheduledResponse.status)
+        throw new Error("Impossible d'enregistrer l'assignation planifiee")
+      }
 
       // Recharger les événements après l'ajout
       if (calendarView === "year") {
@@ -238,8 +592,8 @@ export function CalendarManager() {
         location: "",
         event_time: "",
         duration_minutes: 60,
-        assigned_employee_email: "",
-        assigned_role_id: "",
+        assigned_employee_emails: [],
+        assigned_role_ids: [],
         requires_validation: false,
       })
       setShowAddEventDialog(false)
@@ -286,8 +640,8 @@ export function CalendarManager() {
         location: "",
         event_time: "",
         duration_minutes: 60,
-        assigned_employee_email: "",
-        assigned_role_id: "",
+        assigned_employee_emails: [],
+        assigned_role_ids: [],
         requires_validation: false,
       })
       setAttemptedSubmit(false)
@@ -296,7 +650,7 @@ export function CalendarManager() {
     }
   }
 
-  const approveEvent = async (eventId: string) => {
+  const approveEvent = async (eventId: string): Promise<boolean> => {
     try {
       const adminEmail = localStorage.getItem("userEmail")
       const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
@@ -313,9 +667,33 @@ export function CalendarManager() {
       if (error) throw error
 
       setEvents(events.map((event) => (event.id === eventId ? { ...event, status: "approved" as const } : event)))
+      return true
     } catch (error) {
       console.error("Erreur lors de l'approbation:", error)
+      return false
     }
+  }
+
+  const requestApproveEvent = (event: CalendarEvent, closeDialogs = false) => {
+    setEventToApprove(event)
+    setCloseDialogsAfterApprove(closeDialogs)
+    setShowApproveConfirmDialog(true)
+  }
+
+  const confirmApproveEvent = async () => {
+    if (!eventToApprove) return
+
+    const success = await approveEvent(eventToApprove.id)
+    if (!success) return
+
+    if (closeDialogsAfterApprove) {
+      setShowEventDetailsDialog(false)
+      setShowDayEventsDialog(false)
+    }
+
+    setShowApproveConfirmDialog(false)
+    setEventToApprove(null)
+    setCloseDialogsAfterApprove(false)
   }
 
   const rejectEvent = async (eventId: string, reason: string) => {
@@ -413,12 +791,12 @@ export function CalendarManager() {
   const getEventsForDate = (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) return []
     
-    const dateString = date.toISOString().split("T")[0]
+    const dateString = toLocalDateOnly(date.toISOString())
     return events.filter((event) => {
       try {
         const eventDate = new Date(event.event_date)
         if (isNaN(eventDate.getTime())) return false
-        return eventDate.toISOString().split("T")[0] === dateString
+        return toLocalDateOnly(eventDate.toISOString()) === dateString
       } catch {
         return false
       }
@@ -497,6 +875,16 @@ export function CalendarManager() {
         return (
           <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"><CheckCircle className="h-4 w-4" /> Approuvé</Badge>
         )
+      case "validated":
+        return (
+          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"><CheckCircle className="h-4 w-4" /> Validé</Badge>
+        )
+      case "moved":
+        return (
+          <Badge className="flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400">
+            <Clock className="h-4 w-4" /> Reporté (non validé)
+          </Badge>
+        )
       case "pending":
         return (
           <Badge className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
@@ -514,6 +902,10 @@ export function CalendarManager() {
     switch (status) {
       case "approved":
         return "bg-green-500 dark:bg-green-600"
+      case "validated":
+        return "bg-green-500 dark:bg-green-600"
+      case "moved":
+        return "bg-orange-500 dark:bg-orange-600"
       case "pending":
         return "bg-yellow-500 dark:bg-yellow-600"
       case "rejected":
@@ -771,8 +1163,8 @@ export function CalendarManager() {
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.status)}`}
-                              title={`${event.title} - ${event.status}`}
+                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.scheduled_status || event.status)}`}
+                              title={`${event.title} - ${event.scheduled_status || event.status}`}
                             >
                               {event.title}
                             </div>
@@ -825,7 +1217,7 @@ export function CalendarManager() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">{event.title}</h3>
-                        {getStatusBadge(event.status)}
+                        {getStatusBadge(event.scheduled_status || event.status)}
                       </div>
                       <div className="space-y-2 text-gray-600 dark:text-gray-400">
                         <p className="flex items-center space-x-2">
@@ -841,6 +1233,7 @@ export function CalendarManager() {
                         {event.description && (
                           <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
                         )}
+                        <p className="text-sm text-gray-600 dark:text-gray-300">Assigne a {getAssignedDisplay(event)}</p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
                         </p>
@@ -853,10 +1246,21 @@ export function CalendarManager() {
                       </div>
                     </div>
                     <div className="flex flex-col space-y-2 ml-4">
+                      {!isEventPast(event.event_date) && (
+                        <Button
+                          onClick={() => requestDeleteEvent(event)}
+                          variant="outline"
+                          className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700"
+                          size="sm"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Supprimer
+                        </Button>
+                      )}
                       {event.status === "pending" && (
                         <>
                           <Button
-                            onClick={() => approveEvent(event.id)}
+                            onClick={() => requestApproveEvent(event)}
                             className="bg-green-600 hover:bg-green-700 rounded-xl"
                             size="sm"
                           >
@@ -940,7 +1344,7 @@ export function CalendarManager() {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 ml-4">
                       <Button
-                        onClick={() => approveEvent(event.id)}
+                        onClick={() => requestApproveEvent(event)}
                         className="bg-green-600 hover:bg-green-700 rounded-xl w-full sm:w-auto"
                         size="sm"
                       >
@@ -980,8 +1384,8 @@ export function CalendarManager() {
             location: "",
             event_time: "",
             duration_minutes: 60,
-            assigned_employee_email: "",
-            assigned_role_id: "",
+            assigned_employee_emails: [],
+            assigned_role_ids: [],
             requires_validation: false,
           })
         }
@@ -1072,47 +1476,59 @@ export function CalendarManager() {
               <p className="text-sm font-semibold text-gray-800">Assignation (optionnelle)</p>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Employé assigné</label>
-                <Select
-                  value={newEvent.assigned_employee_email || "none"}
-                  onValueChange={(value) =>
-                    setNewEvent({ ...newEvent, assigned_employee_email: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
-                    <SelectValue placeholder="Aucun employé" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Aucun employé</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.email}>
-                        {employee.name} ({employee.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Employe(s) assigne(s)</label>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                  {employees.length === 0 ? (
+                    <p className="text-xs text-gray-500">Aucun employe actif.</p>
+                  ) : (
+                    employees.map((employee) => (
+                      <label key={employee.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <Checkbox
+                          checked={newEvent.assigned_employee_emails.includes(employee.email)}
+                          onCheckedChange={(checked) =>
+                            setNewEvent({
+                              ...newEvent,
+                              assigned_employee_emails: toggleArraySelection(
+                                newEvent.assigned_employee_emails,
+                                employee.email,
+                                Boolean(checked),
+                              ),
+                            })
+                          }
+                        />
+                        <span>{employee.name} ({employee.email})</span>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Rôle assigné</label>
-                <Select
-                  value={newEvent.assigned_role_id || "none"}
-                  onValueChange={(value) =>
-                    setNewEvent({ ...newEvent, assigned_role_id: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
-                    <SelectValue placeholder="Aucun rôle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Aucun rôle</SelectItem>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Role(s) assigne(s)</label>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                  {roles.length === 0 ? (
+                    <p className="text-xs text-gray-500">Aucun role disponible.</p>
+                  ) : (
+                    roles.map((role) => (
+                      <label key={role.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <Checkbox
+                          checked={newEvent.assigned_role_ids.includes(role.id)}
+                          onCheckedChange={(checked) =>
+                            setNewEvent({
+                              ...newEvent,
+                              assigned_role_ids: toggleArraySelection(
+                                newEvent.assigned_role_ids,
+                                role.id,
+                                Boolean(checked),
+                              ),
+                            })
+                          }
+                        />
+                        <span>{role.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
@@ -1147,8 +1563,8 @@ export function CalendarManager() {
                   location: "",
                   event_time: "",
                   duration_minutes: 60,
-                  assigned_employee_email: "",
-                  assigned_role_id: "",
+                  assigned_employee_emails: [],
+                  assigned_role_ids: [],
                   requires_validation: false,
                 })
               }}
@@ -1200,6 +1616,43 @@ export function CalendarManager() {
             >
               <X className="mr-2 h-4 w-4" />
               Refuser
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showApproveConfirmDialog} onOpenChange={setShowApproveConfirmDialog}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-white">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span>Confirmer la validation</span>
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Etes-vous sur de vouloir valider cet evenement ?
+            </DialogDescription>
+          </DialogHeader>
+          {eventToApprove && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-700 dark:text-gray-300">
+              <p className="font-semibold">{eventToApprove.title}</p>
+              <p>{formatDate(eventToApprove.event_date)}</p>
+              <p>{eventToApprove.event_time ? formatTime(eventToApprove.event_time) : "Heure non precisee"}</p>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowApproveConfirmDialog(false)
+                setEventToApprove(null)
+                setCloseDialogsAfterApprove(false)
+              }}
+              className="bg-white border border-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button onClick={confirmApproveEvent} className="bg-green-600 hover:bg-green-700 text-white">
+              Valider
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1300,6 +1753,46 @@ export function CalendarManager() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog de confirmation de suppression */}
+      <Dialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900 dark:text-white">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              <span>Supprimer l'evenement</span>
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Confirmez-vous la suppression definitive de cet evenement ?
+            </DialogDescription>
+          </DialogHeader>
+          {eventToDelete && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-700 dark:text-gray-300">
+              <p className="font-semibold">{eventToDelete.title}</p>
+              <p>{formatDate(eventToDelete.event_date)}</p>
+              <p>{eventToDelete.event_time ? formatTime(eventToDelete.event_time) : "Heure non precisee"}</p>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteConfirmDialog(false)
+                setEventToDelete(null)
+              }}
+              className="bg-white border border-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={deleteEventConfirmed}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de détails du jour */}
       <Dialog open={showDayEventsDialog} onOpenChange={setShowDayEventsDialog}>
         <DialogContent className="sm:max-w-2xl bg-white dark:bg-gray-800 max-h-[80vh] overflow-y-auto">
@@ -1345,7 +1838,7 @@ export function CalendarManager() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-bold text-lg text-gray-900 dark:text-white">{event.title}</h4>
-                      {getStatusBadge(event.status)}
+                      {getStatusBadge(event.scheduled_status || event.status)}
                     </div>
                     <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                       <div className="flex items-center space-x-2">
@@ -1357,6 +1850,7 @@ export function CalendarManager() {
                       {event.description && (
                         <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
                       )}
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Assigne a {getAssignedDisplay(event)}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
                       </p>
@@ -1392,7 +1886,7 @@ export function CalendarManager() {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                   {selectedEventForDetails.title}
                 </h3>
-                {getStatusBadge(selectedEventForDetails.status)}
+                {getStatusBadge(selectedEventForDetails.scheduled_status || selectedEventForDetails.status)}
               </div>
               
               <div className="space-y-2 text-gray-600 dark:text-gray-400">
@@ -1420,6 +1914,46 @@ export function CalendarManager() {
                     <p className="text-gray-700 dark:text-gray-300">{selectedEventForDetails.description}</p>
                   </div>
                 )}
+                <div className="mt-3">
+                  <p className="font-semibold text-gray-900 dark:text-white mb-1">Assigne a :</p>
+                  <p className="text-gray-700 dark:text-gray-300">{getAssignedDisplay(selectedEventForDetails)}</p>
+                </div>
+                {(selectedEventForDetails.scheduled_requires_validation ?? selectedEventForDetails.requires_validation) && (
+                  <div className="mt-3">
+                    <p className="font-semibold text-gray-900 dark:text-white mb-1">Validation de présence :</p>
+                    {(() => {
+                      const validationStatus = selectedEventForDetails.scheduled_status || selectedEventForDetails.status
+
+                      if (validationStatus === "moved") {
+                        return (
+                          <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <p className="text-orange-800 dark:text-orange-300 font-medium">
+                              Reporté: l'événement n'a pas été validé pour le bon jour.
+                            </p>
+                          </div>
+                        )
+                      }
+
+                      if (validationStatus === "validated") {
+                        return (
+                          <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                            <p className="text-green-800 dark:text-green-300 font-medium">
+                              Validé pour le bon jour.
+                            </p>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                          <p className="text-yellow-800 dark:text-yellow-300 font-medium">
+                            En attente de validation.
+                          </p>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                   Proposé par {selectedEventForDetails.created_by_name || selectedEventForDetails.created_by_email || "Utilisateur"}
                 </p>
@@ -1435,9 +1969,7 @@ export function CalendarManager() {
                 <div className="flex gap-2 pt-4">
                   <Button
                     onClick={() => {
-                      approveEvent(selectedEventForDetails.id)
-                      setShowEventDetailsDialog(false)
-                      setShowDayEventsDialog(false)
+                      requestApproveEvent(selectedEventForDetails, true)
                     }}
                     className="bg-green-600 hover:bg-green-700 rounded-xl flex-1"
                   >
@@ -1474,6 +2006,17 @@ export function CalendarManager() {
                 </Button>
               )}
 
+              {!isEventPast(selectedEventForDetails.event_date) && (
+                <Button
+                  onClick={() => requestDeleteEvent(selectedEventForDetails)}
+                  variant="outline"
+                  className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700 w-full mt-4"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Supprimer l'evenement
+                </Button>
+              )}
+
               {(() => {
                 const today = new Date().toISOString().split('T')[0]
                 const eventDate = selectedEventForDetails.event_date.split('T')[0]
@@ -1489,8 +2032,8 @@ export function CalendarManager() {
                         location: selectedEventForDetails.location,
                         event_time: selectedEventForDetails.event_time || "",
                         duration_minutes: selectedEventForDetails.duration_minutes,
-                        assigned_employee_email: "",
-                        assigned_role_id: "",
+                        assigned_employee_emails: [],
+                        assigned_role_ids: [],
                         requires_validation: false,
                       })
                       setShowEventDetailsDialog(false)
@@ -1530,8 +2073,8 @@ export function CalendarManager() {
             location: "",
             event_time: "",
             duration_minutes: 60,
-            assigned_employee_email: "",
-            assigned_role_id: "",
+            assigned_employee_emails: [],
+            assigned_role_ids: [],
             requires_validation: false,
           })
           setAttemptedSubmit(false)

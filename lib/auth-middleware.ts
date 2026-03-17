@@ -32,6 +32,33 @@ export async function verifyAuth(request: NextRequest): Promise<string | null> {
     })
     
     if (!user) {
+      // Fallback: certains comptes admin existent dans la table `admins`.
+      if (userEmail) {
+        const adminByEmail = await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id::text AS id
+          FROM admins
+          WHERE email = ${userEmail}
+          LIMIT 1
+        `
+
+        if (adminByEmail.length > 0) {
+          return adminByEmail[0].id
+        }
+      }
+
+      if (userId) {
+        const adminById = await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id::text AS id
+          FROM admins
+          WHERE id::text = ${userId}
+          LIMIT 1
+        `
+
+        if (adminById.length > 0) {
+          return adminById[0].id
+        }
+      }
+
       return null
     }
     

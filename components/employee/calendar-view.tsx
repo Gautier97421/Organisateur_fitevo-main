@@ -29,6 +29,8 @@ interface CalendarEvent {
   created_by_email: string
   created_by_name: string
   status: "pending" | "approved" | "rejected"
+  scheduled_status?: string
+  scheduled_requires_validation?: boolean
   rejection_reason?: string
 }
 
@@ -78,6 +80,84 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     event_time: "",
     duration_minutes: 60,
   })
+  const getAuthHeaders = (): Record<string, string> => {
+    if (typeof window === "undefined") return {}
+    const userId = localStorage.getItem("userId") || ""
+    const userEmail = localStorage.getItem("userEmail") || ""
+    const headers: Record<string, string> = {}
+    if (userId) headers["x-user-id"] = userId
+    if (userEmail) headers["x-user-email"] = userEmail
+    return headers
+  }
+
+  const normalizeDateOnly = (value: string): string => {
+    if (!value) return ""
+    return value.includes("T") ? value.split("T")[0] : value
+  }
+
+  const toLocalDateOnly = (value: string): string => {
+    if (!value) return ""
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return normalizeDateOnly(value)
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, "0")
+    const day = String(parsed.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const normalizeTimeOnly = (value?: string | null): string => {
+    if (!value) return ""
+    return value.trim().slice(0, 5)
+  }
+
+  const normalizeTitle = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+
+  const getScheduledStatusForEvent = (event: CalendarEvent, source: ScheduledEvent[]): { status?: string; requiresValidation?: boolean } => {
+    const eventTitle = normalizeTitle(event.title)
+    const eventDate = normalizeDateOnly(event.event_date)
+    const eventTime = normalizeTimeOnly(event.event_time)
+
+    const candidates = source.filter((item) => {
+      const sameTitle = normalizeTitle(item.title) === eventTitle
+      if (!sameTitle) return false
+
+      const sameDate = normalizeDateOnly(item.event_date) === eventDate
+      if (!sameDate) return false
+
+      const scheduledTime = normalizeTimeOnly(item.start_time)
+      const sameTime = !eventTime || !scheduledTime || eventTime === scheduledTime
+      if (!sameTime) return false
+
+      return true
+    })
+
+    if (candidates.length === 0) {
+      return {}
+    }
+
+    const priority = (status: string): number => {
+      if (status === "moved") return 3
+      if (status === "pending") return 2
+      if (status === "validated") return 1
+      return 0
+    }
+
+    const winner = candidates.reduce((best, current) => {
+      if (!best) return current
+      return priority(current.status) >= priority(best.status) ? current : best
+    })
+
+    return {
+      status: winner.status,
+      requiresValidation: Boolean(winner.requires_validation),
+    }
+  }
 
   // S'assurer que activeView est correct selon les permissions
   useEffect(() => {
@@ -110,8 +190,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       const roleId = await getCurrentUserRoleId()
 
       const params = new URLSearchParams({
-        start_date: startDate.toISOString().split("T")[0],
-        end_date: endDate.toISOString().split("T")[0],
+        start_date: toLocalDateOnly(startDate.toISOString()),
+        end_date: toLocalDateOnly(endDate.toISOString()),
       })
 
       if (userEmail) {
@@ -121,13 +201,27 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         params.append("role_id", roleId)
       }
 
-      const response = await fetch(`/api/db/scheduled-events?${params.toString()}`)
+      const response = await fetch(`/api/db/scheduled-events?${params.toString()}`, {
+        headers: getAuthHeaders(),
+      })
       if (!response.ok) {
         throw new Error("Erreur chargement événements planifiés")
       }
 
       const payload = await response.json()
-      setScheduledEvents(Array.isArray(payload.data) ? payload.data : [])
+      const scheduled = Array.isArray(payload.data) ? payload.data : []
+      setScheduledEvents(scheduled)
+      setEvents((prev) =>
+        prev.map((event) => {
+          const matched = getScheduledStatusForEvent(event, scheduled)
+          if (!matched.status) return event
+          return {
+            ...event,
+            scheduled_status: matched.status,
+            scheduled_requires_validation: matched.requiresValidation,
+          }
+        }),
+      )
     } catch (error) {
       console.error("Erreur lors du chargement des événements à valider:", error)
     }
@@ -181,7 +275,10 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       setIsValidatingEventId(eventId)
       const response = await fetch("/api/db/scheduled-event-validations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ eventId, userEmail }),
       })
 
@@ -252,7 +349,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
-          event_date: selectedDate.toISOString().split("T")[0],
+          event_date: toLocalDateOnly(selectedDate.toISOString()),
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
           created_by_email: userEmail,
@@ -386,12 +483,12 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   const getEventsForDate = (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) return []
     
-    const dateString = date.toISOString().split("T")[0]
+    const dateString = toLocalDateOnly(date.toISOString())
     return events.filter((event) => {
       try {
         const eventDate = new Date(event.event_date)
         if (isNaN(eventDate.getTime())) return false
-        return eventDate.toISOString().split("T")[0] === dateString
+        return toLocalDateOnly(eventDate.toISOString()) === dateString
       } catch {
         return false
       }
@@ -430,13 +527,36 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     switch (status) {
       case "approved":
         return "bg-green-500"
+      case "validated":
+        return "bg-green-500"
+      case "moved":
+        return "bg-orange-500"
       case "pending":
-        return "bg-yellow-500"
+        return "bg-orange-500"
       case "rejected":
         return "bg-red-500"
       default:
         return "bg-gray-500"
     }
+  }
+
+  const getEffectiveStatus = (event: CalendarEvent): string => {
+    return event.scheduled_status || event.status
+  }
+
+  const getStatusLabel = (event: CalendarEvent): string => {
+    const effectiveStatus = getEffectiveStatus(event)
+    if (effectiveStatus === "validated") return "Validé"
+    if (effectiveStatus === "approved") return "Approuvé"
+    if (effectiveStatus === "moved") return "Reporté"
+    if (effectiveStatus === "pending") {
+      if (event.scheduled_requires_validation) {
+        return "En attente de validation"
+      }
+      return "En attente"
+    }
+    if (effectiveStatus === "rejected") return "Refusé"
+    return effectiveStatus
   }
 
   const getDaysInMonth = () => {
@@ -587,8 +707,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                           {monthEvents.slice(0, 3).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.status)}`}
-                              title={`${event.title} - ${event.status}`}
+                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(getEffectiveStatus(event))}`}
+                              title={`${event.title} - ${getStatusLabel(event)}`}
                             >
                               {event.title}
                             </div>
@@ -691,8 +811,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.status)}`}
-                              title={`${event.title} - ${event.status}`}
+                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(getEffectiveStatus(event))}`}
+                              title={`${event.title} - ${getStatusLabel(event)}`}
                             >
                               {event.title}
                             </div>
@@ -735,7 +855,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                   <span className="text-gray-700">Approuvé</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                  <div className="w-4 h-4 bg-orange-500 rounded"></div>
                   <span className="text-gray-700">En attente</span>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -749,9 +869,6 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           <Card className="border border-orange-200 shadow-xl bg-orange-50">
             <CardHeader>
               <h3 className="text-lg font-bold text-orange-900">Événements à valider</h3>
-              <p className="text-sm text-orange-700">
-                Les événements avec restriction restent sur aujourd'hui, puis sont reportés au lendemain uniquement en fin de journée s'ils ne sont pas validés.
-              </p>
             </CardHeader>
             <CardContent>
               {pendingScheduledEvents.length === 0 ? (
@@ -773,7 +890,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                             {event.start_time ? ` • ${event.start_time}` : ""}
                           </p>
                           <p className="text-xs text-orange-700 mt-1">
-                            Statut: {event.status === "moved" ? "Non validé: reporté sur aujourd'hui (puis au lendemain en fin de journée)" : event.status}
+                            Statut: {event.status === "moved" ? "Non validé: reporté pour aujourd'hui" : event.status}
                           </p>
                         </div>
                         <Button
@@ -954,7 +1071,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     return (
                       <Card
                         key={event.id}
-                        className={`border-2 bg-white ${getStatusColor(event.status)} bg-opacity-10`}
+                        className={`border-2 bg-white ${getStatusColor(getEffectiveStatus(event))} bg-opacity-10`}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between mb-2">
@@ -966,8 +1083,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                                 </span>
                               )}
                             </div>
-                            <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(event.status)}`}>
-                              {event.status === "approved" ? "Approuvé" : event.status === "pending" ? "En attente" : "Refusé"}
+                            <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(getEffectiveStatus(event))}`}>
+                              {getStatusLabel(event)}
                             </span>
                           </div>
                           <div className="space-y-1 text-sm text-gray-600">
