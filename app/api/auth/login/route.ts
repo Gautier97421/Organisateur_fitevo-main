@@ -57,11 +57,12 @@ function recordLoginAttempt(identifier: string, success: boolean) {
 export async function POST(request: NextRequest) {
   try {
     const { identifier, password } = await request.json()
+    const normalizedPassword = typeof password === 'string' ? password : ''
     
     // Validation des entrées
-    if (!identifier || !password) {
+    if (!identifier) {
       return NextResponse.json(
-        { error: 'Identifiant et mot de passe requis' },
+        { error: 'Identifiant requis' },
         { status: 400 }
       )
     }
@@ -74,8 +75,8 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Valider la longueur du mot de passe
-    if (!isValidString(password, 1, 255)) {
+    // Le mot de passe est optionnel ici pour permettre le flux de première connexion
+    if (password !== undefined && !isValidString(normalizedPassword, 0, 255)) {
       return NextResponse.json(
         { error: 'Format de mot de passe invalide' },
         { status: 400 }
@@ -132,8 +133,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!normalizedPassword) {
+      return NextResponse.json(
+        { error: 'Identifiant et mot de passe requis' },
+        { status: 400 }
+      )
+    }
+
     // Vérification sécurisée du mot de passe avec hash
-    const isPasswordValid = await verifyPassword(password, user.password)
+    const isPasswordValid = await verifyPassword(normalizedPassword, user.password)
     
     if (!isPasswordValid) {
       recordLoginAttempt(identifier, false)

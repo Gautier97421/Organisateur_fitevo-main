@@ -309,7 +309,8 @@ export async function GET(
           if (field === 'date' || field === 'eventDate') {
             filterValue = value.includes('T') ? value : `${value}T00:00:00.000Z`
           }
-          where[field] = { gte: filterValue }
+          const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
+          where[field] = { ...currentRange, gte: filterValue }
         } else if (key.endsWith('_lte')) {
           let field = snakeToCamel(key.replace('_lte', ''))
           // Mappings spéciaux
@@ -320,7 +321,8 @@ export async function GET(
           if (field === 'date' || field === 'eventDate') {
             filterValue = value.includes('T') ? value : `${value}T23:59:59.999Z`
           }
-          where[field] = { lte: filterValue }
+          const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
+          where[field] = { ...currentRange, lte: filterValue }
         } else if (key.endsWith('_neq')) {
           let field = snakeToCamel(key.replace('_neq', ''))
           where[field] = { not: value }

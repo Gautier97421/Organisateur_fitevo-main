@@ -42,6 +42,7 @@ interface TaskItem {
   role_ids?: string[] // IDs des rôles autorisés
   type?: string
   options?: string[]
+  qcm_allow_multiple?: boolean
   required?: boolean
   created_at: string
 }
@@ -98,6 +99,11 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
               {task.required && (
                 <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
                   Obligatoire
+                </span>
+              )}
+              {task.type === "qcm" && (
+                <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
+                  {task.qcm_allow_multiple ? "Choix multiples" : "Choix unique"}
                 </span>
               )}
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full text-xs flex-shrink-0">
@@ -181,6 +187,7 @@ export function TaskManager() {
     description: string
     type: "checkbox" | "text" | "qcm"
     options: string[]
+    qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[] // IDs des rôles sélectionnés
     subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
@@ -189,6 +196,7 @@ export function TaskManager() {
     description: "",
     type: "checkbox",
     options: [],
+    qcmAllowMultiple: false,
     required: true,
     roleIds: [],
     subPeriod: undefined,
@@ -198,6 +206,7 @@ export function TaskManager() {
     description: string
     type: "checkbox" | "text" | "qcm"
     options: string[]
+    qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[]
     subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
@@ -206,6 +215,7 @@ export function TaskManager() {
     description: "",
     type: "checkbox",
     options: [],
+    qcmAllowMultiple: false,
     required: true,
     roleIds: [],
     subPeriod: undefined,
@@ -262,34 +272,55 @@ export function TaskManager() {
       const result = await response.json()
       const tasksData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
 
-      const parseTaskOptions = (rawOptions: any): string[] => {
-        if (!rawOptions) return []
-        if (Array.isArray(rawOptions)) {
-          return rawOptions.map((opt) => String(opt))
+      const parseTaskOptions = (rawOptions: any): { options: string[]; qcmAllowMultiple: boolean } => {
+        if (!rawOptions) return { options: [], qcmAllowMultiple: false }
+
+        const parseAny = (value: any): { options: string[]; qcmAllowMultiple: boolean } => {
+          if (Array.isArray(value)) {
+            return { options: value.map((opt) => String(opt)), qcmAllowMultiple: false }
+          }
+
+          if (value && typeof value === "object") {
+            const choices = Array.isArray(value.choices)
+              ? value.choices.map((opt: any) => String(opt))
+              : Array.isArray(value.options)
+                ? value.options.map((opt: any) => String(opt))
+                : []
+            return {
+              options: choices,
+              qcmAllowMultiple: Boolean(value.allowMultiple || value.qcmAllowMultiple),
+            }
+          }
+
+          return { options: [], qcmAllowMultiple: false }
         }
+
         if (typeof rawOptions === 'string') {
           try {
-            const parsed = JSON.parse(rawOptions)
-            return Array.isArray(parsed) ? parsed.map((opt) => String(opt)) : []
+            return parseAny(JSON.parse(rawOptions))
           } catch {
             try {
               const normalized = rawOptions.replace(/&quot;/g, '"')
-              const parsed = JSON.parse(normalized)
-              return Array.isArray(parsed) ? parsed.map((opt) => String(opt)) : []
+              return parseAny(JSON.parse(normalized))
             } catch {
-              return []
+              return { options: [], qcmAllowMultiple: false }
             }
           }
         }
-        return []
+
+        return parseAny(rawOptions)
       }
       
       // Parser les champs JSON et trier
-      const parsedTasks = tasksData.map((task: any) => ({
-        ...task,
-        options: parseTaskOptions(task.options),
-        role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
-      }))
+      const parsedTasks = tasksData.map((task: any) => {
+        const parsedQcm = parseTaskOptions(task.options)
+        return {
+          ...task,
+          options: parsedQcm.options,
+          qcm_allow_multiple: parsedQcm.qcmAllowMultiple,
+          role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
+        }
+      })
       
       // Trier côté client par period puis sub_period puis order_index
       const sortedTasks = parsedTasks.sort((a: any, b: any) => {
@@ -367,6 +398,7 @@ export function TaskManager() {
         return
       }
 
+      const filteredOptions = newTask.options.filter((opt) => opt.trim().length > 0)
       const response = await fetch('/api/db/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -377,7 +409,12 @@ export function TaskManager() {
             type: newTask.type,
             period: activePeriod,
             sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
-            options: newTask.type === "qcm" ? newTask.options.filter((opt) => opt.trim().length > 0) : null,
+            options: newTask.type === "qcm"
+              ? {
+                  choices: filteredOptions,
+                  allowMultiple: newTask.qcmAllowMultiple,
+                }
+              : null,
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
@@ -404,6 +441,7 @@ export function TaskManager() {
         description: "",
         type: "checkbox",
         options: [],
+        qcmAllowMultiple: false,
         required: true,
         roleIds: [],
         subPeriod: undefined,
@@ -481,6 +519,7 @@ export function TaskManager() {
       description: task.description || "",
       type: task.type as "checkbox" | "text" | "qcm" || "checkbox",
       options: task.options || [],
+      qcmAllowMultiple: Boolean(task.qcm_allow_multiple),
       required: task.required || true,
       roleIds: task.role_ids || [],
       subPeriod: task.sub_period,
@@ -494,6 +533,7 @@ export function TaskManager() {
     if (!editingTask || !editTask.title) return
 
     try {
+      const filteredOptions = editTask.options.filter((opt) => opt.trim().length > 0)
       const response = await fetch(`/api/db/tasks/${editingTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -501,7 +541,12 @@ export function TaskManager() {
           title: editTask.title,
           description: editTask.description || null,
           type: editTask.type,
-          options: editTask.type === "qcm" ? editTask.options.filter((opt) => opt.trim().length > 0) : null,
+          options: editTask.type === "qcm"
+            ? {
+                choices: filteredOptions,
+                allowMultiple: editTask.qcmAllowMultiple,
+              }
+            : null,
           required: editTask.required,
           role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
           sub_period: (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriod : null,
@@ -521,6 +566,7 @@ export function TaskManager() {
         description: "",
         type: "checkbox",
         options: [],
+        qcmAllowMultiple: false,
         required: true,
         roleIds: [],
       })
@@ -874,6 +920,23 @@ export function TaskManager() {
                 {editTask.type === "qcm" && (
                   <div className="space-y-3">
                     <Label className="text-lg font-medium">Options du QCM</Label>
+                    <div className="space-y-2">
+                      <Label className="text-base font-medium">Mode de réponse</Label>
+                      <Select
+                        value={editTask.qcmAllowMultiple ? "multiple" : "single"}
+                        onValueChange={(value) =>
+                          setEditTask({ ...editTask, qcmAllowMultiple: value === "multiple" })
+                        }
+                      >
+                        <SelectTrigger className="h-12 text-base border-2 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Une seule option à cocher</SelectItem>
+                          <SelectItem value="multiple">Plusieurs options à cocher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Input
                         placeholder="Nom de l'option"
@@ -1069,6 +1132,23 @@ export function TaskManager() {
                 {newTask.type === "qcm" && (
                   <div className="space-y-3">
                     <Label className="text-lg font-medium">Options du QCM</Label>
+                    <div className="space-y-2">
+                      <Label className="text-base font-medium">Mode de réponse</Label>
+                      <Select
+                        value={newTask.qcmAllowMultiple ? "multiple" : "single"}
+                        onValueChange={(value) =>
+                          setNewTask({ ...newTask, qcmAllowMultiple: value === "multiple" })
+                        }
+                      >
+                        <SelectTrigger className="h-12 text-base border-2 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Une seule option à cocher</SelectItem>
+                          <SelectItem value="multiple">Plusieurs options à cocher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Input
                         placeholder="Nom de l'option"

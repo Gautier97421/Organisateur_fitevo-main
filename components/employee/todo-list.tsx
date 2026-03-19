@@ -26,6 +26,7 @@ interface Task {
   description: string
   type: "checkbox" | "text" | "qcm"
   options?: string[]
+  qcmAllowMultiple?: boolean
   required: boolean
   completed: boolean
   validated: boolean
@@ -52,6 +53,60 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   const [cashAlreadyDoneToday, setCashAlreadyDoneToday] = useState(false)
   const [isCheckingCashStatus, setIsCheckingCashStatus] = useState(false)
   const [cashSaveError, setCashSaveError] = useState("")
+
+  const parseQcmOptions = (rawOptions: any): { options: string[]; qcmAllowMultiple: boolean } => {
+    if (!rawOptions) return { options: [], qcmAllowMultiple: false }
+
+    const parseAny = (value: any): { options: string[]; qcmAllowMultiple: boolean } => {
+      if (Array.isArray(value)) {
+        return { options: value.map((opt) => String(opt)), qcmAllowMultiple: false }
+      }
+
+      if (value && typeof value === "object") {
+        const choices = Array.isArray(value.choices)
+          ? value.choices.map((opt: any) => String(opt))
+          : Array.isArray(value.options)
+            ? value.options.map((opt: any) => String(opt))
+            : []
+        return {
+          options: choices,
+          qcmAllowMultiple: Boolean(value.allowMultiple || value.qcmAllowMultiple),
+        }
+      }
+
+      return { options: [], qcmAllowMultiple: false }
+    }
+
+    if (typeof rawOptions === "string") {
+      try {
+        return parseAny(JSON.parse(rawOptions))
+      } catch {
+        return { options: [], qcmAllowMultiple: false }
+      }
+    }
+
+    return parseAny(rawOptions)
+  }
+
+  const getQcmSelectedValues = (task: Task): string[] => {
+    if (!task.value) return []
+    if (!task.qcmAllowMultiple) return [task.value]
+
+    try {
+      const parsed = JSON.parse(task.value)
+      return Array.isArray(parsed) ? parsed.map((item) => String(item)) : []
+    } catch {
+      return task.value ? [task.value] : []
+    }
+  }
+
+  const formatTaskValueForDisplay = (task: Task): string => {
+    if (!task.value) return ""
+    if (!task.qcmAllowMultiple) return task.value
+
+    const values = getQcmSelectedValues(task)
+    return values.join(", ")
+  }
 
   // Fonction pour récupérer les tâches depuis la BDD selon la période
   const getTasksForPeriod = async (period: "matin" | "aprem" | "journee"): Promise<Task[]> => {
@@ -109,17 +164,21 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       }
       
       // Convertir les tâches de la BDD au format attendu
-      return dbTasks.map((task: any) => ({
-        id: task.id,
-        title: task.title,
-        description: task.description || '',
-        type: task.type as "checkbox" | "text" | "qcm",
-        options: task.options ? (typeof task.options === 'string' ? JSON.parse(task.options) : task.options) : undefined,
-        required: task.required,
-        completed: false, // Par défaut non complété
-        validated: false, // Par défaut non validé
-        value: ''
-      }))
+      return dbTasks.map((task: any) => {
+        const parsedQcm = parseQcmOptions(task.options)
+        return {
+          id: task.id,
+          title: task.title,
+          description: task.description || '',
+          type: task.type as "checkbox" | "text" | "qcm",
+          options: parsedQcm.options,
+          qcmAllowMultiple: parsedQcm.qcmAllowMultiple,
+          required: task.required,
+          completed: false, // Par défaut non complété
+          validated: false, // Par défaut non validé
+          value: ''
+        }
+      })
     } catch (error) {
       return []
     }
@@ -254,11 +313,40 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const handleQcmChange = (id: string, value: string) => {
-    const task = tasks.find((t) => t.id === id)
-    if (task) {
-      setTaskToValidate({ ...task, value, completed: true })
-      setShowValidationDialog(true)
+    updateTask(id, { value, completed: false })
+  }
+
+  const handleQcmMultipleToggle = (task: Task, option: string, checked: boolean) => {
+    const currentValues = getQcmSelectedValues(task)
+    const nextValues = checked
+      ? Array.from(new Set([...currentValues, option]))
+      : currentValues.filter((item) => item !== option)
+
+    updateTask(task.id, {
+      value: JSON.stringify(nextValues),
+      completed: false,
+    })
+  }
+
+  const handleQcmValidateClick = (task: Task) => {
+    const hasValue = task.qcmAllowMultiple
+      ? getQcmSelectedValues(task).length > 0
+      : Boolean((task.value || "").trim())
+
+    if (!hasValue) {
+      return
     }
+
+    const valueToSave = task.qcmAllowMultiple
+      ? JSON.stringify(getQcmSelectedValues(task))
+      : (task.value || "")
+
+    setTaskToValidate({
+      ...task,
+      value: valueToSave,
+      completed: true,
+    })
+    setShowValidationDialog(true)
   }
 
   const confirmValidation = async () => {
@@ -275,6 +363,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         title: taskToValidate.title,
         description: taskToValidate.description || "",
         type: taskToValidate.type,
+        value: taskToValidate.value || null,
         period: period,
         sub_period: subPeriod || null,
         due_date: `${today}T00:00:00.000Z`,
@@ -304,7 +393,10 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           await fetch(`/api/db/tasks/${existingTask.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'completed' })
+            body: JSON.stringify({
+              status: 'completed',
+              value: taskToValidate.value || null,
+            })
           })
         } else {
           // Créer une nouvelle tâche
@@ -696,31 +788,70 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               {task.type === "qcm" && task.options && (
                 <div className="space-y-3">
                   <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                    <ListIcon className="h-5 w-5" /> Choisissez une option :
+                    <ListIcon className="h-5 w-5" />
+                    {task.qcmAllowMultiple ? "Choisissez une ou plusieurs options :" : "Choisissez une option :"}
                   </Label>
-                  <RadioGroup
-                    value={task.value || ""}
-                    onValueChange={(value) => handleQcmChange(task.id, value)}
-                    disabled={isBlocked || task.validated}
-                    className="space-y-3"
-                  >
-                    {task.options.map((option, index) => (
-                      <div key={index} className="flex items-center space-x-3">
-                        <RadioGroupItem
-                          value={option}
-                          id={`${task.id}-${index}`}
-                          disabled={isBlocked || task.validated}
-                          className="w-5 h-5"
-                        />
-                        <Label
-                          htmlFor={`${task.id}-${index}`}
-                          className="text-lg cursor-pointer text-gray-900"
-                        >
-                          {option}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  {task.qcmAllowMultiple ? (
+                    <div className="space-y-3">
+                      {task.options.map((option, index) => {
+                        const selectedValues = getQcmSelectedValues(task)
+                        const checked = selectedValues.includes(option)
+                        return (
+                          <div key={index} className="flex items-center space-x-3">
+                            <Checkbox
+                              id={`${task.id}-${index}`}
+                              checked={checked}
+                              onCheckedChange={(nextChecked) =>
+                                handleQcmMultipleToggle(task, option, Boolean(nextChecked))
+                              }
+                              disabled={isBlocked || task.validated}
+                              className="w-5 h-5"
+                            />
+                            <Label
+                              htmlFor={`${task.id}-${index}`}
+                              className="text-lg cursor-pointer text-gray-900"
+                            >
+                              {option}
+                            </Label>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <RadioGroup
+                      value={task.value || ""}
+                      onValueChange={(value) => handleQcmChange(task.id, value)}
+                      disabled={isBlocked || task.validated}
+                      className="space-y-3"
+                    >
+                      {task.options.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <RadioGroupItem
+                            value={option}
+                            id={`${task.id}-${index}`}
+                            disabled={isBlocked || task.validated}
+                            className="w-5 h-5"
+                          />
+                          <Label
+                            htmlFor={`${task.id}-${index}`}
+                            className="text-lg cursor-pointer text-gray-900"
+                          >
+                            {option}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
+                  {!task.validated && (
+                    <Button
+                      type="button"
+                      onClick={() => handleQcmValidateClick(task)}
+                      disabled={isBlocked || (task.qcmAllowMultiple ? getQcmSelectedValues(task).length === 0 : !(task.value || "").trim())}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <Lock className="h-4 w-4 mr-2" /> {task.qcmAllowMultiple ? "Valider mes choix" : "Valider mon choix"}
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -798,7 +929,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                 </span>
                 {taskToValidate.value && (
                   <div className="mt-2 p-2 bg-gray-100 rounded">
-                    <strong>Votre réponse :</strong> {taskToValidate.value}
+                    <strong>Votre réponse :</strong> {formatTaskValueForDisplay(taskToValidate)}
                   </div>
                 )}
               </>

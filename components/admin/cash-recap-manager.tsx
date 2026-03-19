@@ -272,7 +272,7 @@ export function CashRecapManager() {
   }, [entries])
 
   const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
+    const filtered = entries.filter((entry) => {
       if (periodFilter !== "all" && entry.period !== periodFilter) {
         return false
       }
@@ -289,6 +289,13 @@ export function CashRecapManager() {
       }
 
       return true
+    })
+
+    // Trier du plus récent au plus ancien.
+    return filtered.sort((a, b) => {
+      const timeA = new Date(a.entry_date).getTime()
+      const timeB = new Date(b.entry_date).getTime()
+      return timeB - timeA
     })
   }, [entries, periodFilter, gymFilter, employeeFilter])
 
