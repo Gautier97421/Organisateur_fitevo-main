@@ -95,6 +95,9 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.roleIds = mapped.role_ids
       delete mapped.role_ids
     }
+    if (mapped.value !== undefined) {
+      delete mapped.value
+    }
   }
   
   if (table === 'gyms') {

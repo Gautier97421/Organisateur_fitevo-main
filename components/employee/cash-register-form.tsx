@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { AlertTriangle, FileText, XCircle, CheckCircle } from "lucide-react"
+import { FileText, XCircle, CheckCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -39,9 +39,10 @@ interface CashRegisterFormProps {
   onSubmit: (data: CashRegisterData) => void
   period: "matin" | "aprem" | "journee"
   gymId?: string
+  mode?: "start" | "end"
 }
 
-export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: CashRegisterFormProps) {
+export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mode = "end" }: CashRegisterFormProps) {
   const [formData, setFormData] = useState<CashRegisterData>({
     cash_amount: 0,
     total_register: 0,
@@ -135,21 +136,8 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
     }))
   }
 
-  const generateCoinsDetail = () => {
-    const details = Object.entries(coinCounts)
-      .filter(([_, count]) => count > 0)
-      .map(([value, count]) => `${coinLabels[value as keyof typeof coinLabels]}: ${count}`)
-      .join(", ")
-
-    setFormData((prev) => ({
-      ...prev,
-      coins_detail: details,
-      cash_amount: calculateTotal(),
-    }))
-  }
-
   const handleSubmit = () => {
-    generateCoinsDetail()
+    const computedTotal = calculateTotal()
 
     // Sécuriser les champs numériques personnalisés: jamais de valeur négative.
     const sanitizedCustomValues: Record<string, any> = { ...customFieldValues }
@@ -167,12 +155,14 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
 
     const finalData = {
       ...formData,
-      cash_amount: calculateTotal(),
+      cash_amount: computedTotal,
+      total_register: computedTotal,
       coins_detail: Object.entries(coinCounts)
         .filter(([_, count]) => count > 0)
         .map(([value, count]) => `${coinLabels[value as keyof typeof coinLabels]}: ${count}`)
         .join(", "),
-      ...sanitizedCustomValues
+      ...(isStartMode ? {} : sanitizedCustomValues),
+      notes: isStartMode ? "" : formData.notes,
     }
     onSubmit(finalData)
   }
@@ -189,6 +179,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
   }
 
   const total = calculateTotal()
+  const isStartMode = mode === "start"
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -196,10 +187,12 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
             <span className="text-3xl">💰</span>
-            <span>Fiche de Caisse - {getPeriodText()}</span>
+            <span>{isStartMode ? "Comptage de caisse d'ouverture" : "Fiche de Caisse - " + getPeriodText()}</span>
           </DialogTitle>
           <DialogDescription className="text-lg text-gray-600">
-            Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list.
+            {isStartMode
+              ? "Première connexion du jour: veuillez compter la caisse d'ouverture avant de commencer."
+              : "Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list."}
           </DialogDescription>
         </DialogHeader>
 
@@ -236,65 +229,8 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
             </CardContent>
           </Card>
 
-          {/* Montant total de la caisse */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-lg font-medium text-gray-900">💵 Total de la caisse</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.total_register}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, total_register: Number.parseFloat(e.target.value) || 0 }))
-                }
-                placeholder="0.00"
-                className="text-lg border-2 rounded-xl bg-white text-gray-900"
-              />
-              <p className="text-sm text-gray-600">
-                Montant total présent dans la caisse (incluant les ventes)
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-lg font-medium text-gray-900">💸 Montant liquide compté</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={total.toFixed(2)}
-                readOnly
-                className="text-lg border-2 rounded-xl bg-gray-100 text-gray-900"
-              />
-              <p className="text-sm text-gray-600">
-                Calculé automatiquement à partir du détail ci-dessus
-              </p>
-            </div>
-          </div>
-
-          {/* Différence */}
-          {formData.total_register > 0 && (
-            <Card
-              className={`${Math.abs(total - formData.total_register) > 0.01 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}
-            >
-              <CardContent className="p-4">
-                <div className="text-center">
-                  <span
-                    className={`text-lg font-bold ${Math.abs(total - formData.total_register) > 0.01 ? "text-red-800" : "text-green-800"}`}
-                  >
-                    Différence : {(total - formData.total_register).toFixed(2)} €
-                  </span>
-                  {Math.abs(total - formData.total_register) > 0.01 && (
-                    <p className="text-sm text-red-600 mt-1">
-                      <AlertTriangle className="h-4 w-4 inline-block mr-1" />
-                      Il y a une différence entre le montant compté et le total de la caisse
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Champs personnalisés de caisse */}
-          {!isLoadingFields && customFields.length > 0 && (
+          {!isStartMode && !isLoadingFields && customFields.length > 0 && (
             <Card className="bg-blue-50 border-blue-200">
               <CardHeader>
                 <CardTitle className="text-lg text-gray-900">📋 Informations supplémentaires</CardTitle>
@@ -358,18 +294,20 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
           )}
 
           {/* Notes */}
-          <div className="space-y-2">
-            <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
-              <FileText className="h-5 w-5" /> Notes (optionnel)
-            </Label>
-            <Textarea
-              value={formData.notes}
-              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-              placeholder="Remarques, incidents, observations..."
-              className="text-lg border-2 rounded-xl bg-white text-gray-900"
-              rows={3}
-            />
-          </div>
+          {!isStartMode && (
+            <div className="space-y-2">
+              <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                <FileText className="h-5 w-5" /> Notes (optionnel)
+              </Label>
+              <Textarea
+                value={formData.notes}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Remarques, incidents, observations..."
+                className="text-lg border-2 rounded-xl bg-white text-gray-900"
+                rows={3}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex space-x-3">
@@ -378,10 +316,10 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId }: C
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={formData.total_register <= 0}
+            disabled={total <= 0}
             className="bg-green-600 hover:bg-green-700 text-lg px-6 flex items-center gap-2"
           >
-            <CheckCircle className="h-5 w-5" /> Valider et Envoyer
+            <CheckCircle className="h-5 w-5" /> {isStartMode ? "Valider l'ouverture" : "Valider et Envoyer"}
           </Button>
         </DialogFooter>
       </DialogContent>

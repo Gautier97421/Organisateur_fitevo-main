@@ -422,8 +422,8 @@ export async function POST(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const authUserId = await verifyAuth(request)
+  if (!authUserId) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -521,6 +521,9 @@ export async function POST(
         if (camelKey === 'description' && table === 'gyms') {
           continue // gyms n'a pas de champ description
         }
+        if (table === 'tasks' && camelKey === 'value') {
+          continue // le schéma tasks ne contient pas de colonne value
+        }
         if (camelKey === 'isSuperAdmin') {
           continue // géré via role
         }
@@ -602,8 +605,17 @@ export async function POST(
         }
       }
       if (!converted.userId && table === 'tasks') {
-        const user = await prisma.user.findFirst({ where: { role: 'admin' } })
-        if (user) converted.userId = user.id
+        // Priorité: utilisateur authentifié, fallback admin si nécessaire
+        converted.userId = authUserId
+        if (!converted.userId) {
+          const user = await prisma.user.findFirst({ where: { role: 'admin' } })
+          if (user) converted.userId = user.id
+        }
+      }
+
+      // createdBy est obligatoire dans le schéma tasks
+      if (table === 'tasks' && !converted.createdBy) {
+        converted.createdBy = authUserId
       }
 
       
@@ -746,6 +758,9 @@ export async function PUT(
       if (camelKey === 'description' && table === 'gyms') {
         continue // gyms n'a pas de champ description
       }
+      if (table === 'tasks' && camelKey === 'value') {
+        continue // le schéma tasks ne contient pas de colonne value
+      }
       if (camelKey === 'isSuperAdmin') {
         continue // géré via role
       }
@@ -847,6 +862,9 @@ export async function PATCH(
       // Ignorer les champs qui n'existent pas dans le schéma
       if (camelKey === 'description' && table === 'gyms') {
         continue
+      }
+      if (table === 'tasks' && camelKey === 'value') {
+        continue // le schéma tasks ne contient pas de colonne value
       }
       if (camelKey === 'isSuperAdmin') {
         continue

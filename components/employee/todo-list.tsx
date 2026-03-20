@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign } from "lucide-react"
+import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign, AlertTriangle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { CashRegisterForm } from "./cash-register-form"
 import {
@@ -47,12 +47,33 @@ interface TodoListProps {
 export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, onSessionEnd }: TodoListProps) {
   const [showValidationDialog, setShowValidationDialog] = useState(false)
   const [showCashRegisterForm, setShowCashRegisterForm] = useState(false)
+  const [cashFormMode, setCashFormMode] = useState<"start" | "end">("end")
+  const [showOptionalTextWarningDialog, setShowOptionalTextWarningDialog] = useState(false)
+  const [unvalidatedOptionalTextTasks, setUnvalidatedOptionalTextTasks] = useState<Task[]>([])
   const [taskToValidate, setTaskToValidate] = useState<Task | null>(null)
   const [textValues, setTextValues] = useState<Record<string, string>>({})
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [cashAlreadyDoneToday, setCashAlreadyDoneToday] = useState(false)
   const [isCheckingCashStatus, setIsCheckingCashStatus] = useState(false)
   const [cashSaveError, setCashSaveError] = useState("")
+
+  useEffect(() => {
+    const runDailyCleanup = async () => {
+      const today = new Date().toISOString().split('T')[0]
+      const cleanupKey = `daily_cleanup_done_${today}`
+      if (localStorage.getItem(cleanupKey) === '1') {
+        return
+      }
+
+      try {
+        await fetch('/api/cleanup-temp-periods', { method: 'POST' })
+        localStorage.setItem(cleanupKey, '1')
+      } catch {
+        // Erreur silencieuse: le cleanup n'est pas bloquant pour l'utilisateur
+      }
+    }
+
+    runDailyCleanup()
+  }, [])
 
   const parseQcmOptions = (rawOptions: any): { options: string[]; qcmAllowMultiple: boolean } => {
     if (!rawOptions) return { options: [], qcmAllowMultiple: false }
@@ -106,6 +127,37 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
     const values = getQcmSelectedValues(task)
     return values.join(", ")
+  }
+
+  const parseStoredResponseValue = (rawOptions: any, task: Task): string => {
+    if (!rawOptions) return ""
+
+    let parsed = rawOptions
+    if (typeof rawOptions === "string") {
+      try {
+        parsed = JSON.parse(rawOptions)
+      } catch {
+        return ""
+      }
+    }
+
+    if (!parsed || typeof parsed !== "object") return ""
+
+    const response = (parsed as any).response
+    if (response === null || response === undefined) return ""
+
+    if (task.type === "qcm") {
+      if (Array.isArray(response)) {
+        return JSON.stringify(response)
+      }
+      return String(response)
+    }
+
+    if (task.type === "checkbox") {
+      return response ? "true" : ""
+    }
+
+    return String(response)
   }
 
   // Fonction pour récupérer les tâches depuis la BDD selon la période
@@ -171,7 +223,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           title: task.title,
           description: task.description || '',
           type: task.type as "checkbox" | "text" | "qcm",
-          options: parsedQcm.options,
+          options: task.type === "qcm" ? parsedQcm.options : undefined,
           qcmAllowMultiple: parsedQcm.qcmAllowMultiple,
           required: task.required,
           completed: false, // Par défaut non complété
@@ -225,12 +277,13 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               
               if (userTask && userTask.status === 'completed') {
                 console.log(`Tâche "${task.title}" trouvée comme complétée`)
+                const restoredValue = parseStoredResponseValue(userTask.options, task)
                 return {
                   ...task,
                   completed: true,
                   validated: true,
                   validated_at: userTask.updated_at,
-                  value: userTask.value || ''
+                  value: restoredValue
                 }
               }
               return task
@@ -356,21 +409,35 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       const validationTime = new Date().toISOString()
       const userAgent = navigator.userAgent
       const userId = localStorage.getItem("userId") || ""
+      const userEmail = localStorage.getItem("userEmail") || ""
       const today = new Date().toISOString().split('T')[0]
+      const actorId = userId || userEmail
+      const responseValue = taskToValidate.type === "checkbox"
+        ? true
+        : taskToValidate.type === "qcm"
+          ? (taskToValidate.qcmAllowMultiple
+              ? getQcmSelectedValues(taskToValidate)
+              : (taskToValidate.value || ""))
+          : (taskToValidate.value || "")
+
+      const responseOptionsPayload = {
+        responseType: taskToValidate.type,
+        response: responseValue,
+        qcmAllowMultiple: Boolean(taskToValidate.qcmAllowMultiple),
+      }
 
       // Sauvegarder dans la base de données
       const taskData = {
         title: taskToValidate.title,
         description: taskToValidate.description || "",
         type: taskToValidate.type,
-        value: taskToValidate.value || null,
         period: period,
         sub_period: subPeriod || null,
         due_date: `${today}T00:00:00.000Z`,
         status: "completed",
-        user_id: userId,
-        created_by: userId,
-        options: taskToValidate.options ? JSON.stringify(taskToValidate.options) : null,
+        user_id: actorId,
+        created_by: actorId,
+        options: responseOptionsPayload,
         required: taskToValidate.required
       }
 
@@ -383,28 +450,38 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       const existingTaskResponse = await fetch(
         `/api/db/tasks?user_id=${userId}&title=${encodeURIComponent(taskToValidate.title)}&period=${period}&updated_at_gte=${encodeURIComponent(dayStart.toISOString())}&updated_at_lte=${encodeURIComponent(dayEnd.toISOString())}`
       )
+
+      if (!existingTaskResponse.ok) {
+        throw new Error("Impossible de vérifier la tâche existante")
+      }
       
-      if (existingTaskResponse.ok) {
-        const existingTaskData = await existingTaskResponse.json()
-        const existingTask = Array.isArray(existingTaskData.data) ? existingTaskData.data[0] : existingTaskData.data
-        
-        if (existingTask) {
-          // Mettre à jour la tâche existante
-          await fetch(`/api/db/tasks/${existingTask.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'completed',
-              value: taskToValidate.value || null,
-            })
+      const existingTaskData = await existingTaskResponse.json()
+      const existingTask = Array.isArray(existingTaskData.data) ? existingTaskData.data[0] : existingTaskData.data
+      
+      if (existingTask) {
+        // Mettre à jour la tâche existante
+        const updateResponse = await fetch(`/api/db/tasks/${existingTask.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'completed',
+            options: responseOptionsPayload,
           })
-        } else {
-          // Créer une nouvelle tâche
-          await fetch('/api/db/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: taskData })
-          })
+        })
+
+        if (!updateResponse.ok) {
+          throw new Error("La validation de la tâche a échoué")
+        }
+      } else {
+        // Créer une nouvelle tâche
+        const createResponse = await fetch('/api/db/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: taskData })
+        })
+
+        if (!createResponse.ok) {
+          throw new Error("L'enregistrement de la tâche a échoué")
         }
       }
 
@@ -428,6 +505,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       console.log('Tâche validée et sauvegardée en BDD:', taskToValidate.title)
     } catch (error) {
       console.error("Erreur lors de la validation:", error)
+      alert("Impossible de valider la tâche. Veuillez réessayer.")
     }
   }
 
@@ -436,14 +514,12 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     setTaskToValidate(null)
   }
 
-  const checkCashRegisterDoneToday = async (): Promise<boolean> => {
-    const today = new Date().toISOString().split('T')[0]
-    const gymKey = gymId || "global"
+  const isFirstWorkSessionOfDay = async (): Promise<boolean> => {
+    const userId = localStorage.getItem("userId") || ""
+    if (!userId) return false
 
-    let url = `/api/db/work_schedules?work_date=${today}&type=work`
-    if (gymId) {
-      url += `&gym_id=${gymId}`
-    }
+    const today = new Date().toISOString().split('T')[0]
+    const url = `/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`
 
     const response = await fetch(url)
     if (!response.ok) {
@@ -452,11 +528,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
     const data = await response.json()
     const schedules = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+    const workSessions = schedules.filter((schedule: any) => (schedule.notes || "").includes("Période:"))
 
-    return schedules.some((schedule: any) => {
-      const notes = schedule.notes || ""
-      return notes.includes(`[CASH_REGISTER_DONE:${gymKey}:${today}]`)
-    })
+    return workSessions.length <= 1
   }
 
   const finalizeSession = async (cashData?: any, markCashRegisterDone?: boolean) => {
@@ -527,7 +601,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     }
   }
 
-  const handleCashRegisterSubmit = async (cashData: any) => {
+  const persistCashRegisterEntry = async (cashData: any, mode: "start" | "end") => {
     setCashSaveError("")
 
     const userEmail = localStorage.getItem("userEmail") || ""
@@ -537,8 +611,11 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     if (!userEmail || !userId) {
       setCashSaveError("Session utilisateur invalide: impossible d'enregistrer la caisse.")
       alert("Session utilisateur invalide: impossible d'enregistrer la caisse.")
-      return
+      return false
     }
+
+    const modePrefix = mode === "start" ? "[OUVERTURE]" : "[FIN_PERIODE]"
+    const mergedNotes = [modePrefix, cashData.notes || ""].filter(Boolean).join(" ").trim()
 
     const response = await fetch("/api/db/cash-register-entries", {
       method: "POST",
@@ -556,7 +633,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         totalRegister: Number(cashData.total_register || 0),
         cashAmount: Number(cashData.cash_amount || 0),
         coinsDetail: cashData.coins_detail || "",
-        notes: cashData.notes || "",
+        notes: mergedNotes,
         customValues: Object.fromEntries(
           Object.entries(cashData).filter(([key]) =>
             !["cash_amount", "total_register", "coins_detail", "notes"].includes(key)
@@ -577,6 +654,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       const message = apiMessage || `Erreur API (${response.status}) lors de l'enregistrement de la caisse.`
       setCashSaveError(message)
       alert(message)
+      return false
+    }
+
+    return true
+  }
+
+  const handleCashRegisterSubmit = async (cashData: any) => {
+    const saved = await persistCashRegisterEntry(cashData, cashFormMode)
+    if (!saved) return
+
+    if (cashFormMode === "start") {
+      setShowCashRegisterForm(false)
       return
     }
 
@@ -584,20 +673,32 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const submitTodoList = async () => {
-    try {
-      const doneToday = await checkCashRegisterDoneToday()
-      setCashAlreadyDoneToday(doneToday)
-
-      if (doneToday) {
-        await finalizeSession(undefined, false)
-        return
+    const optionalTextFilledNotValidated = tasks.filter((task) => {
+      if (task.type !== "text" || task.required || task.validated) {
+        return false
       }
+      const value = (textValues[task.id] ?? task.value ?? "").trim()
+      return value.length > 0
+    })
 
-      setShowCashRegisterForm(true)
-    } catch (error) {
-      console.error("Erreur vérification caisse:", error)
-      setShowCashRegisterForm(true)
+    if (optionalTextFilledNotValidated.length > 0) {
+      setUnvalidatedOptionalTextTasks(optionalTextFilledNotValidated)
+      setShowOptionalTextWarningDialog(true)
+      return
     }
+
+    setCashFormMode("end")
+    setShowCashRegisterForm(true)
+  }
+
+  const continueToCashRegisterAfterWarning = () => {
+    setShowOptionalTextWarningDialog(false)
+    setCashFormMode("end")
+    setShowCashRegisterForm(true)
+  }
+
+  const cancelCashRegisterAfterWarning = () => {
+    setShowOptionalTextWarningDialog(false)
   }
 
   const allRequiredTasksValidated = tasks
@@ -605,25 +706,37 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     .every((task) => task.completed && task.validated)
 
   useEffect(() => {
-    const loadCashStatus = async () => {
-      if (!allRequiredTasksValidated) {
-        setCashAlreadyDoneToday(false)
+    const openCashRegisterAtFirstSessionStart = async () => {
+      if (showCashRegisterForm || showValidationDialog) {
+        return
+      }
+
+      const userId = localStorage.getItem("userId") || ""
+      if (!userId) return
+
+      const today = new Date().toISOString().split('T')[0]
+      const sessionKey = `cash_start_opened_${userId}_${today}`
+      if (localStorage.getItem(sessionKey) === '1') {
         return
       }
 
       try {
         setIsCheckingCashStatus(true)
-        const done = await checkCashRegisterDoneToday()
-        setCashAlreadyDoneToday(done)
+        const shouldOpen = await isFirstWorkSessionOfDay()
+        if (shouldOpen) {
+          setCashFormMode("start")
+          setShowCashRegisterForm(true)
+          localStorage.setItem(sessionKey, '1')
+        }
       } catch {
-        setCashAlreadyDoneToday(false)
+        // Erreur silencieuse
       } finally {
         setIsCheckingCashStatus(false)
       }
     }
 
-    loadCashStatus()
-  }, [allRequiredTasksValidated, gymId])
+    openCashRegisterAtFirstSessionStart()
+  }, [tasks.length, period, subPeriod, gymId, showCashRegisterForm, showValidationDialog])
 
   if (isLoadingTasks) {
     return (
@@ -636,16 +749,26 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
   if (tasks.length === 0) {
     return (
-      <Card className="border-2 border-gray-300">
-        <CardContent className="p-6 text-center">
-          <p className="text-gray-600 text-lg">
-            Aucune tâche n'a été assignée pour cette période.
-          </p>
-          <p className="text-gray-500 text-sm mt-2">
-            Veuillez contacter votre administrateur pour assigner des tâches.
-          </p>
-        </CardContent>
-      </Card>
+      <>
+        <Card className="border-2 border-gray-300">
+          <CardContent className="p-6 text-center">
+            <p className="text-gray-600 text-lg">
+              Aucune tâche n'a été assignée pour cette période.
+            </p>
+            <p className="text-gray-500 text-sm mt-2">
+              Veuillez contacter votre administrateur pour assigner des tâches.
+            </p>
+          </CardContent>
+        </Card>
+        <CashRegisterForm
+          isOpen={showCashRegisterForm}
+          onClose={() => setShowCashRegisterForm(false)}
+          onSubmit={handleCashRegisterSubmit}
+          period={period}
+          gymId={gymId}
+          mode={cashFormMode}
+        />
+      </>
     )
   }
 
@@ -877,13 +1000,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                   <p className="text-sm mt-2 text-gray-600 flex items-center justify-center gap-1">
                     <Hourglass className="h-4 w-4" /> Vérification de la caisse du jour...
                   </p>
-                ) : cashAlreadyDoneToday ? (
-                  <p className="text-sm mt-2 text-green-700 flex items-center justify-center gap-1">
-                    <CheckCircle className="h-4 w-4" /> La caisse du jour est déjà validée. Vous pouvez terminer.
-                  </p>
                 ) : (
                   <p className="text-sm mt-2 text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
-                    <DollarSign className="h-4 w-4" /> Vous devez remplir la fiche de caisse (une seule fois par jour).
+                    <DollarSign className="h-4 w-4" /> Vous devez remplir la fiche de caisse pour terminer votre période.
                   </p>
                 )}
               </div>
@@ -892,15 +1011,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                 disabled={isCheckingCashStatus}
                 className="bg-green-600 hover:bg-green-700 text-white text-xl px-8 py-4 h-auto flex items-center gap-2"
               >
-                {cashAlreadyDoneToday ? (
-                  <>
-                    <CheckCircle className="h-6 w-6" /> Terminer la session
-                  </>
-                ) : (
-                  <>
-                    <DollarSign className="h-6 w-6" /> Remplir la fiche de caisse
-                  </>
-                )}
+                <>
+                  <DollarSign className="h-6 w-6" /> Remplir la fiche de caisse
+                </>
               </Button>
             </div>
           </CardContent>
@@ -947,6 +1060,47 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         </DialogContent>
       </Dialog>
 
+      {/* Dialog d'avertissement: réponses optionnelles non validées */}
+      <Dialog open={showOptionalTextWarningDialog} onOpenChange={setShowOptionalTextWarningDialog}>
+        <DialogContent className="sm:max-w-lg bg-white" aria-describedby="optional-text-warning-description">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
+              <span>Réponses non validées</span>
+            </DialogTitle>
+            <DialogDescription id="optional-text-warning-description" className="text-base text-gray-600">
+              Vous avez rempli une ou plusieurs réponses optionnelles sans les valider.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 text-sm text-gray-700">
+            <p>Vérifiez ces tâches avant de passer à la caisse :</p>
+            <ul className="list-disc pl-5 space-y-1 max-h-40 overflow-y-auto">
+              {unvalidatedOptionalTextTasks.map((task) => (
+                <li key={task.id}>{task.title}</li>
+              ))}
+            </ul>
+            <p className="text-amber-700">Vous pouvez continuer si c'est volontaire.</p>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={cancelCashRegisterAfterWarning}
+              className="border border-gray-300 hover:bg-gray-50 bg-white"
+            >
+              Retourner aux tâches
+            </Button>
+            <Button
+              onClick={continueToCashRegisterAfterWarning}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Continuer vers la caisse
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Formulaire de caisse */}
       <CashRegisterForm
         isOpen={showCashRegisterForm}
@@ -954,6 +1108,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         onSubmit={handleCashRegisterSubmit}
         period={period}
         gymId={gymId}
+        mode={cashFormMode}
       />
     </div>
   )

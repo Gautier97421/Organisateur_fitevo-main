@@ -21,23 +21,36 @@ export async function POST(request: NextRequest) {
     yesterday.setDate(yesterday.getDate() - 1)
     yesterday.setHours(0, 0, 0, 0)
     
+    const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+
     // Supprimer toutes les périodes temporaires datant d'avant aujourd'hui
     // @ts-ignore - Le champ isTemporary existe dans le schéma mais le client doit être rechargé
-    const result = await prisma.workSchedule.deleteMany({
+    const workSchedulesResult = await prisma.workSchedule.deleteMany({
       where: {
         isTemporary: true,
         date: {
-          lt: new Date(new Date().setHours(0, 0, 0, 0)) // Avant aujourd'hui à minuit
+          lt: todayStart // Avant aujourd'hui à minuit
+        }
+      }
+    })
+
+    // Supprimer les tâches complétées des jours précédents (historique quotidien non nécessaire)
+    const tasksResult = await prisma.task.deleteMany({
+      where: {
+        status: 'completed',
+        updatedAt: {
+          lt: todayStart
         }
       }
     })
     
-    logger.info(`Nettoyage terminé: ${result.count} périodes temporaires supprimées`)
+    logger.info(`Nettoyage terminé: ${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`)
     
     return NextResponse.json({ 
       success: true, 
-      message: `${result.count} périodes temporaires supprimées`,
-      count: result.count 
+      message: `${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`,
+      workSchedulesDeleted: workSchedulesResult.count,
+      completedTasksDeleted: tasksResult.count 
     })
   } catch (error: any) {
     logger.error('Erreur lors du nettoyage des périodes temporaires', error)
@@ -53,20 +66,32 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+
     // @ts-ignore - Le champ isTemporary existe dans le schéma mais le client doit être rechargé
-    const count = await prisma.workSchedule.count({
+    const workSchedulesCount = await prisma.workSchedule.count({
       where: {
         isTemporary: true,
         date: {
-          lt: new Date(new Date().setHours(0, 0, 0, 0))
+          lt: todayStart
+        }
+      }
+    })
+
+    const completedTasksCount = await prisma.task.count({
+      where: {
+        status: 'completed',
+        updatedAt: {
+          lt: todayStart
         }
       }
     })
     
     return NextResponse.json({ 
       success: true, 
-      count,
-      message: `${count} périodes temporaires peuvent être supprimées`
+      workSchedulesCount,
+      completedTasksCount,
+      message: `${workSchedulesCount} périodes temporaires et ${completedTasksCount} tâches complétées peuvent être supprimées`
     })
   } catch (error: any) {
     logger.error('Erreur lors de la vérification des périodes temporaires', error)
