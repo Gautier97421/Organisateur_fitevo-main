@@ -9,7 +9,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react"
-import { type Task, type Gym } from "@/lib/api-client"
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  address?: string
+  is_active: boolean
+  created_at: string
+}
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   DndContext,

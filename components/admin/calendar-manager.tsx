@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { supabase } from "@/lib/api-client"
 
 interface CalendarEvent {
   id: string
@@ -382,9 +381,9 @@ export function CalendarManager() {
     }
 
     try {
-      const { error } = await supabase.from("calendar_events").delete().eq("id", event.id)
-      if (error) {
-        throw error
+      const delResponse = await fetch(`/api/db/calendar_events/${event.id}`, { method: 'DELETE' })
+      if (!delResponse.ok) {
+        throw new Error('Erreur suppression')
       }
 
       const scheduledDeleteResponse = await fetch("/api/db/scheduled-events", {
@@ -418,8 +417,8 @@ export function CalendarManager() {
 
       setShowDeleteConfirmDialog(false)
       setEventToDelete(null)
-    } catch (error) {
-      console.error("Erreur suppression evenement:", error)
+    } catch {
+      // Delete error handled silently
     }
   }
 
@@ -430,25 +429,15 @@ export function CalendarManager() {
       const startDate = toLocalDateOnly(startOfYear.toISOString())
       const endDate = toLocalDateOnly(endOfYear.toISOString())
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startDate)
-        .lte("event_date", endDate)
-        .order("event_date", { ascending: true })
-
-      if (error) throw error
-      
-      // Debug pour voir les données
-      console.log("Events chargés:", data)
-      if (data && data.length > 0) {
-        console.log("Premier event - created_by_name:", data[0].created_by_name, "created_by_email:", data[0].created_by_email)
-      }
+      const eventsResponse = await fetch(`/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}&orderBy=event_date&orderDir=asc`)
+      if (!eventsResponse.ok) throw new Error('Erreur chargement événements')
+      const eventsResult = await eventsResponse.json()
+      const data = eventsResult.data || []
       
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
-    } catch (error) {
-      console.error("Erreur chargement events:", error)
+      setEvents(mergeCalendarWithScheduledStatuses(data, scheduledEvents))
+    } catch {
+      // Events load error handled silently
     } finally {
       setIsLoading(false)
     }
@@ -456,20 +445,22 @@ export function CalendarManager() {
 
   const loadAssignmentOptions = async () => {
     try {
-      const [employeesResult, rolesResult] = await Promise.all([
-        supabase.from("employees").select("id,name,email").eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("roles").select("id,name").order("name", { ascending: true }),
+      const [empResponse, rolesResponse] = await Promise.all([
+        fetch('/api/db/employees?is_active=true&orderBy=name&orderDir=asc'),
+        fetch('/api/db/roles?orderBy=name&orderDir=asc'),
       ])
 
-      if (!employeesResult.error) {
-        setEmployees(Array.isArray(employeesResult.data) ? employeesResult.data : [])
+      if (empResponse.ok) {
+        const empResult = await empResponse.json()
+        setEmployees(Array.isArray(empResult.data) ? empResult.data : [])
       }
 
-      if (!rolesResult.error) {
+      if (rolesResponse.ok) {
+        const rolesResult = await rolesResponse.json()
         setRoles(Array.isArray(rolesResult.data) ? rolesResult.data : [])
       }
-    } catch (error) {
-      console.error("Erreur chargement options d'assignation:", error)
+    } catch {
+      // Assignment options load failed silently
     }
   }
 
@@ -482,17 +473,12 @@ export function CalendarManager() {
       const startDate = toLocalDateOnly(startOfMonth.toISOString())
       const endDate = toLocalDateOnly(endOfMonth.toISOString())
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startDate)
-        .lte("event_date", endDate)
-        .order("event_date", { ascending: true })
-
-      if (error) throw error
+      const monthEventsResponse = await fetch(`/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}&orderBy=event_date&orderDir=asc`)
+      if (!monthEventsResponse.ok) throw new Error('Erreur chargement événements')
+      const monthEventsResult = await monthEventsResponse.json()
 
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
+      setEvents(mergeCalendarWithScheduledStatuses(monthEventsResult.data || [], scheduledEvents))
     } catch (error) {
       // Erreur silencieuse
     }
@@ -536,10 +522,11 @@ export function CalendarManager() {
 
       const userId = localStorage.getItem("userId")
       
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .insert([
-          {
+      const insertResponse = await fetch('/api/db/calendar_events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
             title: newEvent.title,
             description: newEvent.description,
             location: newEvent.location,
@@ -550,10 +537,11 @@ export function CalendarManager() {
             created_by_name: userName,
             status: "approved",
             user_id: userId,
-          },
-        ])
+          }
+        })
+      })
 
-      if (error) throw error
+      if (!insertResponse.ok) throw new Error('Erreur création événement')
 
       const scheduledResponse = await fetch("/api/db/scheduled-events", {
         method: "POST",
@@ -575,7 +563,6 @@ export function CalendarManager() {
       })
 
       if (!scheduledResponse.ok) {
-        console.error("Creation scheduled-events echouee:", scheduledResponse.status)
         throw new Error("Impossible d'enregistrer l'assignation planifiee")
       }
 
@@ -599,8 +586,8 @@ export function CalendarManager() {
       setShowAddEventDialog(false)
       setSelectedDate(null)
       setAttemptedSubmit(false)
-    } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
+    } catch {
+      // Event add error handled silently
     }
   }
 
@@ -613,18 +600,19 @@ export function CalendarManager() {
     }
 
     try {
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
+      const editResponse = await fetch(`/api/db/calendar_events/${eventToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
         })
-        .eq("id", eventToEdit.id)
+      })
 
-      if (error) throw error
+      if (!editResponse.ok) throw new Error('Erreur modification')
 
       if (calendarView === "year") {
         await loadEvents()
@@ -645,31 +633,32 @@ export function CalendarManager() {
         requires_validation: false,
       })
       setAttemptedSubmit(false)
-    } catch (error) {
-      console.error("Erreur lors de la modification:", error)
+    } catch {
+      // Event edit error handled silently
     }
   }
 
   const approveEvent = async (eventId: string): Promise<boolean> => {
     try {
       const adminEmail = localStorage.getItem("userEmail")
-      const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
+      const adminResponse = await fetch(`/api/db/admins?email=${encodeURIComponent(adminEmail || '')}&single=true`)
+      const adminResult = adminResponse.ok ? await adminResponse.json() : { data: null }
 
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
+      const approveResponse = await fetch(`/api/db/calendar_events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: "approved",
-          approved_by: admin?.id,
+          approved_by: adminResult.data?.id,
           approved_at: new Date().toISOString(),
         })
-        .eq("id", eventId)
+      })
 
-      if (error) throw error
+      if (!approveResponse.ok) throw new Error('Erreur approbation')
 
       setEvents(events.map((event) => (event.id === eventId ? { ...event, status: "approved" as const } : event)))
       return true
-    } catch (error) {
-      console.error("Erreur lors de l'approbation:", error)
+    } catch {
       return false
     }
   }
@@ -699,19 +688,21 @@ export function CalendarManager() {
   const rejectEvent = async (eventId: string, reason: string) => {
     try {
       const adminEmail = localStorage.getItem("userEmail")
-      const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
+      const adminResponse = await fetch(`/api/db/admins?email=${encodeURIComponent(adminEmail || '')}&single=true`)
+      const adminResult = adminResponse.ok ? await adminResponse.json() : { data: null }
 
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
+      const rejectResponse = await fetch(`/api/db/calendar_events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: "rejected",
-          approved_by: admin?.id,
+          approved_by: adminResult.data?.id,
           approved_at: new Date().toISOString(),
           rejection_reason: reason,
         })
-        .eq("id", eventId)
+      })
 
-      if (error) throw error
+      if (!rejectResponse.ok) throw new Error('Erreur refus')
 
       setEvents(
         events.map((event) =>
@@ -722,8 +713,8 @@ export function CalendarManager() {
       setRejectionReason("")
       setSelectedEventId(null)
       setShowRejectionDialog(false)
-    } catch (error) {
-      console.error("Erreur lors du refus:", error)
+    } catch {
+      // Reject error handled silently
     }
   }
 
@@ -741,17 +732,21 @@ export function CalendarManager() {
       
       reminderDate.setDate(reminderDate.getDate() - reminderSettings.days_before)
 
-      const { error } = await supabase.from("event_reminders").insert([
-        {
-          event_id: eventId,
-          reminder_date: reminderDate.toISOString().split("T")[0],
-          recipient_type: reminderSettings.recipient_type,
-          custom_message: reminderSettings.custom_message,
-          created_by: localStorage.getItem("userEmail"),
-        },
-      ])
+      const reminderResponse = await fetch('/api/db/event_reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            event_id: eventId,
+            reminder_date: reminderDate.toISOString().split("T")[0],
+            recipient_type: reminderSettings.recipient_type,
+            custom_message: reminderSettings.custom_message,
+            created_by: localStorage.getItem("userEmail"),
+          }
+        })
+      })
 
-      if (error) throw error
+      if (!reminderResponse.ok) throw new Error('Erreur ajout rappel')
 
       setShowReminderDialog(false)
       setReminderSettings({
@@ -759,8 +754,8 @@ export function CalendarManager() {
         recipient_type: "all",
         custom_message: "",
       })
-    } catch (error) {
-      console.error("Erreur lors de l'ajout du rappel:", error)
+    } catch {
+      // Reminder add error handled silently
     }
   }
 

@@ -25,12 +25,8 @@ export function RealTimeMonitor() {
 
   const loadEmployeeData = async () => {
     try {
-      console.log('🔄 Chargement des données employés pour le suivi temps réel...')
-      
-      // Charger tous les utilisateurs avec rôle employee
       const responseEmployees = await fetch('/api/db/users')
       if (!responseEmployees.ok) {
-        console.error('❌ Erreur chargement employés:', responseEmployees.status)
         setEmployeeStatuses([])
         setIsLoading(false)
         return
@@ -39,37 +35,22 @@ export function RealTimeMonitor() {
       const employeesData = await responseEmployees.json()
       const allUsers = employeesData.data || []
       
-      console.log(`📊 Total utilisateurs: ${allUsers.length}`)
-      console.log('🔎 Recherche employés actifs...')
-      
-      // Filtrer pour garder uniquement les employés actifs
-      // Note: l'API retourne is_active au lieu de active
       const employees = allUsers.filter((u: any) => {
         const isEmployee = u.role === 'employee'
         const isActive = u.is_active === true || u.active === true
-        console.log(`  - ${u.name}: role=${u.role}, is_active=${u.is_active}, active=${u.active} → ${isEmployee && isActive ? '✅' : '❌'}`)
         return isEmployee && isActive
       })
-      console.log(`👥 ${employees.length} employés actifs trouvés`)
 
       if (employees.length === 0) {
-        console.log('⚠️ Aucun employé actif')
         setEmployeeStatuses([])
         setIsLoading(false)
         return
       }
 
-      // Charger les données de chaque employé
       const today = new Date().toISOString().split('T')[0]
-      console.log(`📅 Date du jour: ${today}`)
       
       const statusPromises = employees.map(async (emp: any) => {
-        console.log(`\n🔍 Vérification employé: ${emp.name} (${emp.email})`)
-        
-        // Charger le planning du jour
         const scheduleUrl = `/api/db/work_schedules?user_id=${emp.id}&work_date=${today}`
-        console.log(`  📡 Requête: ${scheduleUrl}`)
-        
         const responseSchedule = await fetch(scheduleUrl)
         let currentPeriod: "matin" | "aprem" | "journee" | null = null
         let startTime = ""
@@ -81,32 +62,16 @@ export function RealTimeMonitor() {
         if (responseSchedule.ok) {
           const scheduleData = await responseSchedule.json()
           const schedules = Array.isArray(scheduleData.data) ? scheduleData.data : []
-          console.log(`  📋 ${schedules.length} période(s) trouvée(s)`)
           
-          // Debug: afficher toutes les périodes
-          schedules.forEach((s: any, idx: number) => {
-            console.log(`    ${idx + 1}. type="${s.type}", end_time="${s.end_time}", is_temporary=${s.is_temporary}`)
-            console.log(`       notes: "${s.notes?.substring(0, 80)}"`)
-          })
-          
-          // Chercher une session de travail active (type=work sans end_time ou end_time vide)
           const activeWork = schedules.find((s: any) => s.type === 'work' && (!s.end_time || s.end_time === ''))
           
           if (activeWork) {
-            console.log(`  ✅ Période active trouvée!`)
-            console.log(`    - start_time: ${activeWork.start_time}`)
-            console.log(`    - end_time: "${activeWork.end_time}"`)
-            console.log(`    - notes: ${activeWork.notes}`)
-            
             if (activeWork.notes) {
-              // Extraire la période depuis les notes
               const periodMatch = activeWork.notes.match(/Période:\s*(matin|aprem|journee)/)
               if (periodMatch) {
                 currentPeriod = periodMatch[1] as "matin" | "aprem" | "journee"
                 startTime = activeWork.start_time || ""
-                console.log(`    ✨ Période détectée: ${currentPeriod} à ${startTime}`)
                 
-                // Calculer la durée de travail
                 const now = new Date()
                 const [hours, minutes] = startTime.split(':').map(Number)
                 const startDate = new Date()
@@ -121,42 +86,28 @@ export function RealTimeMonitor() {
                 } else {
                   workDuration = `${diffMinutes}min`
                 }
-                console.log(`    ⏱️ Durée: ${workDuration}`)
                 
-                // Extraire le nom de la salle depuis GymId dans les notes
                 const gymIdMatch = activeWork.notes.match(/GymId:\s*([a-zA-Z0-9-]+)/)
                 if (gymIdMatch && gymIdMatch[1]) {
-                  // Charger le nom de la salle
                   try {
                     const gymResponse = await fetch(`/api/db/gyms/${gymIdMatch[1]}`)
                     if (gymResponse.ok) {
                       const gymData = await gymResponse.json()
                       gymName = gymData.data?.name || null
-                      console.log(`    📍 Salle: ${gymName}`)
                     }
-                  } catch (e) {
-                    console.log(`    ⚠️ Impossible de charger la salle`)
+                  } catch {
+                    // Gym lookup failed silently
                   }
                 }
-              } else {
-                console.log(`    ⚠️ Pas de période trouvée dans les notes`)
               }
-            } else {
-              console.log(`    ⚠️ Pas de notes sur cette période`)
             }
-          } else {
-            console.log(`  ❌ Aucune période active (toutes ont un end_time ou ne sont pas type=work)`)
           }
           
-          // Chercher une pause active
           const activeBreak = schedules.find((s: any) => s.type === 'break' && (!s.end_time || s.end_time === ''))
           if (activeBreak) {
             isOnBreak = true
             breakStartTime = activeBreak.start_time
-            console.log(`  ☕ En pause depuis ${breakStartTime}`)
           }
-        } else {
-          console.log(`  ❌ Erreur requête planning: ${responseSchedule.status}`)
         }
 
         return {
@@ -178,16 +129,11 @@ export function RealTimeMonitor() {
 
       const statuses = await Promise.all(statusPromises)
       
-      // Ne garder que les employés qui ont une période active
       const activeStatuses = statuses.filter(s => s.currentPeriod !== null)
-      console.log(`\n📊 Résultat final: ${activeStatuses.length} employé(s) en activité`)
-      activeStatuses.forEach(s => {
-        console.log(`  ✓ ${s.name}: ${s.currentPeriod} depuis ${s.workDuration}`)
-      })
       
       setEmployeeStatuses(activeStatuses)
     } catch (error) {
-      console.error("❌ Erreur lors du chargement des données:", error)
+      // Load error handled silently
     } finally {
       setIsLoading(false)
     }

@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
+import logger from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: fields }, { status: 200 })
   } catch (error) {
-    console.error("Erreur lors de la récupération des champs de caisse:", error)
+    logger.error("Erreur lors de la récupération des champs de caisse", error)
     return NextResponse.json({ error: "Impossible de récupérer les champs" }, { status: 500 })
   }
 }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: field }, { status: 201 })
   } catch (error) {
-    console.error("Erreur lors de la création du champ de caisse:", error)
+    logger.error("Erreur lors de la création du champ de caisse", error)
     return NextResponse.json(
       { error: "Impossible de créer le champ de caisse" },
       { status: 500 }
@@ -104,7 +105,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ data: field }, { status: 200 })
   } catch (error) {
-    console.error("Erreur lors de la mise à jour du champ de caisse:", error)
+    logger.error("Erreur lors de la mise à jour du champ de caisse", error)
     return NextResponse.json(
       { error: "Impossible de mettre à jour le champ de caisse" },
       { status: 500 }
@@ -127,7 +128,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: "Champ de caisse supprimé" }, { status: 200 })
   } catch (error) {
-    console.error("Erreur lors de la suppression du champ de caisse:", error)
+    logger.error("Erreur lors de la suppression du champ de caisse", error)
     return NextResponse.json(
       { error: "Impossible de supprimer le champ de caisse" },
       { status: 500 }

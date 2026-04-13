@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth-middleware"
+import logger from "@/lib/logger"
 
 type ScheduledEventWithValidations = {
   id: string
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    console.error("Erreur récupération validations:", error)
+    logger.error("Erreur récupération validations", error)
     return NextResponse.json({ error: "Impossible de récupérer les validations" }, { status: 500 })
   }
 }
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     )
   } catch (error) {
-    console.error("Erreur validation événement:", error)
+    logger.error("Erreur validation événement", error)
     return NextResponse.json({ error: "Impossible de valider l'événement" }, { status: 500 })
   }
 }

@@ -8,7 +8,20 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle, Wifi, Loader2 } from "lucide-react"
-import { supabase, type Gym } from "@/lib/api-client"
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  address?: string
+  description?: string
+  is_active: boolean
+  wifi_restricted?: boolean
+  wifi_ssid?: string
+  ip_address?: string
+  qr_code_enabled?: boolean
+  created_at: string
+  updated_at?: string
+}
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { QRCodeDisplay } from "./qr-code-display"
 import {

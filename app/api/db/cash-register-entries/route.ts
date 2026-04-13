@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth-middleware"
+import logger from "@/lib/logger"
 
 function normalizeMonth(input?: string): string {
   if (input && /^\d{4}-\d{2}$/.test(input)) {
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    console.error("Erreur récupération récap caisse:", error)
+    logger.error("Erreur récupération récap caisse", error)
     return NextResponse.json({ error: "Impossible de récupérer le récap caisse" }, { status: 500 })
   }
 }
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: created }, { status: 201 })
   } catch (error) {
-    console.error("Erreur création entrée caisse:", error)
+    logger.error("Erreur création entrée caisse", error)
     return NextResponse.json({ error: "Impossible de créer l'entrée caisse" }, { status: 500 })
   }
 }

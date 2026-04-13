@@ -435,9 +435,8 @@ export async function POST(
     const { data } = await request.json()
     const prismaModel = tableMapping[table] || table
     
-    // Logging pour debug
     if (table === 'work_schedules') {
-      console.log('[WORK_SCHEDULES] POST - données reçues:', JSON.stringify(data, null, 2))
+      logger.debug('[WORK_SCHEDULES] POST - données reçues:', JSON.stringify(data, null, 2))
     }
     
     if (!data) {
@@ -453,7 +452,7 @@ export async function POST(
     for (const item of items) {
       const validation = validateTableData(table, item)
       if (!validation.valid) {
-        console.log(`[WORK_SCHEDULES] Validation échouée pour ${table}:`, validation.errors)
+        logger.debug(`[WORK_SCHEDULES] Validation échouée pour ${table}:`, validation.errors)
         return NextResponse.json(
           { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
           { status: 400 }
@@ -565,14 +564,11 @@ export async function POST(
       
       // Convertir les dates simples en DateTime ISO-8601 pour work_schedules
       if (table === 'work_schedules' && converted.date) {
-        console.log(`[WORK_SCHEDULES] Conversion date: ${converted.date} (type: ${typeof converted.date})`)
-        // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
+        logger.debug(`[WORK_SCHEDULES] Conversion date: ${converted.date} (type: ${typeof converted.date})`)
         if (typeof converted.date === 'string' && !converted.date.includes('T')) {
           converted.date = new Date(`${converted.date}T00:00:00.000Z`)
-          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
         } else if (typeof converted.date === 'string') {
           converted.date = new Date(converted.date)
-          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
         }
       }
       
@@ -589,24 +585,20 @@ export async function POST(
       if (!converted.userId && table === 'work_schedules') {
         // Pour work_schedules, utiliser l'email de l'employé
         if (converted.employeeEmail) {
-          console.log(`[WORK_SCHEDULES] Recherche utilisateur avec email: ${converted.employeeEmail}`)
           const user = await prisma.user.findUnique({ where: { email: converted.employeeEmail } })
           if (user) {
             converted.userId = user.id
-            console.log(`[WORK_SCHEDULES] Utilisateur trouvé avec ID: ${user.id}`)
           } else {
-            console.log(`[WORK_SCHEDULES] Utilisateur non trouvé pour email: ${converted.employeeEmail}, utilisation d'un admin`)
-            // Si l'utilisateur n'existe pas, utiliser un admin par défaut
+            logger.debug(`[WORK_SCHEDULES] Utilisateur non trouvé pour email: ${converted.employeeEmail}, utilisation d'un admin`)
             const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
             if (admin) {
               converted.userId = admin.id
-              console.log(`[WORK_SCHEDULES] Admin utilisé avec ID: ${admin.id}`)
             } else {
-              console.log('[WORK_SCHEDULES] ERREUR - Aucun admin trouvé dans la base de données!')
+              logger.error('[WORK_SCHEDULES] Aucun admin trouvé dans la base de données')
             }
           }
         } else {
-          console.log('[WORK_SCHEDULES] ATTENTION - Aucun employeeEmail fourni')
+          logger.debug('[WORK_SCHEDULES] Aucun employeeEmail fourni')
           const user = await prisma.user.findFirst({ where: { role: 'admin' } })
           if (user) converted.userId = user.id
         }
@@ -641,10 +633,8 @@ export async function POST(
       // convertir userId en relation connect
       const data = { ...item }
       
-      // Logging pour debug work_schedules AVANT conversion
       if (table === 'work_schedules') {
-        console.log('[WORK_SCHEDULES] Données AVANT conversion:', JSON.stringify(data, null, 2))
-        console.log('[WORK_SCHEDULES] data.gymId existe ?', !!data.gymId, 'valeur:', data.gymId)
+        logger.debug('[WORK_SCHEDULES] Données AVANT conversion:', JSON.stringify(data, null, 2))
       }
       
       if ((table === 'tasks' || table === 'work_schedules') && data.userId) {
@@ -655,11 +645,9 @@ export async function POST(
       
       // De même pour gymId dans tasks et work_schedules
       if ((table === 'tasks' || table === 'work_schedules') && data.gymId) {
-        console.log('[WORK_SCHEDULES] Conversion gymId:', data.gymId)
         const gymId = data.gymId
         delete data.gymId
         data.gym = { connect: { id: gymId } }
-        console.log('[WORK_SCHEDULES] Après conversion, data.gymId:', data.gymId, 'data.gym:', data.gym)
       }
       
       // Nettoyer createdBy s'il est vide (doit être fait après la copie de convertedItems)
@@ -672,17 +660,11 @@ export async function POST(
         data.password = await hashPassword(data.password)
       }
       
-      // Logging pour debug work_schedules
-      if (table === 'work_schedules') {
-        console.log('[WORK_SCHEDULES] Données finales avant création:', JSON.stringify(data, null, 2))
-      }
-      
       try {
         const result = await (prisma as any)[prismaModel].create({ data })
         results.push(result)
       } catch (createError: any) {
-        console.log(`[WORK_SCHEDULES] ERREUR Prisma lors de la création dans ${table}:`, createError.message || createError)
-        console.log('[WORK_SCHEDULES] Erreur complète:', JSON.stringify(createError, null, 2))
+        logger.error(`Erreur Prisma lors de la création dans ${table}`, createError)
         throw new Error(`Échec de la création: ${createError.message || 'Erreur inconnue'}`)
       }
     }

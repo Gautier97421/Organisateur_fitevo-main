@@ -15,7 +15,39 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
-import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
+interface Employee {
+  id: string
+  name: string
+  email: string
+  is_active: boolean
+  remote_work_enabled?: boolean
+  role_id?: string
+  employee_role?: { id: string; name: string; color: string }
+  has_calendar_access?: boolean
+  has_event_proposal_access?: boolean
+  has_work_schedule_access?: boolean
+  has_work_period_access?: boolean
+  gym_ids?: string[]
+  gyms?: Gym[]
+  created_at: string
+}
+
+interface Admin {
+  id: string
+  name: string
+  email: string
+  is_active: boolean
+  is_super_admin?: boolean
+  created_at: string
+}
+
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  is_active: boolean
+  created_at: string
+}
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import {
   Dialog,
@@ -111,12 +143,12 @@ export function EmployeeManager() {
 
   const loadData = async () => {
     try {
-      // Charger les employés
-      const { data: employeesData, error: employeesError } = await supabase.from("employees").select("*").order("name")
-      if (!employeesError && employeesData) {
-        // Charger les salles assignées pour chaque employé
+      const empResponse = await fetch('/api/db/employees?orderBy=name')
+      if (empResponse.ok) {
+        const empResult = await empResponse.json()
+        const employeesData = empResult.data || []
         const employeesWithGyms = await Promise.all(
-          employeesData.map(async (emp) => {
+          employeesData.map(async (emp: any) => {
             const response = await fetch(`/api/employee-gyms?employeeId=${emp.id}`)
             if (response.ok) {
               const { data: gymsData } = await response.json()
@@ -132,28 +164,32 @@ export function EmployeeManager() {
         setEmployees(employeesWithGyms)
       }
 
-      // Charger les admins
-      const { data: adminsData, error: adminsError } = await supabase.from("admins").select("*").order("name")
-      if (!adminsError) {
-        setAdmins(adminsData || [])
+      const admResponse = await fetch('/api/db/admins?orderBy=name')
+      if (admResponse.ok) {
+        const admResult = await admResponse.json()
+        setAdmins(admResult.data || [])
       }
 
-      // Charger les salles
-      const { data: gymsData, error: gymsError } = await supabase.from("gyms").select("*").order("name")
-      if (!gymsError) {
-        setGyms(gymsData || [])
+      const gymsResponse = await fetch('/api/db/gyms?orderBy=name')
+      if (gymsResponse.ok) {
+        const gymsResult = await gymsResponse.json()
+        setGyms(gymsResult.data || [])
       }
 
-      // Charger le lien WhatsApp
-      const { data: whatsappData } = await supabase.from("app_config").select("*").eq("key", "whatsapp_link").single()
-      if (whatsappData) {
-        setWhatsappLink(whatsappData.value || "")
+      const whatsappResponse = await fetch('/api/db/app_config?key=whatsapp_link&single=true')
+      if (whatsappResponse.ok) {
+        const whatsappResult = await whatsappResponse.json()
+        if (whatsappResult.data) {
+          setWhatsappLink(whatsappResult.data.value || "")
+        }
       }
 
-      // Charger l'URL du site
-      const { data: siteUrlData } = await supabase.from("app_config").select("*").eq("key", "site_url").single()
-      if (siteUrlData) {
-        setSiteUrl(siteUrlData.value || "")
+      const siteUrlResponse = await fetch('/api/db/app_config?key=site_url&single=true')
+      if (siteUrlResponse.ok) {
+        const siteUrlResult = await siteUrlResponse.json()
+        if (siteUrlResult.data) {
+          setSiteUrl(siteUrlResult.data.value || "")
+        }
       }
 
       // Charger les rôles
@@ -463,7 +499,6 @@ export function EmployeeManager() {
     if (!selectedUser) return
 
     try {
-      const table = selectedUser.type === "employee" ? "employees" : "admins"
       const currentUser =
         selectedUser.type === "employee"
           ? employees.find((emp) => emp.id === selectedUser.id)
@@ -471,12 +506,13 @@ export function EmployeeManager() {
 
       if (!currentUser) return
 
-      const { error } = await supabase
-        .from(table)
-        .update({ is_active: !currentUser.is_active })
-        .eq("id", selectedUser.id)
+      const statusResponse = await fetch(`/api/db/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !currentUser.is_active })
+      })
 
-      if (error) throw error
+      if (!statusResponse.ok) throw new Error('Erreur lors de la mise à jour')
 
       if (selectedUser.type === "employee") {
         setEmployees(employees.map((emp) => (emp.id === selectedUser.id ? { ...emp, is_active: !emp.is_active } : emp)))
@@ -496,13 +532,11 @@ export function EmployeeManager() {
     try {
       const userName = localStorage.getItem("userName") || "Admin"
       
-      await supabase
-        .from("app_config")
-        .update({
-          value: whatsappLink,
-          updated_by: userName
-        })
-        .eq("key", "whatsapp_link")
+      await fetch('/api/db/app_config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { value: whatsappLink, updated_by: userName }, where: { key: "whatsapp_link" } })
+      })
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error)
     } finally {
@@ -515,29 +549,21 @@ export function EmployeeManager() {
     try {
       const userName = localStorage.getItem("userName") || "Admin"
       
-      // Vérifier si la config existe déjà
-      const { data: existing } = await supabase
-        .from("app_config")
-        .select("*")
-        .eq("key", "site_url")
-        .single()
+      const existingResponse = await fetch('/api/db/app_config?key=site_url&single=true')
+      const existingResult = existingResponse.ok ? await existingResponse.json() : { data: null }
 
-      if (existing) {
-        await supabase
-          .from("app_config")
-          .update({
-            value: siteUrl,
-            updated_by: userName
-          })
-          .eq("key", "site_url")
+      if (existingResult.data) {
+        await fetch('/api/db/app_config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { value: siteUrl, updated_by: userName }, where: { key: "site_url" } })
+        })
       } else {
-        await supabase
-          .from("app_config")
-          .insert({
-            key: "site_url",
-            value: siteUrl,
-            updated_by: userName
-          })
+        await fetch('/api/db/app_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { key: "site_url", value: siteUrl, updated_by: userName } })
+        })
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error)

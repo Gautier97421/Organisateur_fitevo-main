@@ -19,16 +19,10 @@ export function EmergencyButton() {
   const [message, setMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
 
+  // TODO: Implement actual emergency alert sending (e.g. via /api/send-email or push notification service)
   const sendEmergencyAlert = async () => {
     setIsSending(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    console.log("ALERTE URGENCE:", {
-      timestamp: new Date().toISOString(),
-      user: localStorage.getItem("userEmail"),
-      message: message || "Alerte d'urgence",
-    })
-
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     setMessage("")
     setIsOpen(false)
     setIsSending(false)
@@ -37,8 +31,8 @@ export function EmergencyButton() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-xl px-6 py-3 h-auto animate-pulse flex items-center gap-2">
-          <AlertTriangle className="h-6 w-6" /> URGENCE
+        <Button variant="destructive" disabled className="bg-red-600 hover:bg-red-700 text-xl px-6 py-3 h-auto flex items-center gap-2 opacity-50 cursor-not-allowed" title="Fonctionnalité en cours de développement">
+          <AlertTriangle className="h-6 w-6" /> URGENCE (bientôt disponible)
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

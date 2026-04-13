@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import logger from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: items, error: null })
   } catch (error) {
-    console.error("[API] Error fetching custom page items:", error)
+    logger.error("Error fetching custom page items", error)
     return NextResponse.json(
       { data: null, error: "Erreur lors de la récupération des éléments" },
       { status: 500 }
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: item, error: null })
   } catch (error) {
-    console.error("[API] Error creating custom page item:", error)
+    logger.error("Error creating custom page item", error)
     return NextResponse.json(
       { data: null, error: "Erreur lors de la création de l'élément" },
       { status: 500 }
@@ -96,7 +97,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data: item, error: null })
   } catch (error) {
-    console.error("[API] Error updating custom page item:", error)
+    logger.error("Error updating custom page item", error)
     return NextResponse.json(
       { data: null, error: "Erreur lors de la mise à jour de l'élément" },
       { status: 500 }
@@ -130,7 +131,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ data: { success: true }, error: null })
   } catch (error) {
-    console.error("[API] Error deleting custom page item:", error)
+    logger.error("Error deleting custom page item", error)
     return NextResponse.json(
       { data: null, error: "Erreur lors de la suppression de l'élément" },
       { status: 500 }

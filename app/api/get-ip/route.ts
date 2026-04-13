@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import logger from "@/lib/logger"
 
 // GET - Récupérer l'adresse IP publique du client
 export async function GET(request: NextRequest) {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
         : "IP publique détectée avec succès."
     })
   } catch (error) {
-    console.error("[API] Error getting client IP:", error)
+    logger.error("Error getting client IP", error)
     return NextResponse.json(
       { ip: null, error: "Erreur lors de la récupération de l'adresse IP" },
       { status: 500 }

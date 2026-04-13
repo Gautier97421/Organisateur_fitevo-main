@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { supabase } from "@/lib/api-client"
 import { WorkScheduleCalendar } from "./work-schedule-calendar"
 
 interface CalendarEvent {
@@ -176,7 +175,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       return ""
     }
 
-    const result = await supabase.from("employees").select("role_id").eq("email", userEmail).single()
+    const response = await fetch(`/api/db/employees?email=${encodeURIComponent(userEmail)}&single=true`)
+    const result = response.ok ? await response.json() : { data: null }
     const roleId = result?.data?.role_id || ""
     if (roleId) {
       localStorage.setItem("roleId", roleId)
@@ -232,14 +232,12 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1)
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31)
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startOfYear.toISOString().split("T")[0])
-        .lte("event_date", endOfYear.toISOString().split("T")[0])
-
-      if (error) throw error
-      setEvents(data || [])
+      const startDate = startOfYear.toISOString().split("T")[0]
+      const endDate = endOfYear.toISOString().split("T")[0]
+      const eventsResponse = await fetch(`/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}`)
+      if (!eventsResponse.ok) throw new Error("Erreur chargement événements")
+      const eventsResult = await eventsResponse.json()
+      setEvents(eventsResult.data || [])
       await loadScheduledEventsForRange(startOfYear, endOfYear)
     } catch (error) {
       console.error("Erreur lors du chargement des événements:", error)
@@ -253,14 +251,12 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       const startOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
       const endOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0)
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startOfMonth.toISOString().split("T")[0])
-        .lte("event_date", endOfMonth.toISOString().split("T")[0])
-
-      if (error) throw error
-      setEvents(data || [])
+      const startDate = startOfMonth.toISOString().split("T")[0]
+      const endDate = endOfMonth.toISOString().split("T")[0]
+      const eventsResponse = await fetch(`/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}`)
+      if (!eventsResponse.ok) throw new Error("Erreur chargement événements")
+      const eventsResult = await eventsResponse.json()
+      setEvents(eventsResult.data || [])
       await loadScheduledEventsForRange(startOfMonth, endOfMonth)
     } catch (error) {
       // Erreur silencieuse
@@ -341,23 +337,25 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       const userName = localStorage.getItem("userName") || ""
       const userId = localStorage.getItem("userId") || ""
 
-      console.log("Débug création événement:", { userEmail, userName, userId }) // Debug
+      const insertResponse = await fetch('/api/db/calendar_events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            title: newEvent.title,
+            description: newEvent.description,
+            location: newEvent.location,
+            event_date: toLocalDateOnly(selectedDate.toISOString()),
+            event_time: newEvent.event_time || null,
+            duration_minutes: newEvent.duration_minutes,
+            created_by_email: userEmail,
+            created_by_name: userName,
+            user_id: userId,
+          }
+        })
+      })
 
-      const { error } = await supabase
-        .from("calendar_events")
-        .insert([{
-          title: newEvent.title,
-          description: newEvent.description,
-          location: newEvent.location,
-          event_date: toLocalDateOnly(selectedDate.toISOString()),
-          event_time: newEvent.event_time || null,
-          duration_minutes: newEvent.duration_minutes,
-          created_by_email: userEmail,
-          created_by_name: userName,
-          user_id: userId,
-        }])
-
-      if (error) {
+      if (!insertResponse.ok) {
         setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
         return
       }
@@ -397,18 +395,19 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     }
 
     try {
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
+      const updateResponse = await fetch(`/api/db/calendar_events/${eventToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
         })
-        .eq("id", eventToEdit.id)
+      })
 
-      if (error) {
+      if (!updateResponse.ok) {
         setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
         return
       }
@@ -433,12 +432,11 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     if (!eventToDelete) return
 
     try {
-      const { error } = await supabase
-        .from("calendar_events")
-        .delete()
-        .eq("id", eventToDelete.id)
+      const deleteResponse = await fetch(`/api/db/calendar_events/${eventToDelete.id}`, {
+        method: 'DELETE',
+      })
 
-      if (error) {
+      if (!deleteResponse.ok) {
         setErrorMessage("❌ Erreur lors de la suppression. Veuillez réessayer.")
         return
       }

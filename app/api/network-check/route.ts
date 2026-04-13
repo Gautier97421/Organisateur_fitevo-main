@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import logger from '@/lib/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
       })
     }
   } catch (error) {
-    console.error('Erreur vérification réseau:', error)
+    logger.error('Erreur vérification réseau', error)
     return NextResponse.json(
       { success: false, error: 'Erreur lors de la vérification du réseau' },
       { status: 500 }

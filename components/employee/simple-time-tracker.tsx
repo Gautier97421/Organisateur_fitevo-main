@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, MapPin, CheckCircle, Loader2 } from "lucide-react"
-import { supabase, type Gym } from "@/lib/api-client"
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  is_active: boolean
+  created_at: string
+}
 
 interface TimeEntry {
   id: string
@@ -33,8 +39,11 @@ export function SimpleTimeTracker() {
   const loadData = async (email: string) => {
     try {
       // Charger les salles
-      const { data: gymsData } = await supabase.from("gyms").select("*").eq("is_active", true)
-      if (gymsData) setGyms(gymsData)
+      const gymsResponse = await fetch('/api/db/gyms?is_active=true')
+      if (gymsResponse.ok) {
+        const gymsResult = await gymsResponse.json()
+        if (gymsResult.data) setGyms(Array.isArray(gymsResult.data) ? gymsResult.data : [gymsResult.data])
+      }
 
       // Charger les 5 derniers pointages
       const response = await fetch(`/api/time-entries?user_email=${email}`)
