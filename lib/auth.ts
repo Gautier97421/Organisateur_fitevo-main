@@ -1,74 +1,93 @@
-import prisma from './prisma'
-import { verifyPassword } from './password-utils'
-import logger from './logger'
+import NextAuth from 'next-auth'
+import Credentials from 'next-auth/providers/credentials'
+import type { NextAuthConfig } from 'next-auth'
 
-// Authentification avec la base de données PostgreSQL
-export async function validateCredentials(email: string, password: string): Promise<boolean> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
+export const authConfig = {
+  providers: [
+    Credentials({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
 
-    if (!user || !user.active) {
-      return false
-    }
+        const bcrypt = await import('bcryptjs')
+        const { PrismaClient } = await import('../prisma/generated/prisma/client')
+        const { PrismaPg } = await import('@prisma/adapter-pg')
 
-    // Vérification sécurisée du mot de passe avec hash
-    if (!user.password) {
-      return false
-    }
-    
-    return await verifyPassword(password, user.password)
-  } catch (error) {
-    logger.error('Erreur de validation des credentials', error)
-    return false
-  }
-}
+        const adapter = new PrismaPg({
+          connectionString: process.env.DATABASE_URL,
+        })
+        const prisma = new PrismaClient({ adapter })
 
-export function isAuthenticated(): boolean {
-  if (typeof window === 'undefined') return false
-  return localStorage.getItem('userEmail') !== null
-}
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email as string },
+          })
 
-export function login(email: string, password: string): boolean {
-  // Cette fonction est maintenant gérée par l'API route
-  return true
-}
+          if (!user || !user.active) {
+            return null
+          }
 
-export function logout(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('userName')
-    localStorage.removeItem('userRole')
-    localStorage.removeItem('isSuperAdmin')
-  }
-}
+          if (!user.password) {
+            return null
+          }
 
-// Fonction utilitaire pour créer un utilisateur admin si nécessaire
-export async function ensureAdminUser() {
-  // Désactivé en production - utiliser le seed de manière contrôlée
-  if (process.env.NODE_ENV === 'production') {
-    return
-  }
-  
-  const admin = await prisma.user.findUnique({
-    where: { email: 'admin@fitevo.com' }
-  })
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password as string,
+            user.password,
+          )
 
-  if (!admin) {
-    // Import dynamique pour éviter les erreurs
-    const { hashPassword } = await import('./password-utils')
-    const hashedPassword = await hashPassword('admin123')
-    
-    await prisma.user.create({
-      data: {
-        email: 'admin@fitevo.com',
-        password: hashedPassword,
-        name: 'Admin',
-        role: 'admin',
-        active: true,
-        isFirstLogin: false
+          if (!isPasswordValid) {
+            return null
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            roleId: user.roleId,
+            isSuperAdmin: user.role === 'superadmin',
+          }
+        } finally {
+          await prisma.$disconnect()
+        }
+      },
+    }),
+  ],
+  session: {
+    strategy: 'jwt',
+  },
+  pages: {
+    signIn: '/',
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+        token.role = user.role
+        token.roleId = user.roleId
+        token.isSuperAdmin = user.isSuperAdmin
       }
-    })
-  }
-}
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.roleId = token.roleId as string | null
+        session.user.isSuperAdmin = token.isSuperAdmin as boolean
+      }
+      return session
+    },
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true,
+} satisfies NextAuthConfig
+
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
