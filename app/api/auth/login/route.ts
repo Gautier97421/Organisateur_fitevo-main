@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { verifyPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
 import { isValidEmail, isValidString } from '@/lib/validation'

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth-middleware"
 
 function normalizeMonth(input?: string): string {

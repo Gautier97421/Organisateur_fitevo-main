@@ -1,4 +1,4 @@
-import { prisma } from './prisma'
+import prisma from './prisma'
 import { verifyPassword } from './password-utils'
 import logger from './logger'
 
