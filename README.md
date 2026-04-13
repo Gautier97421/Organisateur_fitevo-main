@@ -22,9 +22,9 @@ cp .env.example .env
 # 3. Start the database
 npm run dev:db
 
-# 4. Generate Prisma client, run migrations, seed
+# 4. Generate Prisma client, push schema, seed
 npm run db:generate
-npm run db:migrate:deploy
+npx prisma db push
 npm run db:seed
 
 # 5. Start dev server
@@ -32,6 +32,34 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Default Dev Accounts
+
+The seed creates three accounts in first-login mode (no password set). To test locally, set a password via Prisma Studio (`npm run db:studio`) or run:
+
+```bash
+npx tsx -e "
+import 'dotenv/config'
+import { PrismaClient } from './prisma/generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import bcrypt from 'bcryptjs'
+async function main() {
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+  const prisma = new PrismaClient({ adapter })
+  const hash = await bcrypt.hash('DevPass123!', 12)
+  await prisma.user.updateMany({ data: { password: hash, isFirstLogin: false } })
+  console.log('All users updated with password: DevPass123!')
+  await prisma.\$disconnect()
+}
+main()
+"
+```
+
+| Role | Email | Password (after script above) |
+|---|---|---|
+| Super Admin | superadmin@fitevo.com | DevPass123! |
+| Admin | admin@fitevo.com | DevPass123! |
+| Employee | employe@fitevo.com | DevPass123! |
 
 ## Available Scripts
 
