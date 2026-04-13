@@ -1,0 +1,90 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fitevo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+
+  web:
+    image: ghcr.io/solodesignhq/organisateur-fitevo:latest
+    container_name: fitevo-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+
+  backup:
+    image: postgres:16-alpine
+    container_name: fitevo-backup
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - backups:/backups
+    networks:
+      - internal
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        while true; do
+          TIMESTAMP=$$(date +%Y%m%d_%H%M%S)
+          pg_dump -h db -U ${POSTGRES_USER} ${POSTGRES_DB} | gzip > /backups/fitevo_$${TIMESTAMP}.sql.gz
+          find /backups -name "*.sql.gz" -mtime +7 -delete
+          sleep 86400
+        done
+
+volumes:
+  pgdata:
+  backups:
+
+networks:
+  internal:
+    driver: bridge
