@@ -1,16 +1,43 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Loader2, Plus, Trash2, Check, X, Edit, GripVertical, Eye, EyeOff, Users, Shield } from "lucide-react"
-import * as LucideIcons from "lucide-react"
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Loader2,
+  Plus,
+  Trash2,
+  Check,
+  X,
+  Edit,
+  GripVertical,
+  Eye,
+  EyeOff,
+  Users,
+  Shield,
+} from 'lucide-react'
+import * as LucideIcons from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -49,8 +76,8 @@ interface CustomPageContentProps {
   pageIcon: string
 }
 
-function SortableItem({ 
-  item, 
+function SortableItem({
+  item,
   index,
   editingId,
   editTitle,
@@ -62,7 +89,7 @@ function SortableItem({
   onDelete,
   onToggleActive,
   setEditTitle,
-  setEditDescription
+  setEditDescription,
 }: {
   item: CustomPageItem
   index: number
@@ -78,14 +105,9 @@ function SortableItem({
   setEditTitle: (value: string) => void
   setEditDescription: (value: string) => void
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -148,11 +170,15 @@ function SortableItem({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start gap-2">
-                <span className={`text-xs md:text-sm font-semibold ${item.isActive ? 'text-red-600' : 'text-gray-400'} flex-shrink-0`}>
+                <span
+                  className={`text-xs md:text-sm font-semibold ${item.isActive ? 'text-red-600' : 'text-gray-400'} flex-shrink-0`}
+                >
                   {index + 1}.
                 </span>
                 <div className="flex-1 min-w-0">
-                  <h4 className={`font-medium text-sm md:text-base ${item.isActive ? 'text-gray-900' : 'text-gray-500'}`}>
+                  <h4
+                    className={`font-medium text-sm md:text-base ${item.isActive ? 'text-gray-900' : 'text-gray-500'}`}
+                  >
                     {item.title}
                   </h4>
                   {item.description && (
@@ -177,8 +203,8 @@ function SortableItem({
                 variant="ghost"
                 size="sm"
                 className={`h-7 w-7 md:h-8 md:w-8 p-0 ${
-                  item.isActive 
-                    ? 'text-orange-600 hover:bg-orange-50' 
+                  item.isActive
+                    ? 'text-orange-600 hover:bg-orange-50'
                     : 'text-green-600 hover:bg-green-50'
                 }`}
                 title={item.isActive ? "Désactiver l'étape" : "Activer l'étape"}
@@ -210,10 +236,10 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editTitle, setEditTitle] = useState("")
-  const [editDescription, setEditDescription] = useState("")
-  const [newTitle, setNewTitle] = useState("")
-  const [newDescription, setNewDescription] = useState("")
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const [roles, setRoles] = useState<Role[]>([])
@@ -230,7 +256,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         setItems(result.data || [])
       }
     } catch (error) {
-      console.error("Error loading items:", error)
+      console.error('Error loading items:', error)
     } finally {
       setIsLoading(false)
     }
@@ -238,13 +264,13 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
 
   const loadRoles = async () => {
     try {
-      const response = await fetch("/api/db/roles?orderBy=name")
+      const response = await fetch('/api/db/roles?orderBy=name')
       if (response.ok) {
         const result = await response.json()
         setRoles(Array.isArray(result.data) ? result.data : [])
       }
     } catch (error) {
-      console.error("Error loading roles:", error)
+      console.error('Error loading roles:', error)
     }
   }
 
@@ -261,7 +287,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         }
       }
     } catch (error) {
-      console.error("Error loading page roles:", error)
+      console.error('Error loading page roles:', error)
     }
   }
 
@@ -275,27 +301,27 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return
-    
+
     setIsSaving(true)
     try {
-      const response = await fetch("/api/custom-page-items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/custom-page-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pageId,
           title: newTitle,
-          description: newDescription || null
-        })
+          description: newDescription || null,
+        }),
       })
 
       if (response.ok) {
-        setNewTitle("")
-        setNewDescription("")
+        setNewTitle('')
+        setNewDescription('')
         setShowAddForm(false)
         await loadItems()
       }
     } catch (error) {
-      console.error("Error adding item:", error)
+      console.error('Error adding item:', error)
     } finally {
       setIsSaving(false)
     }
@@ -304,19 +330,19 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
   const handleEdit = (item: CustomPageItem) => {
     setEditingId(item.id)
     setEditTitle(item.title)
-    setEditDescription(item.description || "")
+    setEditDescription(item.description || '')
   }
 
   const handleSaveEdit = async (id: number) => {
     setIsSaving(true)
     try {
       const response = await fetch(`/api/custom-page-items?id=${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: editTitle,
-          description: editDescription || null
-        })
+          description: editDescription || null,
+        }),
       })
 
       if (response.ok) {
@@ -324,7 +350,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadItems()
       }
     } catch (error) {
-      console.error("Error updating item:", error)
+      console.error('Error updating item:', error)
     } finally {
       setIsSaving(false)
     }
@@ -336,14 +362,14 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     setIsSaving(true)
     try {
       const response = await fetch(`/api/custom-page-items?id=${deleteConfirmId}`, {
-        method: "DELETE"
+        method: 'DELETE',
       })
 
       if (response.ok) {
         await loadItems()
       }
     } catch (error) {
-      console.error("Error deleting item:", error)
+      console.error('Error deleting item:', error)
     } finally {
       setIsSaving(false)
       setDeleteConfirmId(null)
@@ -354,25 +380,25 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     setIsSaving(true)
     try {
       const response = await fetch(`/api/custom-page-items?id=${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !item.isActive })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !item.isActive }),
       })
 
       if (response.ok) {
         await loadItems()
       }
     } catch (error) {
-      console.error("Error toggling item:", error)
+      console.error('Error toggling item:', error)
     } finally {
       setIsSaving(false)
     }
   }
 
   const toggleRoleInPage = (roleId: string) => {
-    setPageRoleIds(prev => {
+    setPageRoleIds((prev) => {
       if (prev.includes(roleId)) {
-        return prev.filter(id => id !== roleId)
+        return prev.filter((id) => id !== roleId)
       } else {
         return [...prev, roleId]
       }
@@ -383,9 +409,9 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     setIsSaving(true)
     try {
       const response = await fetch(`/api/custom-pages?id=${pageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleIds: pageRoleIds })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleIds: pageRoleIds }),
       })
 
       if (response.ok) {
@@ -393,7 +419,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadPageRoles()
       }
     } catch (error) {
-      console.error("Error updating page roles:", error)
+      console.error('Error updating page roles:', error)
     } finally {
       setIsSaving(false)
     }
@@ -401,21 +427,21 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
 
   const getRoleColor = (color: string) => {
     const colorMap: { [key: string]: string } = {
-      rouge: "bg-red-100 text-red-800 border-red-300",
-      bleu: "bg-blue-100 text-blue-800 border-blue-300",
-      vert: "bg-green-100 text-green-800 border-green-300",
-      jaune: "bg-yellow-100 text-yellow-800 border-yellow-300",
-      orange: "bg-orange-100 text-orange-800 border-orange-300",
-      mauve: "bg-purple-100 text-purple-800 border-purple-300",
+      rouge: 'bg-red-100 text-red-800 border-red-300',
+      bleu: 'bg-blue-100 text-blue-800 border-blue-300',
+      vert: 'bg-green-100 text-green-800 border-green-300',
+      jaune: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      orange: 'bg-orange-100 text-orange-800 border-orange-300',
+      mauve: 'bg-purple-100 text-purple-800 border-purple-300',
     }
-    return colorMap[color.toLowerCase()] || "bg-gray-100 text-gray-800 border-gray-300"
+    return colorMap[color.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-300'
   }
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   )
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -435,10 +461,10 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
     try {
       const updates = newItems.map((item, index) =>
         fetch(`/api/custom-page-items?id=${item.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderIndex: index + 1 })
-        })
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIndex: index + 1 }),
+        }),
       )
       await Promise.all(updates)
       await loadItems()
@@ -505,7 +531,10 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
                 />
               </div>
               <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="newDescription" className="text-xs md:text-sm font-medium text-gray-700">
+                <Label
+                  htmlFor="newDescription"
+                  className="text-xs md:text-sm font-medium text-gray-700"
+                >
                   Description (optionnelle)
                 </Label>
                 <Textarea
@@ -538,8 +567,8 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
                 <Button
                   onClick={() => {
                     setShowAddForm(false)
-                    setNewTitle("")
-                    setNewDescription("")
+                    setNewTitle('')
+                    setNewDescription('')
                   }}
                   variant="outline"
                   className="border-gray-300 text-sm md:text-base bg-white hover:bg-gray-50"
@@ -554,11 +583,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         )}
 
         {/* Liste des items */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
             {!Array.isArray(items) || items.length === 0 ? (
               <div className="text-center py-6 md:py-8 text-sm md:text-base text-gray-500">
@@ -566,7 +591,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
               </div>
             ) : (
               <SortableContext
-                items={items.map(item => item.id)}
+                items={items.map((item) => item.id)}
                 strategy={verticalListSortingStrategy}
               >
                 {items.map((item, index) => (
@@ -593,7 +618,10 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         </DndContext>
 
         {/* Dialog de confirmation de suppression */}
-        <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialog
+          open={deleteConfirmId !== null}
+          onOpenChange={(open) => !open && setDeleteConfirmId(null)}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
@@ -622,7 +650,8 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Sélectionnez les rôles qui auront accès à cette page personnalisée. Si aucun rôle n'est sélectionné, tous les employés auront accès.
+              Sélectionnez les rôles qui auront accès à cette page personnalisée. Si aucun rôle
+              n'est sélectionné, tous les employés auront accès.
             </p>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {roles.map((role) => (
@@ -631,8 +660,8 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
                   onClick={() => toggleRoleInPage(role.id)}
                   className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                     pageRoleIds.includes(role.id)
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                 >
                   <div className="flex-shrink-0">
@@ -645,9 +674,11 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
                     )}
                   </div>
                   <div className="flex-1">
-                    <span className={`text-sm font-medium px-2 py-1 rounded-md border ${
-                      getRoleColor(role.color)
-                    }`}>
+                    <span
+                      className={`text-sm font-medium px-2 py-1 rounded-md border ${getRoleColor(
+                        role.color,
+                      )}`}
+                    >
                       {role.name}
                     </span>
                   </div>
@@ -656,11 +687,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
             </div>
           </div>
           <DialogFooter>
-            <Button
-              onClick={() => setShowRolesDialog(false)}
-              variant="outline"
-              disabled={isSaving}
-            >
+            <Button onClick={() => setShowRolesDialog(false)} variant="outline" disabled={isSaving}>
               Annuler
             </Button>
             <Button

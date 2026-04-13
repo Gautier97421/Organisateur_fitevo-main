@@ -1,16 +1,41 @@
-﻿"use client"
+﻿'use client'
 
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle, Wifi, Loader2 } from "lucide-react"
-import { supabase, type Gym } from "@/lib/api-client"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { QRCodeDisplay } from "./qr-code-display"
+import { useState, useEffect, useRef } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+  Plus,
+  MapPin,
+  Building,
+  Trash2,
+  Pencil,
+  QrCode,
+  ExternalLink,
+  Download,
+  XCircle,
+  Wifi,
+  Loader2,
+} from 'lucide-react'
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  address?: string
+  description?: string
+  is_active: boolean
+  wifi_restricted?: boolean
+  wifi_ssid?: string
+  ip_address?: string
+  qr_code_enabled?: boolean
+  created_at: string
+  updated_at?: string
+}
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
+import { QRCodeDisplay } from './qr-code-display'
 import {
   Dialog,
   DialogContent,
@@ -18,19 +43,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 
 export function GymManager() {
   const [gyms, setGyms] = useState<Gym[]>([])
-  const [siteUrl, setSiteUrl] = useState("")
-  const [newGym, setNewGym] = useState({ 
-    name: "", 
-    location: "", 
-    description: "",
+  const [siteUrl, setSiteUrl] = useState('')
+  const [newGym, setNewGym] = useState({
+    name: '',
+    location: '',
+    description: '',
     wifi_restricted: false,
-    wifi_ssid: "",
-    ip_address: "",
-    qr_code_enabled: false
+    wifi_ssid: '',
+    ip_address: '',
+    qr_code_enabled: false,
   })
   const [isAddingGym, setIsAddingGym] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -57,21 +82,23 @@ export function GymManager() {
       const response = await fetch('/api/get-ip')
       if (response.ok) {
         const result = await response.json()
-        if (result.ip && result.ip !== "unknown") {
+        if (result.ip && result.ip !== 'unknown') {
           if (isEdit && editGym) {
             setEditGym({ ...editGym, ip_address: result.ip })
           } else {
-            setNewGym(prev => ({ ...prev, ip_address: result.ip }))
+            setNewGym((prev) => ({ ...prev, ip_address: result.ip }))
           }
           if (result.isLocal) {
-            alert("⚠️ Vous êtes en réseau local. En production, l'IP publique de la salle sera détectée automatiquement.")
+            alert(
+              "⚠️ Vous êtes en réseau local. En production, l'IP publique de la salle sera détectée automatiquement.",
+            )
           }
         } else {
           alert("Impossible de détecter l'adresse IP. Vérifiez votre connexion.")
         }
       }
     } catch (error) {
-      console.error("Error fetching IP:", error)
+      console.error('Error fetching IP:', error)
       alert("Erreur lors de la récupération de l'adresse IP")
     } finally {
       setIsLoadingIp(false)
@@ -85,7 +112,7 @@ export function GymManager() {
         throw new Error('Erreur lors du chargement')
       }
       const result = await response.json()
-      const gymsData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+      const gymsData = Array.isArray(result.data) ? result.data : result.data ? [result.data] : []
       setGyms(gymsData)
     } finally {
       setIsLoading(false)
@@ -98,7 +125,7 @@ export function GymManager() {
       if (response.ok) {
         const result = await response.json()
         if (result.data && result.data.length > 0) {
-          setSiteUrl(result.data[0].value || "")
+          setSiteUrl(result.data[0].value || '')
         }
       }
     } catch (error) {
@@ -132,9 +159,9 @@ export function GymManager() {
             wifi_ssid: newGym.wifi_ssid || null,
             ip_address: newGym.ip_address || null,
             qr_code_enabled: newGym.qr_code_enabled,
-            is_active: true
-          }
-        })
+            is_active: true,
+          },
+        }),
       })
 
       if (!response.ok) {
@@ -147,14 +174,14 @@ export function GymManager() {
         setGyms([...gyms, result.data])
       }
 
-      setNewGym({ 
-        name: "", 
-        location: "", 
-        description: "",
+      setNewGym({
+        name: '',
+        location: '',
+        description: '',
         wifi_restricted: false,
-        wifi_ssid: "",
-        ip_address: "",
-        qr_code_enabled: false
+        wifi_ssid: '',
+        ip_address: '',
+        qr_code_enabled: false,
       })
       setIsAddingGym(false)
     } catch (error) {
@@ -171,11 +198,11 @@ export function GymManager() {
     setEditGym({
       id: gym.id,
       name: gym.name,
-      location: gym.location || "",
-      description: gym.description || "",
+      location: gym.location || '',
+      description: gym.description || '',
       wifi_restricted: !!gym.wifi_restricted,
-      wifi_ssid: gym.wifi_ssid || "",
-      ip_address: gym.ip_address || "",
+      wifi_ssid: gym.wifi_ssid || '',
+      ip_address: gym.ip_address || '',
       is_active: !!gym.is_active,
       qr_code_enabled: !!gym.qr_code_enabled,
     })
@@ -191,8 +218,8 @@ export function GymManager() {
 
     try {
       const response = await fetch(`/api/db/gyms/${editGym.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editGym.name,
           location: editGym.location,
@@ -206,7 +233,7 @@ export function GymManager() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Erreur lors de la mise à jour")
+        throw new Error(errorData.error || 'Erreur lors de la mise à jour')
       }
 
       const result = await response.json()
@@ -216,7 +243,7 @@ export function GymManager() {
       setIsEditingGym(false)
       setEditGym(null)
     } catch (error) {
-      console.error("Erreur lors de la modification:", error)
+      console.error('Erreur lors de la modification:', error)
     }
   }
 
@@ -225,7 +252,7 @@ export function GymManager() {
 
     try {
       const response = await fetch(`/api/db/gyms/${selectedGym.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       if (!response.ok) {
@@ -237,7 +264,7 @@ export function GymManager() {
       setShowDeleteDialog(false)
       setSelectedGym(null)
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
+      console.error('Erreur lors de la suppression:', error)
     }
   }
 
@@ -249,7 +276,7 @@ export function GymManager() {
       const response = await fetch(`/api/db/gyms/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !gym.is_active })
+        body: JSON.stringify({ is_active: !gym.is_active }),
       })
 
       if (!response.ok) {
@@ -259,7 +286,7 @@ export function GymManager() {
 
       setGyms(gyms.map((g) => (g.id === id ? { ...g, is_active: !g.is_active } : g)))
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
+      console.error('Erreur lors de la mise à jour:', error)
     }
   }
 
@@ -317,7 +344,7 @@ export function GymManager() {
                 />
               </div>
             </div>
-            
+
             {/* Section WiFi */}
             <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -332,15 +359,18 @@ export function GymManager() {
                   📶 Restreindre l'accès à cette salle via WiFi
                 </span>
               </label>
-              
+
               {newGym.wifi_restricted && (
                 <div className="ml-8 space-y-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
+                    Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette
+                    salle.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="gym-wifi-ssid" className="dark:text-gray-300">Nom du réseau (SSID)</Label>
+                      <Label htmlFor="gym-wifi-ssid" className="dark:text-gray-300">
+                        Nom du réseau (SSID)
+                      </Label>
                       <Input
                         id="gym-wifi-ssid"
                         value={newGym.wifi_ssid}
@@ -379,7 +409,8 @@ export function GymManager() {
                         </Button>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer automatiquement son adresse IP.
+                        Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer
+                        automatiquement son adresse IP.
                       </p>
                     </div>
                   </div>
@@ -402,8 +433,8 @@ export function GymManager() {
               </label>
               {newGym.qr_code_enabled && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 ml-8">
-                  Le QR Code sera généré automatiquement après la création de la salle.
-                  Le super admin configure l'URL globale du site.
+                  Le QR Code sera généré automatiquement après la création de la salle. Le super
+                  admin configure l'URL globale du site.
                 </p>
               )}
             </div>
@@ -420,7 +451,11 @@ export function GymManager() {
               >
                 Ajouter
               </Button>
-              <Button variant="outline" onClick={() => setIsAddingGym(false)} className="border-2 rounded-xl">
+              <Button
+                variant="outline"
+                onClick={() => setIsAddingGym(false)}
+                className="border-2 rounded-xl"
+              >
                 Annuler
               </Button>
             </div>
@@ -445,21 +480,30 @@ export function GymManager() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                      <h3 className="font-bold text-xl md:text-2xl text-gray-900 truncate">{gym.name}</h3>
-                      <Badge variant={gym.is_active ? "default" : "secondary"} className={`rounded-full ${gym.is_active ? 'bg-red-600' : 'bg-gray-400'} w-fit`}>
-                        {gym.is_active ? "Active" : "Inactive"}
+                      <h3 className="font-bold text-xl md:text-2xl text-gray-900 truncate">
+                        {gym.name}
+                      </h3>
+                      <Badge
+                        variant={gym.is_active ? 'default' : 'secondary'}
+                        className={`rounded-full ${gym.is_active ? 'bg-red-600' : 'bg-gray-400'} w-fit`}
+                      >
+                        {gym.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
                     <div className="flex items-center space-x-2 text-gray-700 mb-2">
                       <MapPin className="h-4 w-4 flex-shrink-0" />
                       <span className="text-sm md:text-base break-words">{gym.location}</span>
                     </div>
-                    {gym.description && <p className="text-gray-600 text-sm mb-2 break-words">{gym.description}</p>}
-                    
+                    {gym.description && (
+                      <p className="text-gray-600 text-sm mb-2 break-words">{gym.description}</p>
+                    )}
+
                     {/* Informations WiFi */}
                     {gym.wifi_restricted && (
                       <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-sm font-semibold text-gray-700 mb-2">📶 Accès restreint au WiFi</p>
+                        <p className="text-sm font-semibold text-gray-700 mb-2">
+                          📶 Accès restreint au WiFi
+                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 text-sm">
                           {gym.wifi_ssid && (
                             <div key="ssid">
@@ -476,20 +520,20 @@ export function GymManager() {
                         </div>
                       </div>
                     )}
-                    
+
                     <div className="mt-3 text-xs text-gray-500">
-                      Crée le {new Date(gym.created_at || "").toLocaleDateString("fr-FR")}
+                      Crée le {new Date(gym.created_at || '').toLocaleDateString('fr-FR')}
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Affichage du QR Code si activé */}
                 {gym.qr_code_enabled && (
                   <div className="mt-4">
                     <QRCodeDisplay gymId={gym.id} gymName={gym.name} siteUrl={siteUrl} />
                   </div>
                 )}
-                
+
                 <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                   <Button
                     variant="outline"
@@ -497,7 +541,7 @@ export function GymManager() {
                     onClick={() => toggleGymStatus(gym.id)}
                     className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900 text-xs md:text-sm w-full sm:w-auto"
                   >
-                    {gym.is_active ? "Désactiver" : "Activer"}
+                    {gym.is_active ? 'Désactiver' : 'Activer'}
                   </Button>
                   <Button
                     variant="outline"
@@ -528,7 +572,9 @@ export function GymManager() {
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl">Modifier la salle</DialogTitle>
-            <DialogDescription className="text-sm">Mettre à jour les informations de la salle.</DialogDescription>
+            <DialogDescription className="text-sm">
+              Mettre à jour les informations de la salle.
+            </DialogDescription>
           </DialogHeader>
           {editGym && (
             <div className="space-y-4">
@@ -567,7 +613,8 @@ export function GymManager() {
                 {editGym.wifi_restricted && (
                   <div className="ml-8 space-y-4">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette salle.
+                      Les employés devront se connecter au réseau WiFi spécifié pour accéder à cette
+                      salle.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -579,9 +626,7 @@ export function GymManager() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="dark:text-gray-300">
-                          Adresse IP de la salle
-                        </Label>
+                        <Label className="dark:text-gray-300">Adresse IP de la salle</Label>
                         <div className="flex gap-2">
                           <Input
                             value={editGym.ip_address}
@@ -607,7 +652,8 @@ export function GymManager() {
                           </Button>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer automatiquement son adresse IP.
+                          Cliquez sur "Mon IP" depuis le réseau de la salle pour enregistrer
+                          automatiquement son adresse IP.
                         </p>
                       </div>
                     </div>
@@ -643,7 +689,11 @@ export function GymManager() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditingGym(false)} className="border-2 rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => setIsEditingGym(false)}
+              className="border-2 rounded-xl"
+            >
               Annuler
             </Button>
             <Button
@@ -674,7 +724,8 @@ export function GymManager() {
               Êtes-vous sûr de vouloir supprimer la salle <strong>{selectedGym?.name}</strong> ?
               <br />
               <span className="text-red-600 font-medium">
-                Toutes les données associées (tâches, employés, événements) seront également supprimées.
+                Toutes les données associées (tâches, employés, événements) seront également
+                supprimées.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -687,7 +738,10 @@ export function GymManager() {
               <XCircle className="h-4 w-4" />
               Annuler
             </Button>
-            <Button onClick={executeDelete} className="bg-red-600 hover:bg-red-700 text-white text-lg px-6">
+            <Button
+              onClick={executeDelete}
+              className="bg-red-600 hover:bg-red-700 text-white text-lg px-6"
+            >
               <Trash2 className="mr-2 h-4 w-4" />
               Supprimer
             </Button>

@@ -1,11 +1,11 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -13,16 +13,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox"
+} from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Plus, Edit2, Trash2, GripVertical } from "lucide-react"
+} from '@/components/ui/select'
+import { Plus, Edit2, Trash2, GripVertical } from 'lucide-react'
 
 interface CashRegisterField {
   id: string
@@ -47,10 +47,10 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
   const [isEditing, setIsEditing] = useState(false)
 
   const [formData, setFormData] = useState({
-    label: "",
-    fieldType: "number",
+    label: '',
+    fieldType: 'number',
     isRequired: false,
-    period: "all",
+    period: 'all',
   })
 
   // Charger les champs
@@ -60,13 +60,13 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
   const loadFields = async () => {
     try {
-      const response = await fetch("/api/db/cash-register-fields")
+      const response = await fetch('/api/db/cash-register-fields')
       if (response.ok) {
         const data = await response.json()
         setFields(Array.isArray(data.data) ? data.data : [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des champs:", error)
+      console.error('Erreur lors du chargement des champs:', error)
     } finally {
       setIsLoading(false)
     }
@@ -79,16 +79,16 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         label: field.label,
         fieldType: field.fieldType,
         isRequired: field.isRequired,
-        period: field.period || "all",
+        period: field.period || 'all',
       })
       setIsEditing(true)
     } else {
       setSelectedField(null)
       setFormData({
-        label: "",
-        fieldType: "number",
+        label: '',
+        fieldType: 'number',
         isRequired: false,
-        period: "all",
+        period: 'all',
       })
       setIsEditing(false)
     }
@@ -97,31 +97,31 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
   const handleSave = async () => {
     if (!formData.label.trim()) {
-      alert("Le label est obligatoire")
+      alert('Le label est obligatoire')
       return
     }
 
     try {
       if (isEditing && selectedField) {
-        await fetch("/api/db/cash-register-fields", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
+        await fetch('/api/db/cash-register-fields', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: selectedField.id,
             ...formData,
-            period: formData.period === "all" ? null : formData.period,
-          })
+            period: formData.period === 'all' ? null : formData.period,
+          }),
         })
       } else {
-        const userEmail = localStorage.getItem("userEmail") || "admin"
-        await fetch("/api/db/cash-register-fields", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const userEmail = localStorage.getItem('userEmail') || 'admin'
+        await fetch('/api/db/cash-register-fields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...formData,
-            period: formData.period === "all" ? null : formData.period,
-            createdBy: userEmail
-          })
+            period: formData.period === 'all' ? null : formData.period,
+            createdBy: userEmail,
+          }),
         })
       }
 
@@ -129,48 +129,48 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
       loadFields()
       onFieldsUpdated?.()
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
-      alert("Erreur lors de la sauvegarde du champ")
+      console.error('Erreur lors de la sauvegarde:', error)
+      alert('Erreur lors de la sauvegarde du champ')
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce champ ?")) return
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce champ ?')) return
 
     try {
       await fetch(`/api/db/cash-register-fields?id=${id}`, {
-        method: "DELETE"
+        method: 'DELETE',
       })
       loadFields()
       onFieldsUpdated?.()
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
-      alert("Erreur lors de la suppression du champ")
+      console.error('Erreur lors de la suppression:', error)
+      alert('Erreur lors de la suppression du champ')
     }
   }
 
   const getFieldTypeLabel = (type: string) => {
     switch (type) {
-      case "number":
-        return "Nombre"
-      case "text":
-        return "Texte"
-      case "checkbox":
-        return "Case à cocher"
+      case 'number':
+        return 'Nombre'
+      case 'text':
+        return 'Texte'
+      case 'checkbox':
+        return 'Case à cocher'
       default:
         return type
     }
   }
 
   const getPeriodLabel = (period?: string) => {
-    if (!period) return "Toutes"
+    if (!period) return 'Toutes'
     switch (period) {
-      case "matin":
-        return "Matin"
-      case "aprem":
-        return "Après-midi"
-      case "journee":
-        return "Journée"
+      case 'matin':
+        return 'Matin'
+      case 'aprem':
+        return 'Après-midi'
+      case 'journee':
+        return 'Journée'
       default:
         return period
     }
@@ -187,7 +187,9 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
           <div className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-2xl">Champs de Caisse Personnalisés</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">Gérez les champs supplémentaires pour la fiche de caisse</p>
+              <p className="text-sm text-gray-600 mt-1">
+                Gérez les champs supplémentaires pour la fiche de caisse
+              </p>
             </div>
             <Button
               onClick={(e) => {
@@ -212,45 +214,43 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         </Card>
       ) : (
         <div className="grid gap-3">
-          {fields.sort((a, b) => a.orderIndex - b.orderIndex).map((field) => (
-            <Card key={field.id} className="border-2">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <GripVertical className="h-5 w-5 text-gray-400" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{field.label}</h3>
-                    <div className="flex gap-2 mt-2">
-                      <Badge variant="outline">{getFieldTypeLabel(field.fieldType)}</Badge>
-                      <Badge variant="outline">Période: {getPeriodLabel(field.period)}</Badge>
-                      {field.isRequired && (
-                        <Badge className="bg-red-100 text-red-800">Obligatoire</Badge>
-                      )}
-                      {!field.isActive && (
-                        <Badge className="bg-gray-100 text-gray-800">Inactif</Badge>
-                      )}
+          {fields
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((field) => (
+              <Card key={field.id} className="border-2">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4 flex-1">
+                    <GripVertical className="h-5 w-5 text-gray-400" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900">{field.label}</h3>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="outline">{getFieldTypeLabel(field.fieldType)}</Badge>
+                        <Badge variant="outline">Période: {getPeriodLabel(field.period)}</Badge>
+                        {field.isRequired && (
+                          <Badge className="bg-red-100 text-red-800">Obligatoire</Badge>
+                        )}
+                        {!field.isActive && (
+                          <Badge className="bg-gray-100 text-gray-800">Inactif</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleOpenDialog(field)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    onClick={() => handleDelete(field.id)}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleOpenDialog(field)} variant="outline" size="sm">
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={() => handleDelete(field.id)}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
         </div>
       )}
 
@@ -258,9 +258,13 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="sm:max-w-md z-50">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Modifier le champ" : "Ajouter un nouveau champ"}</DialogTitle>
+            <DialogTitle>
+              {isEditing ? 'Modifier le champ' : 'Ajouter un nouveau champ'}
+            </DialogTitle>
             <DialogDescription>
-              {isEditing ? "Modifiez les propriétés du champ de caisse" : "Créez un nouveau champ personnalisé pour la fiche de caisse"}
+              {isEditing
+                ? 'Modifiez les propriétés du champ de caisse'
+                : 'Créez un nouveau champ personnalisé pour la fiche de caisse'}
             </DialogDescription>
           </DialogHeader>
 
@@ -277,7 +281,10 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
             <div>
               <Label className="text-sm font-medium">Type de champ</Label>
-              <Select value={formData.fieldType} onValueChange={(value) => setFormData({ ...formData, fieldType: value })}>
+              <Select
+                value={formData.fieldType}
+                onValueChange={(value) => setFormData({ ...formData, fieldType: value })}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -291,7 +298,10 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
             <div>
               <Label className="text-sm font-medium">Période</Label>
-              <Select value={formData.period} onValueChange={(value) => setFormData({ ...formData, period: value })}>
+              <Select
+                value={formData.period}
+                onValueChange={(value) => setFormData({ ...formData, period: value })}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -321,7 +331,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
               Annuler
             </Button>
             <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
-              {isEditing ? "Mettre à jour" : "Créer"}
+              {isEditing ? 'Mettre à jour' : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>

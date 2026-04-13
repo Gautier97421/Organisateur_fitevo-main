@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { auth } from '@/lib/auth'
 
-// GET - Récupérer les salles d'un employé/utilisateur
 export async function GET(request: Request) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')
     const employeeEmail = searchParams.get('employeeEmail')
@@ -15,29 +20,26 @@ export async function GET(request: Request) {
 
     let userId = employeeId
 
-    // Si email fourni, trouver l'ID de l'utilisateur
     if (employeeEmail && !employeeId) {
       const user = await prisma.user.findUnique({
         where: { email: employeeEmail },
-        select: { id: true }
+        select: { id: true },
       })
-      
+
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
       userId = user.id
     }
 
-    // Récupérer les relations user_gyms avec les informations des salles
     const userGyms = await prisma.userGym.findMany({
       where: { userId: userId || '' },
       include: {
-        gym: true
-      }
+        gym: true,
+      },
     })
 
-    // Formater les données pour correspondre à l'interface attendue
-    const gyms = userGyms.map(ug => ({
+    const gyms = userGyms.map((ug) => ({
       id: ug.gym.id,
       name: ug.gym.name,
       address: ug.gym.address,
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
       ip_address: ug.gym.ipAddress,
       qr_code_enabled: ug.gym.qrCodeEnabled,
       created_at: ug.gym.createdAt.toISOString(),
-      updated_at: ug.gym.updatedAt.toISOString()
+      updated_at: ug.gym.updatedAt.toISOString(),
     }))
 
     return NextResponse.json({ data: gyms })
@@ -57,9 +59,13 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Assigner des salles à un employé/utilisateur
 export async function POST(request: Request) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { employeeId, employeeEmail, gymIds } = body
 
@@ -73,31 +79,28 @@ export async function POST(request: Request) {
 
     let userId = employeeId
 
-    // Si email fourni, trouver l'ID de l'utilisateur
     if (employeeEmail && !employeeId) {
       const user = await prisma.user.findUnique({
         where: { email: employeeEmail },
-        select: { id: true }
+        select: { id: true },
       })
-      
+
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
       userId = user.id
     }
 
-    // Supprimer les anciennes relations
     await prisma.userGym.deleteMany({
-      where: { userId: userId || '' }
+      where: { userId: userId || '' },
     })
 
-    // Ajouter les nouvelles relations
     if (gymIds.length > 0) {
       const userGyms = await prisma.userGym.createMany({
-        data: gymIds.map(gymId => ({
+        data: gymIds.map((gymId: string) => ({
           userId: userId || '',
-          gymId: gymId
-        }))
+          gymId: gymId,
+        })),
       })
 
       return NextResponse.json({ data: userGyms })
@@ -110,9 +113,13 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE - Retirer l'assignation d'une salle à un employé
 export async function DELETE(request: Request) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')
     const gymId = searchParams.get('gymId')
@@ -124,8 +131,8 @@ export async function DELETE(request: Request) {
     await prisma.userGym.deleteMany({
       where: {
         userId: employeeId,
-        gymId: gymId
-      }
+        gymId: gymId,
+      },
     })
 
     return NextResponse.json({ success: true })

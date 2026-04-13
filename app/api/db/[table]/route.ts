@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
 import { validateTableData, sanitizeObject } from '@/lib/validation'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { auth } from '@/lib/auth'
 
 // Mapping des tables
 const tableMapping: { [key: string]: string } = {
@@ -27,14 +27,14 @@ const tableMapping: { [key: string]: string } = {
 // Mapper les champs du schéma Prisma vers les noms attendus par le client
 function mapFieldsToClient(table: string, data: any): any {
   if (!data) return data
-  
+
   // Si c'est un tableau, mapper chaque élément
   if (Array.isArray(data)) {
-    return data.map(item => mapFieldsToClient(table, item))
+    return data.map((item) => mapFieldsToClient(table, item))
   }
-  
+
   const mapped = { ...data }
-  
+
   // Mappings spéciaux
   if (table === 'gyms') {
     // Prisma utilise 'address', le client attend 'location'
@@ -65,45 +65,54 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.qrCodeEnabled
     }
   }
-  
+
   // Mapper active -> is_active pour tous les modèles
   if (mapped.active !== undefined) {
     mapped.is_active = mapped.active
     delete mapped.active
   }
-  
+
   // Mapper roleIds -> role_ids pour tasks
   if (table === 'tasks' && mapped.roleIds !== undefined) {
     mapped.role_ids = mapped.roleIds
     delete mapped.roleIds
   }
-  
+
   // Mapper subPeriod -> sub_period pour tasks
   if (table === 'tasks' && mapped.subPeriod !== undefined) {
     mapped.sub_period = mapped.subPeriod
     delete mapped.subPeriod
   }
-  
+
   // Mapper isFirstLogin -> is_first_login pour users
-  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.isFirstLogin !== undefined) {
+  if (
+    (table === 'users' || table === 'employees' || table === 'admins') &&
+    mapped.isFirstLogin !== undefined
+  ) {
     mapped.is_first_login = mapped.isFirstLogin
     delete mapped.isFirstLogin
   }
-  
+
   // Mapper employeeRole -> employee_role pour users/employees/admins
-  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.employeeRole !== undefined) {
+  if (
+    (table === 'users' || table === 'employees' || table === 'admins') &&
+    mapped.employeeRole !== undefined
+  ) {
     mapped.employee_role = mapped.employeeRole
     delete mapped.employeeRole
   }
-  
+
   // Mapper remoteWorkEnabled -> remote_work_enabled pour users
-  if ((table === 'users' || table === 'employees' || table === 'admins') && mapped.remoteWorkEnabled !== undefined) {
+  if (
+    (table === 'users' || table === 'employees' || table === 'admins') &&
+    mapped.remoteWorkEnabled !== undefined
+  ) {
     mapped.remote_work_enabled = mapped.remoteWorkEnabled
     delete mapped.remoteWorkEnabled
   }
-  
+
   // Mapper hasCalendarAccess, hasEventProposalAccess, hasWorkScheduleAccess, hasWorkPeriodAccess
-  if ((table === 'users' || table === 'employees' || table === 'admins')) {
+  if (table === 'users' || table === 'employees' || table === 'admins') {
     if (mapped.hasCalendarAccess !== undefined) {
       mapped.has_calendar_access = mapped.hasCalendarAccess
       delete mapped.hasCalendarAccess
@@ -121,13 +130,13 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.hasWorkPeriodAccess
     }
   }
-  
+
   // Mapper date -> work_date pour work_schedules
   if (table === 'work_schedules' && mapped.date !== undefined) {
     mapped.work_date = mapped.date
     delete mapped.date
   }
-  
+
   // Mapper les champs de work_schedules
   if (table === 'work_schedules') {
     if (mapped.employeeEmail !== undefined) {
@@ -164,7 +173,7 @@ function mapFieldsToClient(table: string, data: any): any {
     }
     // Note: breakDuration et breakStartTime ne sont pas dans le schéma Prisma
   }
-  
+
   // Mapper les champs de user_gyms
   if (table === 'user_gyms') {
     if (mapped.userId !== undefined) {
@@ -176,7 +185,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.gymId
     }
   }
-  
+
   // Mapper les champs de calendar_events
   if (table === 'calendar_events') {
     if (mapped.eventDate !== undefined) {
@@ -216,7 +225,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.userId
     }
   }
-  
+
   // Mapper createdAt -> created_at et updatedAt -> updated_at
   if (mapped.createdAt !== undefined) {
     mapped.created_at = mapped.createdAt
@@ -226,7 +235,7 @@ function mapFieldsToClient(table: string, data: any): any {
     mapped.updated_at = mapped.updatedAt
     delete mapped.updatedAt
   }
-  
+
   // Mapper les champs de custom_pages
   if (table === 'custom_pages') {
     if (mapped.orderIndex !== undefined) {
@@ -246,7 +255,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.createdBy
     }
   }
-  
+
   // Mapper les champs de custom_page_items
   if (table === 'custom_page_items') {
     if (mapped.pageId !== undefined) {
@@ -262,39 +271,37 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.isActive
     }
   }
-  
+
   // Pour les users qui sont des admins/employees, mapper le role vers is_super_admin
   if ((table === 'admins' || table === 'employees') && mapped.role !== undefined) {
     mapped.is_super_admin = mapped.role === 'superadmin'
   }
-  
+
   return mapped
 }
 
 // GET - Lire des données
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string }> }
+  { params }: { params: Promise<{ table: string }> },
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
     const isSingle = searchParams.get('single') === 'true'
-    
+
     const prismaModel = tableMapping[table] || table
-    
+
     // Convertir snake_case vers camelCase pour les noms de colonnes
-    const snakeToCamel = (str: string) => str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-    
+    const snakeToCamel = (str: string) =>
+      str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+
     // Construire les filtres
     const where: any = {}
     searchParams.forEach((value, key) => {
@@ -309,7 +316,8 @@ export async function GET(
           if (field === 'date' || field === 'eventDate') {
             filterValue = value.includes('T') ? value : `${value}T00:00:00.000Z`
           }
-          const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
+          const currentRange =
+            typeof where[field] === 'object' && where[field] !== null ? where[field] : {}
           where[field] = { ...currentRange, gte: filterValue }
         } else if (key.endsWith('_lte')) {
           let field = snakeToCamel(key.replace('_lte', ''))
@@ -321,7 +329,8 @@ export async function GET(
           if (field === 'date' || field === 'eventDate') {
             filterValue = value.includes('T') ? value : `${value}T23:59:59.999Z`
           }
-          const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
+          const currentRange =
+            typeof where[field] === 'object' && where[field] !== null ? where[field] : {}
           where[field] = { ...currentRange, lte: filterValue }
         } else if (key.endsWith('_neq')) {
           let field = snakeToCamel(key.replace('_neq', ''))
@@ -331,7 +340,10 @@ export async function GET(
           // Mappings spéciaux
           // Pour users/employees/admins: is_active → active
           // Pour autres tables (gyms, etc): is_active → isActive
-          if (field === 'isActive' && (table === 'employees' || table === 'admins' || table === 'users')) {
+          if (
+            field === 'isActive' &&
+            (table === 'employees' || table === 'admins' || table === 'users')
+          ) {
             field = 'active'
           }
           if (field === 'workDate' && table === 'work_schedules') field = 'date'
@@ -354,14 +366,14 @@ export async function GET(
         }
       }
     })
-    
+
     // Ajouter un filtre sur le rôle pour les tables admins et employees
     if (table === 'employees') {
       where.role = 'employee'
     } else if (table === 'admins') {
       where.role = 'admin' // Exclure superadmin
     }
-    
+
     // Construire l'orderBy
     const orderByColumn = searchParams.get('orderBy')
     const orderByDir = searchParams.get('orderDir')
@@ -373,45 +385,48 @@ export async function GET(
       if (field === 'eventDate') field = 'eventDate'
       orderBy = { [field]: orderByDir || 'asc' }
     }
-    
+
     // Préparer l'include pour les relations
     const include: any = {}
     if (table === 'employees' || table === 'admins' || table === 'users') {
       include.employeeRole = true
     }
-    
+
     // Exécuter la requête
     if (isSingle) {
-      const data = await (prisma as any)[prismaModel].findFirst({ 
-        where, 
+      const data = await (prisma as any)[prismaModel].findFirst({
+        where,
         orderBy,
-        include: Object.keys(include).length > 0 ? include : undefined 
+        include: Object.keys(include).length > 0 ? include : undefined,
       })
-      
+
       // Mapper les champs du schéma vers les noms attendus par le client
       const mappedData = data ? mapFieldsToClient(table, data) : null
-      
-      return NextResponse.json({ 
-        data: mappedData, 
-        error: !data ? { code: 'PGRST116' } : null 
+
+      return NextResponse.json({
+        data: mappedData,
+        error: !data ? { code: 'PGRST116' } : null,
       })
     } else {
-      const data = await (prisma as any)[prismaModel].findMany({ 
-        where, 
+      const data = await (prisma as any)[prismaModel].findMany({
+        where,
         orderBy,
-        include: Object.keys(include).length > 0 ? include : undefined
+        include: Object.keys(include).length > 0 ? include : undefined,
       })
-      
+
       // Mapper les champs du schéma vers les noms attendus par le client (gère automatiquement les tableaux)
       const mappedData = mapFieldsToClient(table, data)
-      
+
       return NextResponse.json({ data: mappedData || [], error: null })
     }
   } catch (error: any) {
     logger.error('Erreur GET', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la récupération des données' } },
-      { status: 500 }
+      {
+        data: null,
+        error: { message: error.message || 'Erreur lors de la récupération des données' },
+      },
+      { status: 500 },
     )
   }
 }
@@ -419,273 +434,269 @@ export async function GET(
 // POST - Créer des données
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string }> }
+  { params }: { params: Promise<{ table: string }> },
 ) {
   // Vérifier l'authentification
-  const authUserId = await verifyAuth(request)
-  if (!authUserId) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   try {
     const { table } = await params
     const { data } = await request.json()
     const prismaModel = tableMapping[table] || table
-    
-    // Logging pour debug
+
     if (table === 'work_schedules') {
-      console.log('[WORK_SCHEDULES] POST - données reçues:', JSON.stringify(data, null, 2))
+      logger.debug('[WORK_SCHEDULES] POST - données reçues:', JSON.stringify(data, null, 2))
     }
-    
+
     if (!data) {
       return NextResponse.json(
         { data: null, error: { message: 'Aucune donnée fournie' } },
-        { status: 400 }
+        { status: 400 },
       )
     }
-    
+
     const items = Array.isArray(data) ? data : [data]
-    
+
     // Valider et sanitizer les données
     for (const item of items) {
       const validation = validateTableData(table, item)
       if (!validation.valid) {
-        console.log(`[WORK_SCHEDULES] Validation échouée pour ${table}:`, validation.errors)
+        logger.debug(`[WORK_SCHEDULES] Validation échouée pour ${table}:`, validation.errors)
         return NextResponse.json(
           { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
-          { status: 400 }
+          { status: 400 },
         )
       }
     }
-    
-    // Sanitizer les données pour prévenir XSS
+
+    // Preserve raw passwords before sanitization (sanitizeObject corrupts special chars)
+    const rawPasswords = items.map((item: any) => item.password)
+
     const sanitizedData = sanitizeObject(items)
-    
+
+    // Restore raw passwords after sanitization
+    sanitizedData.forEach((item: any, i: number) => {
+      if (rawPasswords[i]) item.password = rawPasswords[i]
+    })
+
     // Convertir snake_case vers camelCase
-    const convertedItems = await Promise.all(sanitizedData.map(async (item: any) => {
-      const converted: any = {}
-      for (const [key, value] of Object.entries(item)) {
-        let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-        
-        // Mappings spéciaux pour correspondre au schéma Prisma
-        if (camelKey === 'location' && table === 'gyms') {
-          camelKey = 'address' // gyms utilise 'address' dans le schéma
-        }
-        
-        // Mapper work_date -> date pour work_schedules (le schéma Prisma utilise 'date')
-        if (table === 'work_schedules' && camelKey === 'workDate') {
-          camelKey = 'date'
-        }
-        
-        // Mapper role_ids -> roleIds pour tasks
-        if (table === 'tasks' && camelKey === 'roleIds') {
-          camelKey = 'roleIds'
-        }
-        
-        // Mapper sub_period -> subPeriod pour tasks
-        if (table === 'tasks' && camelKey === 'subPeriod') {
-          camelKey = 'subPeriod'
-        }
-        
-        // Mapper les champs WiFi de snake_case vers camelCase pour Prisma
-        if (table === 'gyms') {
-          if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
-          if (camelKey === 'wifiSsid') camelKey = 'wifiSsid'
-          if (camelKey === 'ipAddress') camelKey = 'ipAddress'
-          if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
-        }
-        
-        // Mapper is_active -> active pour users (employees/admins), mais isActive pour gyms et autres tables
-        if (camelKey === 'isActive') {
-          if (table === 'users' || table === 'employees' || table === 'admins') {
-            camelKey = 'active'
-          } else {
-            camelKey = 'isActive' // gyms, allowed_networks, etc.
+    const convertedItems = await Promise.all(
+      sanitizedData.map(async (item: any) => {
+        const converted: any = {}
+        for (const [key, value] of Object.entries(item)) {
+          let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+
+          // Mappings spéciaux pour correspondre au schéma Prisma
+          if (camelKey === 'location' && table === 'gyms') {
+            camelKey = 'address' // gyms utilise 'address' dans le schéma
           }
-        }
-        
-        // Mapper work_date -> date pour work_schedules
-        if (camelKey === 'workDate' && table === 'work_schedules') {
-          camelKey = 'date'
-        }
-        
-        // Mapper event_date -> eventDate pour calendar_events
-        if (camelKey === 'eventDate' && table === 'calendar_events') {
-          camelKey = 'eventDate'
-        }
-        
-        // Ignorer les champs qui n'existent pas dans le schéma
-        if (camelKey === 'description' && table === 'gyms') {
-          continue // gyms n'a pas de champ description
-        }
-        if (table === 'tasks' && camelKey === 'value') {
-          continue // le schéma tasks ne contient pas de colonne value
-        }
-        if (camelKey === 'isSuperAdmin') {
-          continue // géré via role
-        }
-        // Ignorer employeeRole et roleColor car ils sont gérés via la relation roleId
-        if ((table === 'users' || table === 'employees' || table === 'admins') && 
-            (camelKey === 'employeeRole' || camelKey === 'roleColor')) {
-          continue
-        }
-        // Ignorer break_duration et break_start_time car ils n'existent pas dans le schéma WorkSchedule
-        if (table === 'work_schedules' && (camelKey === 'breakDuration' || camelKey === 'breakStartTime')) {
-          continue
-        }
-        
-        converted[camelKey] = value
-      }
-      
-      // Assigner le bon rôle selon la table
-      if (table === 'employees') {
-        converted.role = 'employee'
-      } else if (table === 'admins') {
-        // Si is_super_admin est défini, utiliser 'superadmin', sinon 'admin'
-        converted.role = item.is_super_admin ? 'superadmin' : 'admin'
-      }
-      
-      // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
-      if (table === 'calendar_events' && converted.eventDate) {
-        // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
-        if (!converted.eventDate.includes('T')) {
-          converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
-        }
-      }
-      
-      // Convertir les dates simples en DateTime ISO-8601 pour work_schedules
-      if (table === 'work_schedules' && converted.date) {
-        console.log(`[WORK_SCHEDULES] Conversion date: ${converted.date} (type: ${typeof converted.date})`)
-        // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
-        if (typeof converted.date === 'string' && !converted.date.includes('T')) {
-          converted.date = new Date(`${converted.date}T00:00:00.000Z`)
-          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
-        } else if (typeof converted.date === 'string') {
-          converted.date = new Date(converted.date)
-          console.log(`[WORK_SCHEDULES] Date convertie en DateTime: ${converted.date.toISOString()}`)
-        }
-      }
-      
-      // Ajouter userId si nécessaire
-      if (!converted.userId && table === 'calendar_events') {
-        const user = await prisma.user.findUnique({ where: { email: converted.createdByEmail } })
-        if (user) converted.userId = user.id
-        else {
-          // Utiliser le premier admin si l'email n'est pas trouvé
-          const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
-          if (admin) converted.userId = admin.id
-        }
-      }
-      if (!converted.userId && table === 'work_schedules') {
-        // Pour work_schedules, utiliser l'email de l'employé
-        if (converted.employeeEmail) {
-          console.log(`[WORK_SCHEDULES] Recherche utilisateur avec email: ${converted.employeeEmail}`)
-          const user = await prisma.user.findUnique({ where: { email: converted.employeeEmail } })
-          if (user) {
-            converted.userId = user.id
-            console.log(`[WORK_SCHEDULES] Utilisateur trouvé avec ID: ${user.id}`)
-          } else {
-            console.log(`[WORK_SCHEDULES] Utilisateur non trouvé pour email: ${converted.employeeEmail}, utilisation d'un admin`)
-            // Si l'utilisateur n'existe pas, utiliser un admin par défaut
-            const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
-            if (admin) {
-              converted.userId = admin.id
-              console.log(`[WORK_SCHEDULES] Admin utilisé avec ID: ${admin.id}`)
+
+          // Mapper work_date -> date pour work_schedules (le schéma Prisma utilise 'date')
+          if (table === 'work_schedules' && camelKey === 'workDate') {
+            camelKey = 'date'
+          }
+
+          // Mapper role_ids -> roleIds pour tasks
+          if (table === 'tasks' && camelKey === 'roleIds') {
+            camelKey = 'roleIds'
+          }
+
+          // Mapper sub_period -> subPeriod pour tasks
+          if (table === 'tasks' && camelKey === 'subPeriod') {
+            camelKey = 'subPeriod'
+          }
+
+          // Mapper les champs WiFi de snake_case vers camelCase pour Prisma
+          if (table === 'gyms') {
+            if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
+            if (camelKey === 'wifiSsid') camelKey = 'wifiSsid'
+            if (camelKey === 'ipAddress') camelKey = 'ipAddress'
+            if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
+          }
+
+          // Mapper is_active -> active pour users (employees/admins), mais isActive pour gyms et autres tables
+          if (camelKey === 'isActive') {
+            if (table === 'users' || table === 'employees' || table === 'admins') {
+              camelKey = 'active'
             } else {
-              console.log('[WORK_SCHEDULES] ERREUR - Aucun admin trouvé dans la base de données!')
+              camelKey = 'isActive' // gyms, allowed_networks, etc.
             }
           }
-        } else {
-          console.log('[WORK_SCHEDULES] ATTENTION - Aucun employeeEmail fourni')
-          const user = await prisma.user.findFirst({ where: { role: 'admin' } })
-          if (user) converted.userId = user.id
-        }
-      }
-      if (!converted.userId && table === 'tasks') {
-        // Priorité: utilisateur authentifié, fallback admin si nécessaire
-        converted.userId = authUserId
-        if (!converted.userId) {
-          const user = await prisma.user.findFirst({ where: { role: 'admin' } })
-          if (user) converted.userId = user.id
-        }
-      }
 
-      // createdBy est obligatoire dans le schéma tasks
-      if (table === 'tasks' && !converted.createdBy) {
-        converted.createdBy = authUserId
-      }
+          // Mapper work_date -> date pour work_schedules
+          if (camelKey === 'workDate' && table === 'work_schedules') {
+            camelKey = 'date'
+          }
 
-      
-      // Nettoyer createdBy s'il est vide
-      if (converted.createdBy === '') {
-        delete converted.createdBy
-      }
-      
-      return converted
-    }))
-    
+          // Mapper event_date -> eventDate pour calendar_events
+          if (camelKey === 'eventDate' && table === 'calendar_events') {
+            camelKey = 'eventDate'
+          }
+
+          // Ignorer les champs qui n'existent pas dans le schéma
+          if (camelKey === 'description' && table === 'gyms') {
+            continue // gyms n'a pas de champ description
+          }
+          if (table === 'tasks' && camelKey === 'value') {
+            continue // le schéma tasks ne contient pas de colonne value
+          }
+          if (camelKey === 'isSuperAdmin') {
+            continue // géré via role
+          }
+          // Ignorer employeeRole et roleColor car ils sont gérés via la relation roleId
+          if (
+            (table === 'users' || table === 'employees' || table === 'admins') &&
+            (camelKey === 'employeeRole' || camelKey === 'roleColor')
+          ) {
+            continue
+          }
+          // Ignorer break_duration et break_start_time car ils n'existent pas dans le schéma WorkSchedule
+          if (
+            table === 'work_schedules' &&
+            (camelKey === 'breakDuration' || camelKey === 'breakStartTime')
+          ) {
+            continue
+          }
+
+          converted[camelKey] = value
+        }
+
+        // Assigner le bon rôle selon la table
+        if (table === 'employees') {
+          converted.role = 'employee'
+        } else if (table === 'admins') {
+          // Si is_super_admin est défini, utiliser 'superadmin', sinon 'admin'
+          converted.role = item.is_super_admin ? 'superadmin' : 'admin'
+        }
+
+        // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
+        if (table === 'calendar_events' && converted.eventDate) {
+          // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
+          if (!converted.eventDate.includes('T')) {
+            converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+          }
+        }
+
+        // Convertir les dates simples en DateTime ISO-8601 pour work_schedules
+        if (table === 'work_schedules' && converted.date) {
+          logger.debug(
+            `[WORK_SCHEDULES] Conversion date: ${converted.date} (type: ${typeof converted.date})`,
+          )
+          if (typeof converted.date === 'string' && !converted.date.includes('T')) {
+            converted.date = new Date(`${converted.date}T00:00:00.000Z`)
+          } else if (typeof converted.date === 'string') {
+            converted.date = new Date(converted.date)
+          }
+        }
+
+        // Ajouter userId si nécessaire
+        if (!converted.userId && table === 'calendar_events') {
+          const user = await prisma.user.findUnique({ where: { email: converted.createdByEmail } })
+          if (user) converted.userId = user.id
+          else {
+            // Utiliser le premier admin si l'email n'est pas trouvé
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
+            if (admin) converted.userId = admin.id
+          }
+        }
+        if (!converted.userId && table === 'work_schedules') {
+          // Pour work_schedules, utiliser l'email de l'employé
+          if (converted.employeeEmail) {
+            const user = await prisma.user.findUnique({ where: { email: converted.employeeEmail } })
+            if (user) {
+              converted.userId = user.id
+            } else {
+              logger.debug(
+                `[WORK_SCHEDULES] Utilisateur non trouvé pour email: ${converted.employeeEmail}, utilisation d'un admin`,
+              )
+              const admin = await prisma.user.findFirst({ where: { role: 'admin' } })
+              if (admin) {
+                converted.userId = admin.id
+              } else {
+                logger.error('[WORK_SCHEDULES] Aucun admin trouvé dans la base de données')
+              }
+            }
+          } else {
+            logger.debug('[WORK_SCHEDULES] Aucun employeeEmail fourni')
+            const user = await prisma.user.findFirst({ where: { role: 'admin' } })
+            if (user) converted.userId = user.id
+          }
+        }
+        if (!converted.userId && table === 'tasks') {
+          // Priorité: utilisateur authentifié, fallback admin si nécessaire
+          converted.userId = session?.user?.id
+          if (!converted.userId) {
+            const user = await prisma.user.findFirst({ where: { role: 'admin' } })
+            if (user) converted.userId = user.id
+          }
+        }
+
+        // createdBy est obligatoire dans le schéma tasks
+        if (table === 'tasks' && !converted.createdBy) {
+          converted.createdBy = session?.user?.id
+        }
+
+        // Nettoyer createdBy s'il est vide
+        if (converted.createdBy === '') {
+          delete converted.createdBy
+        }
+
+        return converted
+      }),
+    )
+
     // Insérer dans Prisma
     const results = []
     for (const item of convertedItems) {
-      // Pour les tables avec relations obligatoires (tasks, work_schedules), 
+      // Pour les tables avec relations obligatoires (tasks, work_schedules),
       // convertir userId en relation connect
       const data = { ...item }
-      
-      // Logging pour debug work_schedules AVANT conversion
+
       if (table === 'work_schedules') {
-        console.log('[WORK_SCHEDULES] Données AVANT conversion:', JSON.stringify(data, null, 2))
-        console.log('[WORK_SCHEDULES] data.gymId existe ?', !!data.gymId, 'valeur:', data.gymId)
+        logger.debug('[WORK_SCHEDULES] Données AVANT conversion:', JSON.stringify(data, null, 2))
       }
-      
+
       if ((table === 'tasks' || table === 'work_schedules') && data.userId) {
         const userId = data.userId
         delete data.userId
         data.user = { connect: { id: userId } }
       }
-      
+
       // De même pour gymId dans tasks et work_schedules
       if ((table === 'tasks' || table === 'work_schedules') && data.gymId) {
-        console.log('[WORK_SCHEDULES] Conversion gymId:', data.gymId)
         const gymId = data.gymId
         delete data.gymId
         data.gym = { connect: { id: gymId } }
-        console.log('[WORK_SCHEDULES] Après conversion, data.gymId:', data.gymId, 'data.gym:', data.gym)
       }
-      
+
       // Nettoyer createdBy s'il est vide (doit être fait après la copie de convertedItems)
       if (data.createdBy === '') {
         delete data.createdBy
       }
-      
+
       // Hacher le mot de passe pour les utilisateurs
       if ((table === 'users' || table === 'employees' || table === 'admins') && data.password) {
         data.password = await hashPassword(data.password)
       }
-      
-      // Logging pour debug work_schedules
-      if (table === 'work_schedules') {
-        console.log('[WORK_SCHEDULES] Données finales avant création:', JSON.stringify(data, null, 2))
-      }
-      
+
       try {
         const result = await (prisma as any)[prismaModel].create({ data })
         results.push(result)
       } catch (createError: any) {
-        console.log(`[WORK_SCHEDULES] ERREUR Prisma lors de la création dans ${table}:`, createError.message || createError)
-        console.log('[WORK_SCHEDULES] Erreur complète:', JSON.stringify(createError, null, 2))
+        logger.error(`Erreur Prisma lors de la création dans ${table}`, createError)
         throw new Error(`Échec de la création: ${createError.message || 'Erreur inconnue'}`)
       }
     }
-    
+
     return NextResponse.json({ data: results, error: null })
   } catch (error: any) {
     logger.error('Erreur POST', error)
     return NextResponse.json(
       { data: null, error: { message: error.message || 'Erreur lors de la création' } },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
@@ -693,44 +704,45 @@ export async function POST(
 // PUT - Mettre à jour des données
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string }> }
+  { params }: { params: Promise<{ table: string }> },
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   try {
     const { table } = await params
     const { data, where } = await request.json()
     const prismaModel = tableMapping[table] || table
-    
+
     // Valider les données
     const validation = validateTableData(table, data)
     if (!validation.valid) {
       return NextResponse.json(
         { data: null, error: { message: `Validation échouée: ${validation.errors.join(', ')}` } },
-        { status: 400 }
+        { status: 400 },
       )
     }
-    
-    // Sanitizer les données
+
+    // Preserve raw password before sanitization
+    const rawPassword = data.password
+
     const sanitizedData = sanitizeObject(data)
-    
+
+    if (rawPassword) sanitizedData.password = rawPassword
+
     // Convertir snake_case vers camelCase
     const converted: any = {}
     for (const [key, value] of Object.entries(sanitizedData)) {
       let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-      
+
       // Mapper location → address pour les gyms
       if (camelKey === 'location' && table === 'gyms') {
         camelKey = 'address'
       }
-      
+
       // Mapper les champs WiFi et QR pour les gyms
       if (table === 'gyms') {
         if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
@@ -738,22 +750,27 @@ export async function PUT(
         if (camelKey === 'ipAddress') camelKey = 'ipAddress'
         if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
       }
-      
+
       // Mapper is_active → isActive pour new_member_instruction_items, ou → active pour users
-      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config' && table !== 'gyms') {
+      if (
+        camelKey === 'isActive' &&
+        table !== 'new_member_instruction_items' &&
+        table !== 'app_config' &&
+        table !== 'gyms'
+      ) {
         camelKey = 'active'
       }
-      
+
       // Mapper work_date → date pour work_schedules
       if (camelKey === 'workDate' && table === 'work_schedules') {
         camelKey = 'date'
       }
-      
+
       // Mapper event_date → eventDate pour calendar_events
       if (camelKey === 'eventDate' && table === 'calendar_events') {
         camelKey = 'eventDate'
       }
-      
+
       // Ignorer les champs qui n'existent pas dans le schéma
       if (camelKey === 'description' && table === 'gyms') {
         continue // gyms n'a pas de champ description
@@ -764,78 +781,79 @@ export async function PUT(
       if (camelKey === 'isSuperAdmin') {
         continue // géré via role
       }
-      
+
       converted[camelKey] = value
     }
-    
+
     // Ne pas permettre de changer le rôle via cette API pour employees/admins
     // Le rôle est fixe selon la table
     if (table === 'employees' || table === 'admins') {
       delete converted.role
     }
-    
-    const result = await (prisma as any)[prismaModel].updateMany({
-      where,
+
+    if (!where?.id) {
+      return NextResponse.json(
+        { data: null, error: { message: 'Update requires an id in the where clause' } },
+        { status: 400 },
+      )
+    }
+
+    const result = await (prisma as any)[prismaModel].update({
+      where: { id: where.id },
       data: converted,
     })
-    
+
     return NextResponse.json({ data: result, error: null })
   } catch (error: any) {
     logger.error('Erreur PUT', error)
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    )
+    return NextResponse.json({ data: null, error: { message: error.message } }, { status: 500 })
   }
 }
 
 // PATCH - Mettre à jour un seul enregistrement par ID ou email
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string }> }
+  { params }: { params: Promise<{ table: string }> },
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
     const id = searchParams.get('id')
     const body = await request.json()
     const prismaModel = tableMapping[table] || table
-    
+
     // Accepter email dans le body pour les users
     const email = body.email
-    
+
     if (!id && !email) {
       return NextResponse.json(
         { data: null, error: { message: 'ID ou email manquant' } },
-        { status: 400 }
+        { status: 400 },
       )
     }
-    
+
     // Construire le where selon ce qui est fourni
-    const where: any = id ? { id: parseInt(id) } : { email }
-    
+    const where: any = id ? { id } : { email }
+
     // Convertir snake_case vers camelCase
     const converted: any = {}
     for (const [key, value] of Object.entries(body)) {
       // Ignorer l'email dans les données à updater
       if (key === 'email') continue
-      
+
       let camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-      
+
       // Mapper location → address pour les gyms
       if (camelKey === 'location' && table === 'gyms') {
         camelKey = 'address'
       }
-      
+
       // Mapper les champs WiFi et QR pour les gyms
       if (table === 'gyms') {
         if (camelKey === 'wifiRestricted') camelKey = 'wifiRestricted'
@@ -843,22 +861,27 @@ export async function PATCH(
         if (camelKey === 'ipAddress') camelKey = 'ipAddress'
         if (camelKey === 'qrCodeEnabled') camelKey = 'qrCodeEnabled'
       }
-      
+
       // Mapper is_active → isActive pour new_member_instruction_items, ou → active pour users
-      if (camelKey === 'isActive' && table !== 'new_member_instruction_items' && table !== 'app_config' && table !== 'gyms') {
+      if (
+        camelKey === 'isActive' &&
+        table !== 'new_member_instruction_items' &&
+        table !== 'app_config' &&
+        table !== 'gyms'
+      ) {
         camelKey = 'active'
       }
-      
+
       // Mapper work_date → date pour work_schedules
       if (camelKey === 'workDate' && table === 'work_schedules') {
         camelKey = 'date'
       }
-      
+
       // Mapper event_date → eventDate pour calendar_events
       if (camelKey === 'eventDate' && table === 'calendar_events') {
         camelKey = 'eventDate'
       }
-      
+
       // Ignorer les champs qui n'existent pas dans le schéma
       if (camelKey === 'description' && table === 'gyms') {
         continue
@@ -869,73 +892,64 @@ export async function PATCH(
       if (camelKey === 'isSuperAdmin') {
         continue
       }
-      
+
       converted[camelKey] = value
     }
-    
+
     // Hacher le mot de passe s'il est présent (pour les users)
     if ((table === 'users' || table === 'employees' || table === 'admins') && converted.password) {
       converted.password = await hashPassword(converted.password)
       // Marquer que ce n'est plus la première connexion
       converted.isFirstLogin = false
     }
-    
+
     const result = await (prisma as any)[prismaModel].update({
       where,
       data: converted,
     })
-    
+
     // Mapper les champs de retour
     const mappedResult = mapFieldsToClient(table, result)
-    
+
     return NextResponse.json({ data: mappedResult, error: null })
   } catch (error: any) {
     logger.error('Erreur PATCH', error)
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    )
+    return NextResponse.json({ data: null, error: { message: error.message } }, { status: 500 })
   }
 }
 
 // DELETE - Supprimer des données
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string }> }
+  { params }: { params: Promise<{ table: string }> },
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   try {
     const { table } = await params
     const searchParams = request.nextUrl.searchParams
     const id = searchParams.get('id')
     const prismaModel = tableMapping[table] || table
-    
+
     if (!id) {
       return NextResponse.json(
         { data: null, error: { message: 'ID requis pour la suppression' } },
-        { status: 400 }
+        { status: 400 },
       )
     }
-    
+
     // Supprimer l'enregistrement par ID
     const result = await (prisma as any)[prismaModel].delete({
-      where: { id: parseInt(id) }
+      where: { id },
     })
-    
+
     return NextResponse.json({ data: result, error: null })
   } catch (error: any) {
     logger.error('Erreur DELETE', error)
-    return NextResponse.json(
-      { data: null, error: { message: error.message } },
-      { status: 500 }
-    )
+    return NextResponse.json({ data: null, error: { message: error.message } }, { status: 500 })
   }
 }

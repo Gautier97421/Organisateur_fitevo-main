@@ -1,13 +1,16 @@
-import { PrismaClient } from '@prisma/client'
+import 'dotenv/config'
+import { PrismaClient } from './generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-const prisma = new PrismaClient()
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log('🌱 Création des instructions de nouveau adhérent...')
 
   // Vérifier si des instructions existent déjà
   const existing = await prisma.newMemberInstructionItem.findFirst()
-  
+
   if (existing) {
     console.log('ℹ️  Les instructions existent déjà')
     return
@@ -53,8 +56,8 @@ async function main() {
 
 N'hésitez pas à poser des questions si vous avez oublié une étape !`,
       orderIndex: 1,
-      isActive: true
-    }
+      isActive: true,
+    },
   })
 
   console.log('✅ Instructions de nouveau adhérent créées')

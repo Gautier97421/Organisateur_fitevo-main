@@ -1,50 +1,54 @@
-# Build stage
-FROM public.ecr.aws/docker/library/node:20-alpine AS builder
-
+# ── Stage 1: base ──────────────────────────────
+FROM node:22-alpine AS base
+RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# ── Stage 2: deps ─────────────────────────────
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts && npm cache clean --force
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
-
-# Install dependencies (without frozen-lockfile to allow updates)
-RUN pnpm install
-
-# Copy prisma schema
-COPY prisma ./prisma
-
-# Generate Prisma Client
-RUN pnpm prisma:generate
-
-# Copy source code
+# ── Stage 3: builder ──────────────────────────
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application
-RUN pnpm build
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Production stage
-FROM public.ecr.aws/docker/library/node:20-alpine AS runner
+RUN npx prisma generate && npm run build
+
+# ── Stage 4: production ───────────────────────
+FROM node:22-alpine AS production
+
+LABEL org.opencontainers.image.source="https://github.com/SoloDesignHQ/organisateur-fitevo"
+LABEL org.opencontainers.image.description="Organisateur FitEvo"
+LABEL org.opencontainers.image.licenses="UNLICENSED"
+
+RUN apk add --no-cache openssl libc6-compat dumb-init netcat-openbsd \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Copy necessary files from builder
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-lock.yaml ./
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
+USER nextjs
 
-# Expose the port
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
 EXPOSE 3000
 
-# Set environment to production
-ENV NODE_ENV=production
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
 
-# Start the application
-CMD ["pnpm", "start"]
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["/app/docker-entrypoint.sh"]

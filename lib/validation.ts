@@ -26,7 +26,11 @@ export function isValidUrl(url: string): boolean {
 /**
  * Valide une chaîne: longueur min/max
  */
-export function isValidString(str: string, minLength: number = 1, maxLength: number = 1000): boolean {
+export function isValidString(
+  str: string,
+  minLength: number = 1,
+  maxLength: number = 1000,
+): boolean {
   if (typeof str !== 'string') return false
   return str.length >= minLength && str.length <= maxLength
 }
@@ -86,15 +90,15 @@ export function sanitizeString(str: string): string {
  */
 export function sanitizeObject(obj: any): any {
   if (obj === null || obj === undefined) return obj
-  
+
   if (typeof obj === 'string') {
     return sanitizeString(obj)
   }
-  
+
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item))
+    return obj.map((item) => sanitizeObject(item))
   }
-  
+
   if (typeof obj === 'object') {
     const sanitized: any = {}
     for (const [key, value] of Object.entries(obj)) {
@@ -102,7 +106,7 @@ export function sanitizeObject(obj: any): any {
     }
     return sanitized
   }
-  
+
   return obj
 }
 
@@ -111,28 +115,28 @@ export function sanitizeObject(obj: any): any {
  */
 export function validateUserFields(data: any): { valid: boolean; errors: string[] } {
   const errors: string[] = []
-  
+
   // Email obligatoire et valide
   if (data.email !== undefined) {
     if (!isValidEmail(data.email)) {
       errors.push('Email invalide')
     }
   }
-  
+
   // Nom: longueur max 100 caractères
   if (data.name !== undefined) {
     if (!isValidString(data.name, 1, 100)) {
       errors.push('Nom invalide (1-100 caractères)')
     }
   }
-  
+
   // Password: minimum 6 caractères
   if (data.password !== undefined) {
     if (!isValidString(data.password, 6, 255)) {
       errors.push('Mot de passe invalide (minimum 6 caractères)')
     }
   }
-  
+
   // Role doit être dans la liste autorisée
   if (data.role !== undefined) {
     const validRoles = ['employee', 'admin', 'superadmin']
@@ -140,7 +144,7 @@ export function validateUserFields(data: any): { valid: boolean; errors: string[
       errors.push('Rôle invalide')
     }
   }
-  
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -149,28 +153,28 @@ export function validateUserFields(data: any): { valid: boolean; errors: string[
  */
 export function validateGymFields(data: any): { valid: boolean; errors: string[] } {
   const errors: string[] = []
-  
+
   // Nom obligatoire
   if (data.name !== undefined) {
     if (!isValidString(data.name, 1, 100)) {
       errors.push('Nom invalide (1-100 caractères)')
     }
   }
-  
+
   // Adresse
   if (data.address !== undefined && data.address !== null) {
     if (!isValidString(data.address, 0, 500)) {
       errors.push('Adresse invalide (max 500 caractères)')
     }
   }
-  
+
   // WiFi SSID
   if (data.wifiSsid !== undefined && data.wifiSsid !== null) {
     if (!isValidString(data.wifiSsid, 0, 100)) {
       errors.push('SSID WiFi invalide (max 100 caractères)')
     }
   }
-  
+
   // IP Address
   if (data.ipAddress !== undefined && data.ipAddress !== null) {
     const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/
@@ -178,7 +182,7 @@ export function validateGymFields(data: any): { valid: boolean; errors: string[]
       errors.push('Adresse IP invalide')
     }
   }
-  
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -187,21 +191,21 @@ export function validateGymFields(data: any): { valid: boolean; errors: string[]
  */
 export function validateTaskFields(data: any): { valid: boolean; errors: string[] } {
   const errors: string[] = []
-  
+
   // Titre obligatoire
   if (data.title !== undefined) {
     if (!isValidString(data.title, 1, 200)) {
       errors.push('Titre invalide (1-200 caractères)')
     }
   }
-  
+
   // Description
   if (data.description !== undefined && data.description !== null) {
     if (!isValidString(data.description, 0, 1000)) {
       errors.push('Description invalide (max 1000 caractères)')
     }
   }
-  
+
   // Type doit être dans la liste
   if (data.type !== undefined) {
     const validTypes = ['checkbox', 'text', 'qcm']
@@ -209,7 +213,7 @@ export function validateTaskFields(data: any): { valid: boolean; errors: string[
       errors.push('Type invalide')
     }
   }
-  
+
   // Period doit être dans la liste
   if (data.period !== undefined) {
     const validPeriods = ['matin', 'aprem', 'journee']
@@ -217,7 +221,7 @@ export function validateTaskFields(data: any): { valid: boolean; errors: string[
       errors.push('Période invalide')
     }
   }
-  
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -229,17 +233,17 @@ export function validateTableData(table: string, data: any): { valid: boolean; e
   if (table === 'users' || table === 'employees' || table === 'admins') {
     return validateUserFields(data)
   }
-  
+
   // Gyms
   if (table === 'gyms') {
     return validateGymFields(data)
   }
-  
+
   // Tasks
   if (table === 'tasks') {
     return validateTaskFields(data)
   }
-  
+
   // Par défaut: valide (pour les autres tables)
   return { valid: true, errors: [] }
 }

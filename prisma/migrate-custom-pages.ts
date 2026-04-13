@@ -1,40 +1,43 @@
-import { PrismaClient } from '@prisma/client'
+import 'dotenv/config'
+import { Prisma, PrismaClient } from './generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-const prisma = new PrismaClient()
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log('🔄 Migration des instructions Nouveau Adhérent vers les pages personnalisées...')
-  
+
   try {
     // Vérifier si des pages personnalisées existent déjà
     const existingPages = await prisma.customPage.count()
-    
+
     if (existingPages === 0) {
       console.log('📝 Création de la page "Nouveau Adhérent"...')
-      
+
       // Créer la page personnalisée
       const newMemberPage = await prisma.customPage.create({
         data: {
           title: 'Nouveau Adhérent',
           icon: 'UserPlus',
-          description: 'Procédure d\'inscription d\'un nouveau membre',
+          description: "Procédure d'inscription d'un nouveau membre",
           orderIndex: 1,
           isActive: true,
-          roleIds: null, // Accessible à tous par défaut
-          createdBy: 'system'
-        }
+          roleIds: Prisma.JsonNull,
+          createdBy: 'system',
+        },
       })
-      
+
       console.log('✅ Page créée:', newMemberPage.title)
-      
+
       // Récupérer les instructions existantes
       const oldInstructions = await prisma.newMemberInstructionItem.findMany({
-        orderBy: { orderIndex: 'asc' }
+        orderBy: { orderIndex: 'asc' },
       })
-      
+
       if (oldInstructions.length > 0) {
         console.log(`📋 Migration de ${oldInstructions.length} instructions...`)
-        
+
         // Créer les items dans la nouvelle structure
         for (const instruction of oldInstructions) {
           await prisma.customPageItem.create({
@@ -43,11 +46,11 @@ async function main() {
               title: instruction.title,
               description: instruction.description,
               orderIndex: instruction.orderIndex,
-              isActive: instruction.isActive
-            }
+              isActive: instruction.isActive,
+            },
           })
         }
-        
+
         console.log('✅ Instructions migrées avec succès')
       } else {
         console.log('ℹ️  Aucune instruction existante à migrer')
@@ -55,7 +58,7 @@ async function main() {
     } else {
       console.log('ℹ️  Des pages personnalisées existent déjà, migration ignorée')
     }
-    
+
     console.log('\n✨ Migration terminée avec succès!')
   } catch (error) {
     console.error('❌ Erreur lors de la migration:', error)

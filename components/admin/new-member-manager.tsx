@@ -1,13 +1,13 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { Save, UserPlus, Loader2, Plus, Trash2, Check, X, GripVertical } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
+import { Save, UserPlus, Loader2, Plus, Trash2, Check, X, GripVertical } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -38,15 +38,17 @@ export function NewMemberManager() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editTitle, setEditTitle] = useState("")
-  const [editDescription, setEditDescription] = useState("")
-  const [newTitle, setNewTitle] = useState("")
-  const [newDescription, setNewDescription] = useState("")
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
 
   const loadInstructions = async () => {
     try {
-      const response = await fetch("/api/db/new_member_instruction_items?orderBy=order_index&orderDir=asc")
+      const response = await fetch(
+        '/api/db/new_member_instruction_items?orderBy=order_index&orderDir=asc',
+      )
       if (response.ok) {
         const result = await response.json()
         // L'API retourne { data: [...], error: null }
@@ -67,29 +69,28 @@ export function NewMemberManager() {
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return
-    
+
     setIsSaving(true)
     try {
-      const maxOrder = instructions.length > 0 
-        ? Math.max(...instructions.map(i => i.order_index))
-        : 0
+      const maxOrder =
+        instructions.length > 0 ? Math.max(...instructions.map((i) => i.order_index)) : 0
 
-      const response = await fetch("/api/db/new_member_instruction_items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/db/new_member_instruction_items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           data: {
             title: newTitle,
             description: newDescription || null,
             order_index: maxOrder + 1,
-            is_active: true
-          }
-        })
+            is_active: true,
+          },
+        }),
       })
 
       if (response.ok) {
-        setNewTitle("")
-        setNewDescription("")
+        setNewTitle('')
+        setNewDescription('')
         setShowAddForm(false)
         await loadInstructions()
       }
@@ -103,19 +104,19 @@ export function NewMemberManager() {
   const handleEdit = (item: InstructionItem) => {
     setEditingId(item.id)
     setEditTitle(item.title)
-    setEditDescription(item.description || "")
+    setEditDescription(item.description || '')
   }
 
   const handleSaveEdit = async (id: number) => {
     setIsSaving(true)
     try {
       const response = await fetch(`/api/db/new_member_instruction_items?id=${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: editTitle,
-          description: editDescription || null
-        })
+          description: editDescription || null,
+        }),
       })
 
       if (response.ok) {
@@ -130,12 +131,12 @@ export function NewMemberManager() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette instruction ?")) return
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette instruction ?')) return
 
     setIsSaving(true)
     try {
       const response = await fetch(`/api/db/new_member_instruction_items?id=${id}`, {
-        method: "DELETE"
+        method: 'DELETE',
       })
 
       if (response.ok) {
@@ -152,9 +153,9 @@ export function NewMemberManager() {
     setIsSaving(true)
     try {
       const response = await fetch(`/api/db/new_member_instruction_items?id=${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: !item.is_active })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !item.is_active }),
       })
 
       if (response.ok) {
@@ -171,7 +172,7 @@ export function NewMemberManager() {
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   )
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -192,10 +193,10 @@ export function NewMemberManager() {
     try {
       const updates = newInstructions.map((item, index) =>
         fetch(`/api/db/new_member_instruction_items?id=${item.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_index: index + 1 })
-        })
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_index: index + 1 }),
+        }),
       )
       await Promise.all(updates)
       await loadInstructions()
@@ -252,7 +253,10 @@ export function NewMemberManager() {
                 />
               </div>
               <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="newDescription" className="text-xs md:text-sm font-medium text-gray-700">
+                <Label
+                  htmlFor="newDescription"
+                  className="text-xs md:text-sm font-medium text-gray-700"
+                >
                   Description (optionnelle)
                 </Label>
                 <Textarea
@@ -285,8 +289,8 @@ export function NewMemberManager() {
                 <Button
                   onClick={() => {
                     setShowAddForm(false)
-                    setNewTitle("")
-                    setNewDescription("")
+                    setNewTitle('')
+                    setNewDescription('')
                   }}
                   variant="outline"
                   className="border-gray-300 text-sm md:text-base bg-white hover:bg-gray-50"
@@ -301,11 +305,7 @@ export function NewMemberManager() {
         )}
 
         {/* Liste des instructions */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
             {!Array.isArray(instructions) || instructions.length === 0 ? (
               <div className="text-center py-6 md:py-8 text-sm md:text-base text-gray-500">
@@ -313,7 +313,7 @@ export function NewMemberManager() {
               </div>
             ) : (
               <SortableContext
-                items={instructions.map(item => item.id)}
+                items={instructions.map((item) => item.id)}
                 strategy={verticalListSortingStrategy}
               >
                 {instructions.map((item, index) => (

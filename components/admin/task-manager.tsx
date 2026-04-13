@@ -1,16 +1,42 @@
-"use client"
+'use client'
 
-import { Label } from "@/components/ui/label"
+import { Label } from '@/components/ui/label'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react"
-import { type Task, type Gym } from "@/lib/api-client"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  GripVertical,
+  Building,
+  AlertCircle,
+  ListTodo,
+  Plus,
+  CheckSquare2,
+  FileText,
+  List,
+  CheckCircle,
+  XCircle,
+  Trash2,
+  Pencil,
+} from 'lucide-react'
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  address?: string
+  is_active: boolean
+  created_at: string
+}
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 import {
   DndContext,
   closestCenter,
@@ -35,8 +61,8 @@ interface TaskItem {
   title: string
   description?: string
   status: string
-  period: "matin" | "aprem" | "journee"
-  sub_period?: "debut" | "milieu" | "fin" // Sous-créneau (seulement pour matin/aprem)
+  period: 'matin' | 'aprem' | 'journee'
+  sub_period?: 'debut' | 'milieu' | 'fin' // Sous-créneau (seulement pour matin/aprem)
   order_index: number
   gym_id: string
   role_ids?: string[] // IDs des rôles autorisés
@@ -54,15 +80,22 @@ interface Role {
 }
 
 // Composant SortableTaskItem pour le drag and drop
-function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: TaskItem; index: number; roles: Role[]; onDelete: (id: string) => void; onEdit: (task: TaskItem) => void }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id })
+function SortableTaskItem({
+  task,
+  index,
+  roles,
+  onDelete,
+  onEdit,
+}: {
+  task: TaskItem
+  index: number
+  roles: Role[]
+  onDelete: (id: string) => void
+  onEdit: (task: TaskItem) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -90,10 +123,16 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
               <div className="w-8 h-8 bg-red-600 dark:bg-red-700 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 #{index + 1}
               </div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white truncate">{task.title}</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white truncate">
+                {task.title}
+              </h3>
               {task.sub_period && (
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
-                  {task.sub_period === "debut" ? "Début" : task.sub_period === "milieu" ? "Milieu" : "Fin"}
+                  {task.sub_period === 'debut'
+                    ? 'Début'
+                    : task.sub_period === 'milieu'
+                      ? 'Milieu'
+                      : 'Fin'}
                 </span>
               )}
               {task.required && (
@@ -101,16 +140,24 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
                   Obligatoire
                 </span>
               )}
-              {task.type === "qcm" && (
+              {task.type === 'qcm' && (
                 <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
-                  {task.qcm_allow_multiple ? "Choix multiples" : "Choix unique"}
+                  {task.qcm_allow_multiple ? 'Choix multiples' : 'Choix unique'}
                 </span>
               )}
               <span className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full text-xs flex-shrink-0">
-                {task.type === "checkbox" ? <CheckSquare2 className="h-3 w-3" /> : task.type === "text" ? <FileText className="h-3 w-3" /> : <List className="h-3 w-3" />}
+                {task.type === 'checkbox' ? (
+                  <CheckSquare2 className="h-3 w-3" />
+                ) : task.type === 'text' ? (
+                  <FileText className="h-3 w-3" />
+                ) : (
+                  <List className="h-3 w-3" />
+                )}
               </span>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{task.description}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">
+              {task.description}
+            </p>
             {task.role_ids && task.role_ids.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {task.role_ids.map((roleId) => {
@@ -138,7 +185,9 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
                   </span>
                 ))}
                 {task.options.length > 3 && (
-                  <span className="text-gray-500 dark:text-gray-400 text-xs">+{task.options.length - 3}</span>
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    +{task.options.length - 3}
+                  </span>
                 )}
               </div>
             )}
@@ -173,9 +222,9 @@ export function TaskManager() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [roles, setRoles] = useState<Role[]>([])
-  const [selectedGym, setSelectedGym] = useState<string>("")
-  const [selectedRole, setSelectedRole] = useState<string>("all") // "all" pour tous les rôles
-  const [activePeriod, setActivePeriod] = useState<"matin" | "aprem" | "journee">("matin")
+  const [selectedGym, setSelectedGym] = useState<string>('')
+  const [selectedRole, setSelectedRole] = useState<string>('all') // "all" pour tous les rôles
+  const [activePeriod, setActivePeriod] = useState<'matin' | 'aprem' | 'journee'>('matin')
   const [showForm, setShowForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showCreateConflict, setShowCreateConflict] = useState(false)
@@ -185,16 +234,16 @@ export function TaskManager() {
   const [newTask, setNewTask] = useState<{
     title: string
     description: string
-    type: "checkbox" | "text" | "qcm"
+    type: 'checkbox' | 'text' | 'qcm'
     options: string[]
     qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[] // IDs des rôles sélectionnés
-    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
+    subPeriod?: 'debut' | 'milieu' | 'fin' // Sous-créneau
   }>({
-    title: "",
-    description: "",
-    type: "checkbox",
+    title: '',
+    description: '',
+    type: 'checkbox',
     options: [],
     qcmAllowMultiple: false,
     required: true,
@@ -204,41 +253,41 @@ export function TaskManager() {
   const [editTask, setEditTask] = useState<{
     title: string
     description: string
-    type: "checkbox" | "text" | "qcm"
+    type: 'checkbox' | 'text' | 'qcm'
     options: string[]
     qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[]
-    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
+    subPeriod?: 'debut' | 'milieu' | 'fin' // Sous-créneau
   }>({
-    title: "",
-    description: "",
-    type: "checkbox",
+    title: '',
+    description: '',
+    type: 'checkbox',
     options: [],
     qcmAllowMultiple: false,
     required: true,
     roleIds: [],
     subPeriod: undefined,
   })
-  const [newOptionInput, setNewOptionInput] = useState("")
-  const [editOptionInput, setEditOptionInput] = useState("")
+  const [newOptionInput, setNewOptionInput] = useState('')
+  const [editOptionInput, setEditOptionInput] = useState('')
 
   // Configuration drag and drop
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   )
 
   const loadGyms = async () => {
     try {
       const response = await fetch('/api/db/gyms?is_active=true&orderBy=name')
       if (!response.ok) throw new Error('Erreur chargement salles')
-      
+
       const result = await response.json()
-      const gymsData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
-      
+      const gymsData = Array.isArray(result.data) ? result.data : result.data ? [result.data] : []
+
       setGyms(gymsData)
       if (gymsData && gymsData.length > 0) {
         setSelectedGym(gymsData[0].id)
@@ -254,7 +303,7 @@ export function TaskManager() {
     try {
       const response = await fetch('/api/roles')
       if (!response.ok) throw new Error('Erreur chargement rôles')
-      
+
       const result = await response.json()
       setRoles(result.data || [])
     } catch (error) {
@@ -268,11 +317,13 @@ export function TaskManager() {
     try {
       const response = await fetch(`/api/db/tasks?gym_id=${selectedGym}&orderBy=order_index`)
       if (!response.ok) throw new Error('Erreur chargement tâches')
-      
-      const result = await response.json()
-      const tasksData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
 
-      const parseTaskOptions = (rawOptions: any): { options: string[]; qcmAllowMultiple: boolean } => {
+      const result = await response.json()
+      const tasksData = Array.isArray(result.data) ? result.data : result.data ? [result.data] : []
+
+      const parseTaskOptions = (
+        rawOptions: any,
+      ): { options: string[]; qcmAllowMultiple: boolean } => {
         if (!rawOptions) return { options: [], qcmAllowMultiple: false }
 
         const parseAny = (value: any): { options: string[]; qcmAllowMultiple: boolean } => {
@@ -280,7 +331,7 @@ export function TaskManager() {
             return { options: value.map((opt) => String(opt)), qcmAllowMultiple: false }
           }
 
-          if (value && typeof value === "object") {
+          if (value && typeof value === 'object') {
             const choices = Array.isArray(value.choices)
               ? value.choices.map((opt: any) => String(opt))
               : Array.isArray(value.options)
@@ -310,7 +361,7 @@ export function TaskManager() {
 
         return parseAny(rawOptions)
       }
-      
+
       // Parser les champs JSON et trier
       const parsedTasks = tasksData.map((task: any) => {
         const parsedQcm = parseTaskOptions(task.options)
@@ -318,26 +369,30 @@ export function TaskManager() {
           ...task,
           options: parsedQcm.options,
           qcm_allow_multiple: parsedQcm.qcmAllowMultiple,
-          role_ids: task.role_ids ? (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : task.role_ids) : []
+          role_ids: task.role_ids
+            ? typeof task.role_ids === 'string'
+              ? JSON.parse(task.role_ids)
+              : task.role_ids
+            : [],
         }
       })
-      
+
       // Trier côté client par period puis sub_period puis order_index
       const sortedTasks = parsedTasks.sort((a: any, b: any) => {
         const periodOrder: any = { matin: 1, aprem: 2, journee: 3 }
         if (a.period !== b.period) {
           return (periodOrder[a.period] || 0) - (periodOrder[b.period] || 0)
         }
-        
+
         // Trier par sous-créneau à l'intérieur de chaque période
         const subPeriodOrder: any = { debut: 1, milieu: 2, fin: 3, undefined: 4, null: 4 }
         if (a.sub_period !== b.sub_period) {
           return (subPeriodOrder[a.sub_period] || 4) - (subPeriodOrder[b.sub_period] || 4)
         }
-        
+
         return a.order_index - b.order_index
       })
-      
+
       setTasks(sortedTasks)
     } catch (error) {
       // Erreur silencieuse pour ne pas surcharger la console
@@ -358,19 +413,23 @@ export function TaskManager() {
   }, [selectedGym])
 
   // Rafraîchissement automatique toutes les 15 secondes
-  useAutoRefresh(() => {
-    if (selectedGym) {
-      loadTasks()
-    }
-  }, 15000, [selectedGym])
+  useAutoRefresh(
+    () => {
+      if (selectedGym) {
+        loadTasks()
+      }
+    },
+    15000,
+    [selectedGym],
+  )
 
   const getCurrentTasks = () => {
-     const filtered = tasks.filter((task) => {
+    const filtered = tasks.filter((task) => {
       // Filtrer par période
       if (task.period !== activePeriod) return false
-      
+
       // Filtrer par rôle si un rôle est sélectionné
-      if (selectedRole !== "all") {
+      if (selectedRole !== 'all') {
         // Si la tâche a des rôles définis, vérifier si le rôle sélectionné est inclus
         if (task.role_ids && Array.isArray(task.role_ids) && task.role_ids.length > 0) {
           return task.role_ids.includes(selectedRole)
@@ -378,7 +437,7 @@ export function TaskManager() {
         // Si la tâche n'a pas de rôles définis, elle est visible par tous
         return true
       }
-      
+
       return true
     })
     return filtered
@@ -389,11 +448,10 @@ export function TaskManager() {
 
     try {
       const currentTasks = getCurrentTasks()
-      const maxOrder = currentTasks.length > 0 
-        ? Math.max(...currentTasks.map((t) => t.order_index || 0)) 
-        : 0
-      const userId = localStorage.getItem("userId")
-      
+      const maxOrder =
+        currentTasks.length > 0 ? Math.max(...currentTasks.map((t) => t.order_index || 0)) : 0
+      const userId = localStorage.getItem('userId')
+
       if (!userId) {
         return
       }
@@ -408,22 +466,24 @@ export function TaskManager() {
             description: newTask.description || null,
             type: newTask.type,
             period: activePeriod,
-            sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
-            options: newTask.type === "qcm"
-              ? {
-                  choices: filteredOptions,
-                  allowMultiple: newTask.qcmAllowMultiple,
-                }
-              : null,
+            sub_period:
+              activePeriod === 'matin' || activePeriod === 'aprem' ? newTask.subPeriod : null,
+            options:
+              newTask.type === 'qcm'
+                ? {
+                    choices: filteredOptions,
+                    allowMultiple: newTask.qcmAllowMultiple,
+                  }
+                : null,
             required: newTask.required,
             order_index: maxOrder + 1,
             gym_id: selectedGym,
             role_ids: newTask.roleIds.length > 0 ? newTask.roleIds : null,
             user_id: userId,
             created_by: userId,
-            status: 'pending'
-          }
-        })
+            status: 'pending',
+          },
+        }),
       })
 
       if (!response.ok) {
@@ -432,14 +492,14 @@ export function TaskManager() {
       }
 
       const result = await response.json()
-      
+
       // Recharger toutes les tâches depuis le serveur
       await loadTasks()
 
       setNewTask({
-        title: "",
-        description: "",
-        type: "checkbox",
+        title: '',
+        description: '',
+        type: 'checkbox',
         options: [],
         qcmAllowMultiple: false,
         required: true,
@@ -452,30 +512,30 @@ export function TaskManager() {
     }
   }
 
-  const addQcmOption = (mode: "new" | "edit") => {
-    const value = (mode === "new" ? newOptionInput : editOptionInput).trim()
+  const addQcmOption = (mode: 'new' | 'edit') => {
+    const value = (mode === 'new' ? newOptionInput : editOptionInput).trim()
     if (!value) return
 
-    if (mode === "new") {
+    if (mode === 'new') {
       if (newTask.options.includes(value)) {
-        setNewOptionInput("")
+        setNewOptionInput('')
         return
       }
       setNewTask((prev) => ({ ...prev, options: [...prev.options, value] }))
-      setNewOptionInput("")
+      setNewOptionInput('')
       return
     }
 
     if (editTask.options.includes(value)) {
-      setEditOptionInput("")
+      setEditOptionInput('')
       return
     }
     setEditTask((prev) => ({ ...prev, options: [...prev.options, value] }))
-    setEditOptionInput("")
+    setEditOptionInput('')
   }
 
-  const removeQcmOption = (mode: "new" | "edit", optionIndex: number) => {
-    if (mode === "new") {
+  const removeQcmOption = (mode: 'new' | 'edit', optionIndex: number) => {
+    if (mode === 'new') {
       setNewTask((prev) => ({
         ...prev,
         options: prev.options.filter((_, idx) => idx !== optionIndex),
@@ -489,8 +549,8 @@ export function TaskManager() {
     }))
   }
 
-  const updateQcmOption = (mode: "new" | "edit", index: number, value: string) => {
-    if (mode === "new") {
+  const updateQcmOption = (mode: 'new' | 'edit', index: number, value: string) => {
+    if (mode === 'new') {
       setNewTask((prev) => {
         const updated = [...prev.options]
         updated[index] = value
@@ -516,8 +576,8 @@ export function TaskManager() {
     setEditingTask(task)
     setEditTask({
       title: task.title,
-      description: task.description || "",
-      type: task.type as "checkbox" | "text" | "qcm" || "checkbox",
+      description: task.description || '',
+      type: (task.type as 'checkbox' | 'text' | 'qcm') || 'checkbox',
       options: task.options || [],
       qcmAllowMultiple: Boolean(task.qcm_allow_multiple),
       required: task.required || true,
@@ -541,16 +601,20 @@ export function TaskManager() {
           title: editTask.title,
           description: editTask.description || null,
           type: editTask.type,
-          options: editTask.type === "qcm"
-            ? {
-                choices: filteredOptions,
-                allowMultiple: editTask.qcmAllowMultiple,
-              }
-            : null,
+          options:
+            editTask.type === 'qcm'
+              ? {
+                  choices: filteredOptions,
+                  allowMultiple: editTask.qcmAllowMultiple,
+                }
+              : null,
           required: editTask.required,
           role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
-          sub_period: (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriod : null,
-        })
+          sub_period:
+            editingTask.period === 'matin' || editingTask.period === 'aprem'
+              ? editTask.subPeriod
+              : null,
+        }),
       })
 
       if (!response.ok) {
@@ -562,33 +626,33 @@ export function TaskManager() {
       setShowEditForm(false)
       setEditingTask(null)
       setEditTask({
-        title: "",
-        description: "",
-        type: "checkbox",
+        title: '',
+        description: '',
+        type: 'checkbox',
         options: [],
         qcmAllowMultiple: false,
         required: true,
         roleIds: [],
       })
-      setEditOptionInput("")
+      setEditOptionInput('')
     } catch (error: any) {
-      console.error("Erreur lors de la modification de la tâche:", error)
+      console.error('Erreur lors de la modification de la tâche:', error)
     }
   }
 
   const deleteTask = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return
-    
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return
+
     try {
       const response = await fetch(`/api/db/tasks/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
-      
+
       if (!response.ok) throw new Error('Erreur suppression')
 
       setTasks(tasks.filter((task) => task.id !== id))
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
+      console.error('Erreur lors de la suppression:', error)
     }
   }
 
@@ -620,47 +684,47 @@ export function TaskManager() {
         await fetch(`/api/db/tasks/${reorderedTasks[i].id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_index: i + 1 })
+          body: JSON.stringify({ order_index: i + 1 }),
         })
       }
       loadTasks()
     } catch (error) {
-      console.error("Erreur lors du déplacement de la tâche:", error)
+      console.error('Erreur lors du déplacement de la tâche:', error)
       loadTasks() // Recharger en cas d'erreur
     }
   }
 
   const getPeriodColor = (period: string) => {
     switch (period) {
-      case "matin":
-        return "from-blue-500 to-cyan-500"
-      case "aprem":
-        return "from-orange-500 to-red-500"
-      case "journee":
-        return "from-purple-500 to-pink-500"
+      case 'matin':
+        return 'from-blue-500 to-cyan-500'
+      case 'aprem':
+        return 'from-orange-500 to-red-500'
+      case 'journee':
+        return 'from-purple-500 to-pink-500'
       default:
-        return "from-gray-500 to-gray-600"
+        return 'from-gray-500 to-gray-600'
     }
   }
 
-  const getPeriodCount = (period: "matin" | "aprem" | "journee") => {
+  const getPeriodCount = (period: 'matin' | 'aprem' | 'journee') => {
     return tasks.filter((task) => {
       if (task.period !== period) return false
-      
+
       // Appliquer le même filtre de rôle
-      if (selectedRole !== "all") {
+      if (selectedRole !== 'all') {
         if (task.role_ids && Array.isArray(task.role_ids) && task.role_ids.length > 0) {
           return task.role_ids.includes(selectedRole)
         }
         return true
       }
-      
+
       return true
     }).length
   }
 
   const currentTasks = getCurrentTasks().sort((a, b) => a.order_index - b.order_index)
-  const selectedGymName = gyms.find((g) => g.id === selectedGym)?.name || ""
+  const selectedGymName = gyms.find((g) => g.id === selectedGym)?.name || ''
 
   if (isLoading) {
     return (
@@ -690,7 +754,7 @@ export function TaskManager() {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3">
           <ListTodo className="h-6 w-6 sm:h-8 sm:w-8 text-red-600" />
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
         </div>
@@ -746,8 +810,8 @@ export function TaskManager() {
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
+                          <div
+                            className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: role.color }}
                           />
                           {role.name}
@@ -767,37 +831,37 @@ export function TaskManager() {
           {/* Navigation entre les périodes */}
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             <Button
-              variant={activePeriod === "matin" ? "default" : "outline"}
-              onClick={() => setActivePeriod("matin")}
+              variant={activePeriod === 'matin' ? 'default' : 'outline'}
+              onClick={() => setActivePeriod('matin')}
               className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-                activePeriod === "matin"
-                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                activePeriod === 'matin'
+                  ? 'bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800'
+                  : 'border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              Matin ({getPeriodCount("matin")} tâches)
+              Matin ({getPeriodCount('matin')} tâches)
             </Button>
             <Button
-              variant={activePeriod === "aprem" ? "default" : "outline"}
-              onClick={() => setActivePeriod("aprem")}
+              variant={activePeriod === 'aprem' ? 'default' : 'outline'}
+              onClick={() => setActivePeriod('aprem')}
               className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-                activePeriod === "aprem"
-                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                activePeriod === 'aprem'
+                  ? 'bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800'
+                  : 'border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              Après-midi ({getPeriodCount("aprem")} tâches)
+              Après-midi ({getPeriodCount('aprem')} tâches)
             </Button>
             <Button
-              variant={activePeriod === "journee" ? "default" : "outline"}
-              onClick={() => setActivePeriod("journee")}
+              variant={activePeriod === 'journee' ? 'default' : 'outline'}
+              onClick={() => setActivePeriod('journee')}
               className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-                activePeriod === "journee"
-                  ? "bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-                  : "border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                activePeriod === 'journee'
+                  ? 'bg-red-600 text-white shadow-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800'
+                  : 'border-2 hover:bg-gray-50 border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              Journée ({getPeriodCount("journee")} tâches)
+              Journée ({getPeriodCount('journee')} tâches)
             </Button>
           </div>
 
@@ -805,14 +869,13 @@ export function TaskManager() {
           {showEditForm && editingTask && (
             <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
               <CardHeader className="bg-blue-600 dark:bg-blue-700 text-white rounded-t-xl">
-                <CardTitle className="text-xl">
-                  Modifier la tâche : {editingTask.title}
-                </CardTitle>
+                <CardTitle className="text-xl">Modifier la tâche : {editingTask.title}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 p-8">
                 {showCreateConflict && (
                   <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
-                    ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant de créer une nouvelle tâche.
+                    ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant de créer
+                    une nouvelle tâche.
                   </div>
                 )}
 
@@ -860,29 +923,38 @@ export function TaskManager() {
                 </div>
 
                 {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
-                {editingTask && (editingTask.period === "matin" || editingTask.period === "aprem") && (
-                  <div className="space-y-2">
-                    <Label className="text-lg font-medium">Sous-créneau :</Label>
-                    <Select
-                      value={editTask.subPeriod || "none"}
-                      onValueChange={(value) => setEditTask({ ...editTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
-                    >
-                      <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
-                        <SelectValue placeholder="Sélectionner un sous-créneau" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucun</SelectItem>
-                        <SelectItem value="debut">Début (ouverture)</SelectItem>
-                        <SelectItem value="milieu">Milieu</SelectItem>
-                        <SelectItem value="fin">Fin (fermeture)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                {editingTask &&
+                  (editingTask.period === 'matin' || editingTask.period === 'aprem') && (
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium">Sous-créneau :</Label>
+                      <Select
+                        value={editTask.subPeriod || 'none'}
+                        onValueChange={(value) =>
+                          setEditTask({
+                            ...editTask,
+                            subPeriod:
+                              value === 'none' ? undefined : (value as 'debut' | 'milieu' | 'fin'),
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
+                          <SelectValue placeholder="Sélectionner un sous-créneau" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Aucun</SelectItem>
+                          <SelectItem value="debut">Début (ouverture)</SelectItem>
+                          <SelectItem value="milieu">Milieu</SelectItem>
+                          <SelectItem value="fin">Fin (fermeture)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                 <div className="space-y-2">
                   <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
-                  <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
+                  <p className="text-sm text-gray-500">
+                    Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {roles.map((role) => (
                       <div
@@ -898,7 +970,7 @@ export function TaskManager() {
                             ...editTask,
                             roleIds: isSelected
                               ? editTask.roleIds.filter((id) => id !== role.id)
-                              : [...editTask.roleIds, role.id]
+                              : [...editTask.roleIds, role.id],
                           })
                         }}
                       >
@@ -917,15 +989,15 @@ export function TaskManager() {
                   </div>
                 </div>
 
-                {editTask.type === "qcm" && (
+                {editTask.type === 'qcm' && (
                   <div className="space-y-3">
                     <Label className="text-lg font-medium">Options du QCM</Label>
                     <div className="space-y-2">
                       <Label className="text-base font-medium">Mode de réponse</Label>
                       <Select
-                        value={editTask.qcmAllowMultiple ? "multiple" : "single"}
+                        value={editTask.qcmAllowMultiple ? 'multiple' : 'single'}
                         onValueChange={(value) =>
-                          setEditTask({ ...editTask, qcmAllowMultiple: value === "multiple" })
+                          setEditTask({ ...editTask, qcmAllowMultiple: value === 'multiple' })
                         }
                       >
                         <SelectTrigger className="h-12 text-base border-2 rounded-xl">
@@ -943,16 +1015,16 @@ export function TaskManager() {
                         value={editOptionInput}
                         onChange={(e) => setEditOptionInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                          if (e.key === 'Enter') {
                             e.preventDefault()
-                            addQcmOption("edit")
+                            addQcmOption('edit')
                           }
                         }}
                         className="text-lg h-12 border-2 rounded-xl"
                       />
                       <Button
                         type="button"
-                        onClick={() => addQcmOption("edit")}
+                        onClick={() => addQcmOption('edit')}
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         Ajouter option
@@ -963,12 +1035,15 @@ export function TaskManager() {
                         <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
                       ) : (
                         editTask.options.map((option, idx) => (
-                          <div key={`edit-option-${idx}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                          <div
+                            key={`edit-option-${idx}`}
+                            className="flex items-center justify-between rounded-lg border px-3 py-2"
+                          >
                             <div className="flex items-center gap-2 w-full mr-2">
                               <span className="text-sm font-medium w-7">{idx + 1}.</span>
                               <Input
                                 value={option}
-                                onChange={(e) => updateQcmOption("edit", idx, e.target.value)}
+                                onChange={(e) => updateQcmOption('edit', idx, e.target.value)}
                                 className="h-9"
                               />
                             </div>
@@ -976,7 +1051,7 @@ export function TaskManager() {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => removeQcmOption("edit", idx)}
+                              onClick={() => removeQcmOption('edit', idx)}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
                               Supprimer
@@ -1017,14 +1092,19 @@ export function TaskManager() {
             <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
               <CardHeader className="bg-red-600 dark:bg-red-700 text-white rounded-t-xl">
                 <CardTitle className="text-xl">
-                  Ajouter une tâche à {selectedGymName} -{" "}
-                  {activePeriod === "matin" ? "Matin" : activePeriod === "aprem" ? "Après-midi" : "Journée"}
+                  Ajouter une tâche à {selectedGymName} -{' '}
+                  {activePeriod === 'matin'
+                    ? 'Matin'
+                    : activePeriod === 'aprem'
+                      ? 'Après-midi'
+                      : 'Journée'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6 p-8">
                 {showEditConflict && (
                   <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
-                    ⚠️ Veuillez terminer ou annuler l'ajout de cette tâche avant de modifier une tâche existante.
+                    ⚠️ Veuillez terminer ou annuler l'ajout de cette tâche avant de modifier une
+                    tâche existante.
                   </div>
                 )}
 
@@ -1072,12 +1152,18 @@ export function TaskManager() {
                 </div>
 
                 {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
-                {(activePeriod === "matin" || activePeriod === "aprem") && (
+                {(activePeriod === 'matin' || activePeriod === 'aprem') && (
                   <div className="space-y-2">
                     <Label className="text-lg font-medium">Sous-créneau :</Label>
                     <Select
-                      value={newTask.subPeriod || "none"}
-                      onValueChange={(value) => setNewTask({ ...newTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
+                      value={newTask.subPeriod || 'none'}
+                      onValueChange={(value) =>
+                        setNewTask({
+                          ...newTask,
+                          subPeriod:
+                            value === 'none' ? undefined : (value as 'debut' | 'milieu' | 'fin'),
+                        })
+                      }
                     >
                       <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
                         <SelectValue placeholder="Sélectionner un sous-créneau" />
@@ -1094,7 +1180,9 @@ export function TaskManager() {
 
                 <div className="space-y-2">
                   <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
-                  <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
+                  <p className="text-sm text-gray-500">
+                    Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {roles.map((role) => (
                       <div
@@ -1110,7 +1198,7 @@ export function TaskManager() {
                             ...newTask,
                             roleIds: isSelected
                               ? newTask.roleIds.filter((id) => id !== role.id)
-                              : [...newTask.roleIds, role.id]
+                              : [...newTask.roleIds, role.id],
                           })
                         }}
                       >
@@ -1129,15 +1217,15 @@ export function TaskManager() {
                   </div>
                 </div>
 
-                {newTask.type === "qcm" && (
+                {newTask.type === 'qcm' && (
                   <div className="space-y-3">
                     <Label className="text-lg font-medium">Options du QCM</Label>
                     <div className="space-y-2">
                       <Label className="text-base font-medium">Mode de réponse</Label>
                       <Select
-                        value={newTask.qcmAllowMultiple ? "multiple" : "single"}
+                        value={newTask.qcmAllowMultiple ? 'multiple' : 'single'}
                         onValueChange={(value) =>
-                          setNewTask({ ...newTask, qcmAllowMultiple: value === "multiple" })
+                          setNewTask({ ...newTask, qcmAllowMultiple: value === 'multiple' })
                         }
                       >
                         <SelectTrigger className="h-12 text-base border-2 rounded-xl">
@@ -1155,16 +1243,16 @@ export function TaskManager() {
                         value={newOptionInput}
                         onChange={(e) => setNewOptionInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                          if (e.key === 'Enter') {
                             e.preventDefault()
-                            addQcmOption("new")
+                            addQcmOption('new')
                           }
                         }}
                         className="text-lg h-12 border-2 rounded-xl"
                       />
                       <Button
                         type="button"
-                        onClick={() => addQcmOption("new")}
+                        onClick={() => addQcmOption('new')}
                         className="bg-red-600 hover:bg-red-700 text-white"
                       >
                         Ajouter option
@@ -1175,12 +1263,15 @@ export function TaskManager() {
                         <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
                       ) : (
                         newTask.options.map((option, idx) => (
-                          <div key={`new-option-${idx}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                          <div
+                            key={`new-option-${idx}`}
+                            className="flex items-center justify-between rounded-lg border px-3 py-2"
+                          >
                             <div className="flex items-center gap-2 w-full mr-2">
                               <span className="text-sm font-medium w-7">{idx + 1}.</span>
                               <Input
                                 value={option}
-                                onChange={(e) => updateQcmOption("new", idx, e.target.value)}
+                                onChange={(e) => updateQcmOption('new', idx, e.target.value)}
                                 className="h-9"
                               />
                             </div>
@@ -1188,7 +1279,7 @@ export function TaskManager() {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => removeQcmOption("new", idx)}
+                              onClick={() => removeQcmOption('new', idx)}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
                               Supprimer
@@ -1223,14 +1314,12 @@ export function TaskManager() {
 
           {/* Liste des tâches */}
           <div className="space-y-4">
-            <h3
-              className="text-xl font-semibold text-gray-900 dark:text-white"
-            >
-              {activePeriod === "matin"
-                ? "Tâches du Matin"
-                : activePeriod === "aprem"
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {activePeriod === 'matin'
+                ? 'Tâches du Matin'
+                : activePeriod === 'aprem'
                   ? "Tâches de l'Après-midi"
-                  : "Tâches de la Journée"}{" "}
+                  : 'Tâches de la Journée'}{' '}
               - {selectedGymName}
             </h3>
 
@@ -1240,7 +1329,9 @@ export function TaskManager() {
                   <div className="flex justify-center mb-3">
                     <ListTodo className="h-12 w-12 text-gray-400 dark:text-gray-500" />
                   </div>
-                  <p className="text-lg mb-2 dark:text-gray-300">Aucune tâche dans cette to-do list</p>
+                  <p className="text-lg mb-2 dark:text-gray-300">
+                    Aucune tâche dans cette to-do list
+                  </p>
                   <p>Cliquez sur "Nouvelle Tâche" pour en ajouter une</p>
                 </CardContent>
               </Card>

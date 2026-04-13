@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+import { verifyAuth } from '@/lib/auth-middleware'
+import logger from '@/lib/logger'
 
 type ScheduledEventWithValidations = {
   id: string
@@ -56,15 +57,15 @@ async function isEventValidated(event: ScheduledEventWithValidations): Promise<b
 }
 
 export async function GET(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
     const { searchParams } = new URL(request.url)
-    const eventId = searchParams.get("event_id")
-    const userEmail = searchParams.get("user_email")
+    const eventId = searchParams.get('event_id')
+    const userEmail = searchParams.get('user_email')
 
     const where: any = {}
     if (eventId) {
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     const validations = await prisma.scheduledEventValidation.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     })
 
     const data = validations.map((item) => ({
@@ -90,15 +91,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    console.error("Erreur récupération validations:", error)
-    return NextResponse.json({ error: "Impossible de récupérer les validations" }, { status: 500 })
+    logger.error('Erreur récupération validations', error)
+    return NextResponse.json({ error: 'Impossible de récupérer les validations' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
     const { eventId, userEmail } = body
 
     if (!eventId || !userEmail) {
-      return NextResponse.json({ error: "eventId et userEmail sont obligatoires" }, { status: 400 })
+      return NextResponse.json({ error: 'eventId et userEmail sont obligatoires' }, { status: 400 })
     }
 
     const validation = await prisma.scheduledEventValidation.upsert({
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
         await prisma.scheduledEvent.update({
           where: { id: eventId },
           data: {
-            status: "validated",
+            status: 'validated',
           },
         })
       }
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     )
   } catch (error) {
-    console.error("Erreur validation événement:", error)
+    logger.error('Erreur validation événement', error)
     return NextResponse.json({ error: "Impossible de valider l'événement" }, { status: 500 })
   }
 }

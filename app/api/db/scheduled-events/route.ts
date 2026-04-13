@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+import { verifyAuth } from '@/lib/auth-middleware'
+import logger from '@/lib/logger'
 
 type ScheduledEventWithValidations = {
   id: string
@@ -26,11 +27,13 @@ type ScheduledEventWithValidations = {
 }
 
 function toDayStart(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 0, 0, 0, 0))
+  return new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 0, 0, 0, 0),
+  )
 }
 
 function normalizeDateInput(rawDate: string): Date {
-  if (rawDate.includes("T")) {
+  if (rawDate.includes('T')) {
     return new Date(rawDate)
   }
   return new Date(`${rawDate}T00:00:00.000Z`)
@@ -38,7 +41,7 @@ function normalizeDateInput(rawDate: string): Date {
 
 function buildEndTime(startTime: string | null, durationMinutes: number): string | null {
   if (!startTime) return null
-  const [hoursRaw, minutesRaw] = startTime.split(":")
+  const [hoursRaw, minutesRaw] = startTime.split(':')
   const hours = Number.parseInt(hoursRaw, 10)
   const minutes = Number.parseInt(minutesRaw, 10)
 
@@ -50,7 +53,7 @@ function buildEndTime(startTime: string | null, durationMinutes: number): string
   const endHours = Math.floor((total % (24 * 60)) / 60)
   const endMinutes = total % 60
 
-  return `${String(endHours).padStart(2, "0")}:${String(endMinutes).padStart(2, "0")}`
+  return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`
 }
 
 async function isEventValidated(event: ScheduledEventWithValidations): Promise<boolean> {
@@ -125,7 +128,7 @@ async function moveOverdueUnvalidatedEvents() {
         data: {
           // Tant que la journée courante n'est pas terminée, l'événement doit rester sur aujourd'hui.
           eventDate: todayStart,
-          status: "moved",
+          status: 'moved',
         },
       })
     }
@@ -159,20 +162,20 @@ function mapToClient(event: ScheduledEventWithValidations, currentUserEmail?: st
 }
 
 export async function GET(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
     await moveOverdueUnvalidatedEvents()
 
     const { searchParams } = new URL(request.url)
-    const startDateParam = searchParams.get("start_date")
-    const endDateParam = searchParams.get("end_date")
-    const userEmail = searchParams.get("user_email")
-    const roleId = searchParams.get("role_id")
-    const includeAll = searchParams.get("include_all") === "true"
+    const startDateParam = searchParams.get('start_date')
+    const endDateParam = searchParams.get('end_date')
+    const userEmail = searchParams.get('user_email')
+    const roleId = searchParams.get('role_id')
+    const includeAll = searchParams.get('include_all') === 'true'
 
     const where: any = {}
 
@@ -189,9 +192,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!includeAll) {
-      const visibilityFilters: any[] = [
-        { assignedEmployeeEmail: null, assignedRoleId: null },
-      ]
+      const visibilityFilters: any[] = [{ assignedEmployeeEmail: null, assignedRoleId: null }]
 
       if (userEmail) {
         visibilityFilters.push({ assignedEmployeeEmail: userEmail })
@@ -206,7 +207,7 @@ export async function GET(request: NextRequest) {
 
     const events = await prisma.scheduledEvent.findMany({
       where,
-      orderBy: [{ eventDate: "asc" }, { startTime: "asc" }],
+      orderBy: [{ eventDate: 'asc' }, { startTime: 'asc' }],
       include: {
         validations: {
           select: {
@@ -221,15 +222,18 @@ export async function GET(request: NextRequest) {
     const data = events.map((event) => mapToClient(event, userEmail))
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    console.error("Erreur récupération événements planifiés:", error)
-    return NextResponse.json({ error: "Impossible de récupérer les événements planifiés" }, { status: 500 })
+    logger.error('Erreur récupération événements planifiés', error)
+    return NextResponse.json(
+      { error: 'Impossible de récupérer les événements planifiés' },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
@@ -251,7 +255,7 @@ export async function POST(request: NextRequest) {
 
     if (!title || !eventDate || !createdByEmail) {
       return NextResponse.json(
-        { error: "title, eventDate et createdByEmail sont obligatoires" },
+        { error: 'title, eventDate et createdByEmail sont obligatoires' },
         { status: 400 },
       )
     }
@@ -264,7 +268,7 @@ export async function POST(request: NextRequest) {
 
     if (Array.isArray(assignedEmployeeEmails)) {
       for (const email of assignedEmployeeEmails) {
-        if (typeof email === "string" && email.trim()) {
+        if (typeof email === 'string' && email.trim()) {
           employeeTargets.add(email.trim())
         }
       }
@@ -272,18 +276,18 @@ export async function POST(request: NextRequest) {
 
     if (Array.isArray(assignedRoleIds)) {
       for (const roleId of assignedRoleIds) {
-        if (typeof roleId === "string" && roleId.trim()) {
+        if (typeof roleId === 'string' && roleId.trim()) {
           roleTargets.add(roleId.trim())
         }
       }
     }
 
     // Compatibilité avec l'ancien format (assignation unique).
-    if (typeof assignedEmployeeEmail === "string" && assignedEmployeeEmail.trim()) {
+    if (typeof assignedEmployeeEmail === 'string' && assignedEmployeeEmail.trim()) {
       employeeTargets.add(assignedEmployeeEmail.trim())
     }
 
-    if (typeof assignedRoleId === "string" && assignedRoleId.trim()) {
+    if (typeof assignedRoleId === 'string' && assignedRoleId.trim()) {
       roleTargets.add(assignedRoleId.trim())
     }
 
@@ -304,7 +308,7 @@ export async function POST(request: NextRequest) {
     } else {
       for (const email of employeeTargets) {
         targets.push({
-          assignType: "employee",
+          assignType: 'employee',
           assignedTo: email,
           assignedEmployeeEmail: email,
           assignedRoleId: null,
@@ -312,7 +316,7 @@ export async function POST(request: NextRequest) {
       }
       for (const roleId of roleTargets) {
         targets.push({
-          assignType: "role",
+          assignType: 'role',
           assignedTo: roleId,
           assignedEmployeeEmail: null,
           assignedRoleId: roleId,
@@ -334,7 +338,7 @@ export async function POST(request: NextRequest) {
             assignedEmployeeEmail: target.assignedEmployeeEmail,
             assignedRoleId: target.assignedRoleId,
             requiresValidation: Boolean(requiresValidation),
-            status: Boolean(requiresValidation) ? "pending" : "validated",
+            status: Boolean(requiresValidation) ? 'pending' : 'validated',
             createdByEmail,
           },
           include: {
@@ -358,15 +362,15 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error("Erreur création événement planifié:", error)
+    logger.error('Erreur création événement planifié', error)
     return NextResponse.json({ error: "Impossible de créer l'événement planifié" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
@@ -374,7 +378,7 @@ export async function DELETE(request: NextRequest) {
     const { title, eventDate, startTime, createdByEmail } = body || {}
 
     if (!title || !eventDate) {
-      return NextResponse.json({ error: "title et eventDate sont obligatoires" }, { status: 400 })
+      return NextResponse.json({ error: 'title et eventDate sont obligatoires' }, { status: 400 })
     }
 
     const normalizedDate = normalizeDateInput(eventDate)
@@ -390,12 +394,12 @@ export async function DELETE(request: NextRequest) {
       },
     }
 
-    const normalizedStartTime = typeof startTime === "string" ? startTime.trim() : ""
+    const normalizedStartTime = typeof startTime === 'string' ? startTime.trim() : ''
     if (normalizedStartTime) {
       where.startTime = normalizedStartTime
     }
 
-    if (typeof createdByEmail === "string" && createdByEmail.trim()) {
+    if (typeof createdByEmail === 'string' && createdByEmail.trim()) {
       where.createdByEmail = createdByEmail.trim()
     }
 
@@ -403,7 +407,10 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ deletedCount: deleted.count }, { status: 200 })
   } catch (error) {
-    console.error("Erreur suppression événements planifiés:", error)
-    return NextResponse.json({ error: "Impossible de supprimer les événements planifiés" }, { status: 500 })
+    logger.error('Erreur suppression événements planifiés', error)
+    return NextResponse.json(
+      { error: 'Impossible de supprimer les événements planifiés' },
+      { status: 500 },
+    )
   }
 }

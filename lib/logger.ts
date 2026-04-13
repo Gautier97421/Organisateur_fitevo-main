@@ -10,21 +10,21 @@ export const logger = {
       console.log(...args)
     }
   },
-  
+
   // Debug - uniquement en développement
   debug: (...args: any[]) => {
     if (isDevelopment) {
       console.log('[DEBUG]', ...args)
     }
   },
-  
+
   // Info - uniquement en développement
   info: (...args: any[]) => {
     if (isDevelopment) {
       console.info('[INFO]', ...args)
     }
   },
-  
+
   // Warning - loggé en production aussi (sans détails sensibles)
   warn: (...args: any[]) => {
     if (isDevelopment) {
@@ -32,7 +32,7 @@ export const logger = {
     }
     // En production, on pourrait envoyer à un service de monitoring
   },
-  
+
   // Erreur - toujours loggée mais sans exposer de détails sensibles
   error: (message: string, error?: any) => {
     if (isDevelopment) {
@@ -43,7 +43,7 @@ export const logger = {
       // Ici on pourrait envoyer à Sentry, LogRocket, etc.
     }
   },
-  
+
   // Erreur critique - toujours loggée
   critical: (message: string, error?: any) => {
     console.error('[CRITICAL]', message)
@@ -51,7 +51,7 @@ export const logger = {
       console.error(error)
     }
     // En production, envoyer une alerte
-  }
+  },
 }
 
 // Export par défaut

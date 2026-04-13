@@ -1,4 +1,4 @@
-import { LoginForm } from "@/components/auth/login-form"
+import { LoginForm } from '@/components/auth/login-form'
 
 export default function HomePage() {
   return (
@@ -9,7 +9,7 @@ export default function HomePage() {
           className="absolute inset-[-50%] -rotate-45 bg-repeat"
           style={{
             backgroundImage: "url('/logo_fitevo-remove.png')",
-            backgroundSize: "180px 180px",
+            backgroundSize: '180px 180px',
           }}
         />
       </div>

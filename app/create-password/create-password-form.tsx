@@ -1,23 +1,23 @@
-"use client"
+'use client'
 
-import type React from "react"
+import type React from 'react'
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Eye, EyeOff, Check, X, Key } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Eye, EyeOff, Check, X, Key } from 'lucide-react'
 
 export function CreatePasswordForm() {
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [email, setEmail] = useState("")
+  const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -26,14 +26,19 @@ export function CreatePasswordForm() {
     hasLetter: /[a-zA-Z]/.test(password),
     hasNumber: /\d/.test(password),
     isValid: password.length >= 6 && /[a-zA-Z]/.test(password) && /\d/.test(password),
-    strength: password.length < 6 ? "weak" : /[a-zA-Z]/.test(password) && /\d/.test(password) ? "strong" : "medium"
+    strength:
+      password.length < 6
+        ? 'weak'
+        : /[a-zA-Z]/.test(password) && /\d/.test(password)
+          ? 'strong'
+          : 'medium',
   }
   const passwordsMatch = password === confirmPassword && password.length > 0
 
   useEffect(() => {
-    const emailParam = searchParams.get("email")
+    const emailParam = searchParams.get('email')
     if (!emailParam) {
-      router.push("/")
+      router.push('/')
       return
     }
     setEmail(emailParam)
@@ -43,12 +48,12 @@ export function CreatePasswordForm() {
     e.preventDefault()
 
     if (!validation.isValid || !passwordsMatch) {
-      setError("Veuillez corriger les erreurs avant de continuer")
+      setError('Veuillez corriger les erreurs avant de continuer')
       return
     }
 
     setIsLoading(true)
-    setError("")
+    setError('')
 
     try {
       // Mettre à jour le mot de passe via l'API
@@ -65,7 +70,7 @@ export function CreatePasswordForm() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || "Erreur lors de la création du mot de passe")
+        throw new Error(data.error || 'Erreur lors de la création du mot de passe')
       }
 
       // Maintenant se connecter automatiquement
@@ -80,24 +85,24 @@ export function CreatePasswordForm() {
       const loginData = await loginResponse.json()
 
       if (!loginResponse.ok) {
-        throw new Error(loginData.error || "Erreur de connexion")
+        throw new Error(loginData.error || 'Erreur de connexion')
       }
 
       // Stocker les informations de l'utilisateur
-      localStorage.setItem("userId", loginData.user.id)
-      localStorage.setItem("userEmail", loginData.user.email)
-      localStorage.setItem("userName", loginData.user.name)
-      localStorage.setItem("userRole", loginData.user.role)
-      localStorage.setItem("isSuperAdmin", loginData.user.isSuperAdmin.toString())
+      localStorage.setItem('userId', loginData.user.id)
+      localStorage.setItem('userEmail', loginData.user.email)
+      localStorage.setItem('userName', loginData.user.name)
+      localStorage.setItem('userRole', loginData.user.role)
+      localStorage.setItem('isSuperAdmin', loginData.user.isSuperAdmin.toString())
 
       // Rediriger selon le rôle
       if (loginData.user.role === 'employee') {
-        router.push("/employee")
+        router.push('/employee')
       } else {
-        router.push("/admin")
+        router.push('/admin')
       }
     } catch (err: any) {
-      setError(err.message || "Erreur lors de la création du mot de passe. Veuillez réessayer.")
+      setError(err.message || 'Erreur lors de la création du mot de passe. Veuillez réessayer.')
     } finally {
       setIsLoading(false)
     }
@@ -122,7 +127,9 @@ export function CreatePasswordForm() {
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Email: <strong>{email}</strong>
           </p>
-          <p className="text-sm text-gray-500">Créez un mot de passe sécurisé pour votre première connexion</p>
+          <p className="text-sm text-gray-500">
+            Créez un mot de passe sécurisé pour votre première connexion
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
           {error && (
@@ -137,7 +144,7 @@ export function CreatePasswordForm() {
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Créez un mot de passe sécurisé"
@@ -164,7 +171,7 @@ export function CreatePasswordForm() {
               <div className="relative">
                 <Input
                   id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmez votre mot de passe"
@@ -188,7 +195,9 @@ export function CreatePasswordForm() {
 
             {/* Indicateurs de validation */}
             <div className="space-y-2 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Critères du mot de passe :</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Critères du mot de passe :
+              </p>
               <div className="space-y-1">
                 <div className="flex items-center space-x-2 text-sm">
                   {validation.minLength ? (
@@ -198,7 +207,9 @@ export function CreatePasswordForm() {
                   )}
                   <span
                     className={
-                      validation.minLength ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                      validation.minLength
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-red-700 dark:text-red-400'
                     }
                   >
                     Au moins 6 caractères
@@ -213,8 +224,8 @@ export function CreatePasswordForm() {
                   <span
                     className={
                       validation.hasLetter
-                        ? "text-green-700 dark:text-green-400"
-                        : "text-red-700 dark:text-red-400"
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-red-700 dark:text-red-400'
                     }
                   >
                     Au moins une lettre
@@ -228,7 +239,9 @@ export function CreatePasswordForm() {
                   )}
                   <span
                     className={
-                      validation.hasNumber ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                      validation.hasNumber
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-red-700 dark:text-red-400'
                     }
                   >
                     Au moins un chiffre
@@ -241,7 +254,11 @@ export function CreatePasswordForm() {
                     <X className="h-4 w-4 text-red-500" />
                   )}
                   <span
-                    className={passwordsMatch ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}
+                    className={
+                      passwordsMatch
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-red-700 dark:text-red-400'
+                    }
                   >
                     Les mots de passe correspondent
                   </span>
@@ -256,24 +273,28 @@ export function CreatePasswordForm() {
                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className={`h-2 rounded-full transition-all duration-300 ${
-                          validation.strength === "weak"
-                            ? "w-1/3 bg-red-500"
-                            : validation.strength === "medium"
-                              ? "w-2/3 bg-yellow-500"
-                              : "w-full bg-green-500"
+                          validation.strength === 'weak'
+                            ? 'w-1/3 bg-red-500'
+                            : validation.strength === 'medium'
+                              ? 'w-2/3 bg-yellow-500'
+                              : 'w-full bg-green-500'
                         }`}
                       />
                     </div>
                     <span
                       className={`text-sm font-medium ${
-                        validation.strength === "weak"
-                          ? "text-red-600 dark:text-red-400"
-                          : validation.strength === "medium"
-                            ? "text-yellow-600 dark:text-yellow-400"
-                            : "text-green-600 dark:text-green-400"
+                        validation.strength === 'weak'
+                          ? 'text-red-600 dark:text-red-400'
+                          : validation.strength === 'medium'
+                            ? 'text-yellow-600 dark:text-yellow-400'
+                            : 'text-green-600 dark:text-green-400'
                       }`}
                     >
-                      {validation.strength === "weak" ? "Faible" : validation.strength === "medium" ? "Moyen" : "Fort"}
+                      {validation.strength === 'weak'
+                        ? 'Faible'
+                        : validation.strength === 'medium'
+                          ? 'Moyen'
+                          : 'Fort'}
                     </span>
                   </div>
                 </div>

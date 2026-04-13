@@ -13,7 +13,7 @@ export const theme = {
   gradients: {
     primary: 'from-red-600 to-black',
     primaryReverse: 'from-black to-red-600',
-  }
+  },
 }
 
 // Classes utilitaires

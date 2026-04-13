@@ -1,15 +1,37 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle, CalendarDays, MapPin, Edit2, Trash2 } from "lucide-react"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Calendar,
+  Clock,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  ArrowLeft,
+  Bell,
+  CheckCircle,
+  XCircle,
+  CalendarDays,
+  MapPin,
+  Edit2,
+  Trash2,
+} from 'lucide-react'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 import {
   Dialog,
   DialogContent,
@@ -17,8 +39,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { supabase } from "@/lib/api-client"
+} from '@/components/ui/dialog'
 
 interface CalendarEvent {
   id: string
@@ -30,9 +51,9 @@ interface CalendarEvent {
   duration_minutes: number
   created_by_email: string
   created_by_name: string
-  status: "pending" | "approved" | "rejected" | "moved" | "validated" | string
+  status: 'pending' | 'approved' | 'rejected' | 'moved' | 'validated' | string
   requires_validation?: boolean
-  scheduled_status?: "pending" | "moved" | "validated" | string
+  scheduled_status?: 'pending' | 'moved' | 'validated' | string
   scheduled_requires_validation?: boolean
   scheduled_assigned_employee_emails?: string[]
   scheduled_assigned_role_ids?: string[]
@@ -67,12 +88,12 @@ interface RoleOption {
 export function CalendarManager() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeView, setActiveView] = useState<"calendar" | "list" | "pending">("calendar")
-  const [calendarView, setCalendarView] = useState<"year" | "month">("year")
+  const [activeView, setActiveView] = useState<'calendar' | 'list' | 'pending'>('calendar')
+  const [calendarView, setCalendarView] = useState<'year' | 'month'>('year')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedMonth, setSelectedMonth] = useState<Date | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [rejectionReason, setRejectionReason] = useState("")
+  const [rejectionReason, setRejectionReason] = useState('')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [showRejectionDialog, setShowRejectionDialog] = useState(false)
   const [showApproveConfirmDialog, setShowApproveConfirmDialog] = useState(false)
@@ -92,10 +113,10 @@ export function CalendarManager() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [newEvent, setNewEvent] = useState({
-    title: "",
-    description: "",
-    location: "",
-    event_time: "",
+    title: '',
+    description: '',
+    location: '',
+    event_time: '',
     duration_minutes: 60,
     assigned_employee_emails: [] as string[],
     assigned_role_ids: [] as string[],
@@ -103,24 +124,24 @@ export function CalendarManager() {
   })
   const [reminderSettings, setReminderSettings] = useState({
     days_before: 1,
-    recipient_type: "all" as "all" | "admins" | "employees",
-    custom_message: "",
+    recipient_type: 'all' as 'all' | 'admins' | 'employees',
+    custom_message: '',
   })
 
   const normalizeDateOnly = (value: string): string => {
-    if (!value) return ""
-    return value.includes("T") ? value.split("T")[0] : value
+    if (!value) return ''
+    return value.includes('T') ? value.split('T')[0] : value
   }
 
   const toLocalDateOnly = (value: string): string => {
-    if (!value) return ""
+    if (!value) return ''
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) {
       return normalizeDateOnly(value)
     }
     const year = parsed.getFullYear()
-    const month = String(parsed.getMonth() + 1).padStart(2, "0")
-    const day = String(parsed.getDate()).padStart(2, "0")
+    const month = String(parsed.getMonth() + 1).padStart(2, '0')
+    const day = String(parsed.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   }
 
@@ -131,7 +152,7 @@ export function CalendarManager() {
   }
 
   const normalizeTimeOnly = (value?: string | null): string => {
-    if (!value) return ""
+    if (!value) return ''
     const trimmed = value.trim()
     return trimmed.length >= 5 ? trimmed.slice(0, 5) : trimmed
   }
@@ -140,9 +161,9 @@ export function CalendarManager() {
     return value
       .trim()
       .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
   }
 
   const buildEventKey = (
@@ -154,31 +175,31 @@ export function CalendarManager() {
     includeEmail: boolean,
   ): string => {
     const normalizedEmail = createdByEmail.trim().toLowerCase()
-    return `${normalizeTitle(title)}|${date}|${includeTime ? time : "*"}|${includeEmail ? normalizedEmail : "*"}`
+    return `${normalizeTitle(title)}|${date}|${includeTime ? time : '*'}|${includeEmail ? normalizedEmail : '*'}`
   }
 
   const getStatusPriority = (status: string): number => {
-    if (status === "moved") return 3
-    if (status === "validated") return 2
-    if (status === "pending") return 1
+    if (status === 'moved') return 3
+    if (status === 'validated') return 2
+    if (status === 'pending') return 1
     return 0
   }
 
   const getAuthHeaders = (): Record<string, string> => {
-    if (typeof window === "undefined") {
+    if (typeof window === 'undefined') {
       return {}
     }
 
-    const userId = localStorage.getItem("userId") || ""
-    const userEmail = localStorage.getItem("userEmail") || ""
+    const userId = localStorage.getItem('userId') || ''
+    const userEmail = localStorage.getItem('userEmail') || ''
     const headers: Record<string, string> = {}
 
     if (userId) {
-      headers["x-user-id"] = userId
+      headers['x-user-id'] = userId
     }
 
     if (userEmail) {
-      headers["x-user-email"] = userEmail
+      headers['x-user-email'] = userEmail
     }
 
     return headers
@@ -207,7 +228,7 @@ export function CalendarManager() {
     })
 
     const labels = [...employeeLabels, ...roleLabels]
-    return labels.length > 0 ? labels.join(", ") : "Non assigne"
+    return labels.length > 0 ? labels.join(', ') : 'Non assigne'
   }
 
   const mergeCalendarWithScheduledStatuses = (
@@ -236,7 +257,7 @@ export function CalendarManager() {
 
     for (const item of scheduledEvents) {
       const time = normalizeTimeOnly(item.start_time)
-      const email = (item.created_by_email || "").trim().toLowerCase()
+      const email = (item.created_by_email || '').trim().toLowerCase()
       const dateCandidates = getDateCandidates(item.event_date)
 
       for (const date of dateCandidates) {
@@ -256,7 +277,7 @@ export function CalendarManager() {
             mergedEmployeeEmails.add(item.assigned_employee_email)
           }
 
-          if (item.assign_type === "employee" && item.assigned_to) {
+          if (item.assign_type === 'employee' && item.assigned_to) {
             mergedEmployeeEmails.add(item.assigned_to)
           }
 
@@ -264,7 +285,7 @@ export function CalendarManager() {
             mergedRoleIds.add(item.assigned_role_id)
           }
 
-          if (item.assign_type === "role" && item.assigned_to) {
+          if (item.assign_type === 'role' && item.assigned_to) {
             mergedRoleIds.add(item.assigned_to)
           }
 
@@ -275,7 +296,8 @@ export function CalendarManager() {
 
           statusMap.set(key, {
             status: resolvedStatus,
-            requires_validation: (current?.requires_validation || false) || Boolean(item.requires_validation),
+            requires_validation:
+              current?.requires_validation || false || Boolean(item.requires_validation),
             assigned_employee_emails: Array.from(mergedEmployeeEmails),
             assigned_role_ids: Array.from(mergedRoleIds),
           })
@@ -294,14 +316,15 @@ export function CalendarManager() {
           }
 
           const fallbackStatus =
-            !fallbackCurrent || getStatusPriority(item.status) >= getStatusPriority(fallbackCurrent.status)
+            !fallbackCurrent ||
+            getStatusPriority(item.status) >= getStatusPriority(fallbackCurrent.status)
               ? item.status
               : fallbackCurrent.status
 
           statusFallbackMap.set(fallbackKey, {
             status: fallbackStatus,
             requires_validation:
-              (fallbackCurrent?.requires_validation || false) || Boolean(item.requires_validation),
+              fallbackCurrent?.requires_validation || false || Boolean(item.requires_validation),
             assigned_employee_emails: Array.from(fallbackEmployees),
             assigned_role_ids: Array.from(fallbackRoles),
           })
@@ -316,7 +339,7 @@ export function CalendarManager() {
     return calendarEvents.map((event) => {
       const date = normalizeDateOnly(event.event_date)
       const time = normalizeTimeOnly(event.event_time)
-      const email = (event.created_by_email || "").trim().toLowerCase()
+      const email = (event.created_by_email || '').trim().toLowerCase()
 
       const match =
         statusMap.get(buildEventKey(event.title, date, time, email, true, true)) ||
@@ -339,18 +362,21 @@ export function CalendarManager() {
     })
   }
 
-  const fetchScheduledEventsInRange = async (startDate: string, endDate: string): Promise<ScheduledEventApiItem[]> => {
+  const fetchScheduledEventsInRange = async (
+    startDate: string,
+    endDate: string,
+  ): Promise<ScheduledEventApiItem[]> => {
     try {
       const response = await fetch(
         `/api/db/scheduled-events?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&include_all=true`,
         {
-          cache: "no-store",
+          cache: 'no-store',
           headers: getAuthHeaders(),
         },
       )
 
       if (!response.ok) {
-        console.warn("Impossible de charger les statuts des événements planifiés:", response.status)
+        console.warn('Impossible de charger les statuts des événements planifiés:', response.status)
         return []
       }
 
@@ -362,7 +388,7 @@ export function CalendarManager() {
   }
 
   const isEventPast = (eventDateRaw: string): boolean => {
-    const today = new Date().toISOString().split("T")[0]
+    const today = new Date().toISOString().split('T')[0]
     const eventDate = normalizeDateOnly(eventDateRaw)
     return eventDate < today
   }
@@ -382,15 +408,15 @@ export function CalendarManager() {
     }
 
     try {
-      const { error } = await supabase.from("calendar_events").delete().eq("id", event.id)
-      if (error) {
-        throw error
+      const delResponse = await fetch(`/api/db/calendar_events/${event.id}`, { method: 'DELETE' })
+      if (!delResponse.ok) {
+        throw new Error('Erreur suppression')
       }
 
-      const scheduledDeleteResponse = await fetch("/api/db/scheduled-events", {
-        method: "DELETE",
+      const scheduledDeleteResponse = await fetch('/api/db/scheduled-events', {
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
@@ -402,10 +428,10 @@ export function CalendarManager() {
       })
 
       if (!scheduledDeleteResponse.ok) {
-        console.warn("Suppression scheduled-events echouee:", scheduledDeleteResponse.status)
+        console.warn('Suppression scheduled-events echouee:', scheduledDeleteResponse.status)
       }
 
-      if (calendarView === "year") {
+      if (calendarView === 'year') {
         await loadEvents()
       } else if (selectedMonth) {
         await loadMonthEvents()
@@ -418,8 +444,8 @@ export function CalendarManager() {
 
       setShowDeleteConfirmDialog(false)
       setEventToDelete(null)
-    } catch (error) {
-      console.error("Erreur suppression evenement:", error)
+    } catch {
+      // Delete error handled silently
     }
   }
 
@@ -430,25 +456,17 @@ export function CalendarManager() {
       const startDate = toLocalDateOnly(startOfYear.toISOString())
       const endDate = toLocalDateOnly(endOfYear.toISOString())
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startDate)
-        .lte("event_date", endDate)
-        .order("event_date", { ascending: true })
+      const eventsResponse = await fetch(
+        `/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}&orderBy=event_date&orderDir=asc`,
+      )
+      if (!eventsResponse.ok) throw new Error('Erreur chargement événements')
+      const eventsResult = await eventsResponse.json()
+      const data = eventsResult.data || []
 
-      if (error) throw error
-      
-      // Debug pour voir les données
-      console.log("Events chargés:", data)
-      if (data && data.length > 0) {
-        console.log("Premier event - created_by_name:", data[0].created_by_name, "created_by_email:", data[0].created_by_email)
-      }
-      
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
-    } catch (error) {
-      console.error("Erreur chargement events:", error)
+      setEvents(mergeCalendarWithScheduledStatuses(data, scheduledEvents))
+    } catch {
+      // Events load error handled silently
     } finally {
       setIsLoading(false)
     }
@@ -456,20 +474,22 @@ export function CalendarManager() {
 
   const loadAssignmentOptions = async () => {
     try {
-      const [employeesResult, rolesResult] = await Promise.all([
-        supabase.from("employees").select("id,name,email").eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("roles").select("id,name").order("name", { ascending: true }),
+      const [empResponse, rolesResponse] = await Promise.all([
+        fetch('/api/db/employees?is_active=true&orderBy=name&orderDir=asc'),
+        fetch('/api/db/roles?orderBy=name&orderDir=asc'),
       ])
 
-      if (!employeesResult.error) {
-        setEmployees(Array.isArray(employeesResult.data) ? employeesResult.data : [])
+      if (empResponse.ok) {
+        const empResult = await empResponse.json()
+        setEmployees(Array.isArray(empResult.data) ? empResult.data : [])
       }
 
-      if (!rolesResult.error) {
+      if (rolesResponse.ok) {
+        const rolesResult = await rolesResponse.json()
         setRoles(Array.isArray(rolesResult.data) ? rolesResult.data : [])
       }
-    } catch (error) {
-      console.error("Erreur chargement options d'assignation:", error)
+    } catch {
+      // Assignment options load failed silently
     }
   }
 
@@ -482,24 +502,21 @@ export function CalendarManager() {
       const startDate = toLocalDateOnly(startOfMonth.toISOString())
       const endDate = toLocalDateOnly(endOfMonth.toISOString())
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("event_date", startDate)
-        .lte("event_date", endDate)
-        .order("event_date", { ascending: true })
-
-      if (error) throw error
+      const monthEventsResponse = await fetch(
+        `/api/db/calendar_events?event_date_gte=${startDate}&event_date_lte=${endDate}&orderBy=event_date&orderDir=asc`,
+      )
+      if (!monthEventsResponse.ok) throw new Error('Erreur chargement événements')
+      const monthEventsResult = await monthEventsResponse.json()
 
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
+      setEvents(mergeCalendarWithScheduledStatuses(monthEventsResult.data || [], scheduledEvents))
     } catch (error) {
       // Erreur silencieuse
     }
   }
 
   useEffect(() => {
-    if (calendarView === "year") {
+    if (calendarView === 'year') {
       loadEvents()
     } else if (selectedMonth) {
       loadMonthEvents()
@@ -511,13 +528,17 @@ export function CalendarManager() {
   }, [])
 
   // Rafraîchissement automatique toutes les 15 secondes
-  useAutoRefresh(() => {
-    if (calendarView === "year") {
-      loadEvents()
-    } else if (selectedMonth) {
-      loadMonthEvents()
-    }
-  }, 15000, [calendarView, selectedMonth])
+  useAutoRefresh(
+    () => {
+      if (calendarView === 'year') {
+        loadEvents()
+      } else if (selectedMonth) {
+        loadMonthEvents()
+      }
+    },
+    15000,
+    [calendarView, selectedMonth],
+  )
 
   const addEvent = async () => {
     setAttemptedSubmit(true)
@@ -531,15 +552,16 @@ export function CalendarManager() {
     }
 
     try {
-      const userEmail = localStorage.getItem("userEmail") || ""
-      const userName = localStorage.getItem("userName") || ""
+      const userEmail = localStorage.getItem('userEmail') || ''
+      const userName = localStorage.getItem('userName') || ''
 
-      const userId = localStorage.getItem("userId")
-      
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .insert([
-          {
+      const userId = localStorage.getItem('userId')
+
+      const insertResponse = await fetch('/api/db/calendar_events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
             title: newEvent.title,
             description: newEvent.description,
             location: newEvent.location,
@@ -548,17 +570,18 @@ export function CalendarManager() {
             duration_minutes: newEvent.duration_minutes,
             created_by_email: userEmail,
             created_by_name: userName,
-            status: "approved",
+            status: 'approved',
             user_id: userId,
           },
-        ])
+        }),
+      })
 
-      if (error) throw error
+      if (!insertResponse.ok) throw new Error('Erreur création événement')
 
-      const scheduledResponse = await fetch("/api/db/scheduled-events", {
-        method: "POST",
+      const scheduledResponse = await fetch('/api/db/scheduled-events', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
@@ -575,22 +598,21 @@ export function CalendarManager() {
       })
 
       if (!scheduledResponse.ok) {
-        console.error("Creation scheduled-events echouee:", scheduledResponse.status)
         throw new Error("Impossible d'enregistrer l'assignation planifiee")
       }
 
       // Recharger les événements après l'ajout
-      if (calendarView === "year") {
+      if (calendarView === 'year') {
         await loadEvents()
       } else if (selectedMonth) {
         await loadMonthEvents()
       }
 
       setNewEvent({
-        title: "",
-        description: "",
-        location: "",
-        event_time: "",
+        title: '',
+        description: '',
+        location: '',
+        event_time: '',
         duration_minutes: 60,
         assigned_employee_emails: [],
         assigned_role_ids: [],
@@ -599,8 +621,8 @@ export function CalendarManager() {
       setShowAddEventDialog(false)
       setSelectedDate(null)
       setAttemptedSubmit(false)
-    } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
+    } catch {
+      // Event add error handled silently
     }
   }
 
@@ -613,20 +635,21 @@ export function CalendarManager() {
     }
 
     try {
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
+      const editResponse = await fetch(`/api/db/calendar_events/${eventToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
-        })
-        .eq("id", eventToEdit.id)
+        }),
+      })
 
-      if (error) throw error
+      if (!editResponse.ok) throw new Error('Erreur modification')
 
-      if (calendarView === "year") {
+      if (calendarView === 'year') {
         await loadEvents()
       } else if (selectedMonth) {
         await loadMonthEvents()
@@ -635,41 +658,48 @@ export function CalendarManager() {
       setShowEditEventDialog(false)
       setEventToEdit(null)
       setNewEvent({
-        title: "",
-        description: "",
-        location: "",
-        event_time: "",
+        title: '',
+        description: '',
+        location: '',
+        event_time: '',
         duration_minutes: 60,
         assigned_employee_emails: [],
         assigned_role_ids: [],
         requires_validation: false,
       })
       setAttemptedSubmit(false)
-    } catch (error) {
-      console.error("Erreur lors de la modification:", error)
+    } catch {
+      // Event edit error handled silently
     }
   }
 
   const approveEvent = async (eventId: string): Promise<boolean> => {
     try {
-      const adminEmail = localStorage.getItem("userEmail")
-      const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
+      const adminEmail = localStorage.getItem('userEmail')
+      const adminResponse = await fetch(
+        `/api/db/admins?email=${encodeURIComponent(adminEmail || '')}&single=true`,
+      )
+      const adminResult = adminResponse.ok ? await adminResponse.json() : { data: null }
 
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
-          status: "approved",
-          approved_by: admin?.id,
+      const approveResponse = await fetch(`/api/db/calendar_events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'approved',
+          approved_by: adminResult.data?.id,
           approved_at: new Date().toISOString(),
-        })
-        .eq("id", eventId)
+        }),
+      })
 
-      if (error) throw error
+      if (!approveResponse.ok) throw new Error('Erreur approbation')
 
-      setEvents(events.map((event) => (event.id === eventId ? { ...event, status: "approved" as const } : event)))
+      setEvents(
+        events.map((event) =>
+          event.id === eventId ? { ...event, status: 'approved' as const } : event,
+        ),
+      )
       return true
-    } catch (error) {
-      console.error("Erreur lors de l'approbation:", error)
+    } catch {
       return false
     }
   }
@@ -698,32 +728,38 @@ export function CalendarManager() {
 
   const rejectEvent = async (eventId: string, reason: string) => {
     try {
-      const adminEmail = localStorage.getItem("userEmail")
-      const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
+      const adminEmail = localStorage.getItem('userEmail')
+      const adminResponse = await fetch(
+        `/api/db/admins?email=${encodeURIComponent(adminEmail || '')}&single=true`,
+      )
+      const adminResult = adminResponse.ok ? await adminResponse.json() : { data: null }
 
-      const { error } = await supabase
-        .from("calendar_events")
-        .update({
-          status: "rejected",
-          approved_by: admin?.id,
+      const rejectResponse = await fetch(`/api/db/calendar_events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'rejected',
+          approved_by: adminResult.data?.id,
           approved_at: new Date().toISOString(),
           rejection_reason: reason,
-        })
-        .eq("id", eventId)
+        }),
+      })
 
-      if (error) throw error
+      if (!rejectResponse.ok) throw new Error('Erreur refus')
 
       setEvents(
         events.map((event) =>
-          event.id === eventId ? { ...event, status: "rejected" as const, rejection_reason: reason } : event,
+          event.id === eventId
+            ? { ...event, status: 'rejected' as const, rejection_reason: reason }
+            : event,
         ),
       )
 
-      setRejectionReason("")
+      setRejectionReason('')
       setSelectedEventId(null)
       setShowRejectionDialog(false)
-    } catch (error) {
-      console.error("Erreur lors du refus:", error)
+    } catch {
+      // Reject error handled silently
     }
   }
 
@@ -733,34 +769,38 @@ export function CalendarManager() {
       if (!event) return
 
       const reminderDate = new Date(event.event_date)
-      
+
       // Valider que la date est valide
       if (isNaN(reminderDate.getTime())) {
         return
       }
-      
+
       reminderDate.setDate(reminderDate.getDate() - reminderSettings.days_before)
 
-      const { error } = await supabase.from("event_reminders").insert([
-        {
-          event_id: eventId,
-          reminder_date: reminderDate.toISOString().split("T")[0],
-          recipient_type: reminderSettings.recipient_type,
-          custom_message: reminderSettings.custom_message,
-          created_by: localStorage.getItem("userEmail"),
-        },
-      ])
+      const reminderResponse = await fetch('/api/db/event_reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            event_id: eventId,
+            reminder_date: reminderDate.toISOString().split('T')[0],
+            recipient_type: reminderSettings.recipient_type,
+            custom_message: reminderSettings.custom_message,
+            created_by: localStorage.getItem('userEmail'),
+          },
+        }),
+      })
 
-      if (error) throw error
+      if (!reminderResponse.ok) throw new Error('Erreur ajout rappel')
 
       setShowReminderDialog(false)
       setReminderSettings({
         days_before: 1,
-        recipient_type: "all",
-        custom_message: "",
+        recipient_type: 'all',
+        custom_message: '',
       })
-    } catch (error) {
-      console.error("Erreur lors de l'ajout du rappel:", error)
+    } catch {
+      // Reminder add error handled silently
     }
   }
 
@@ -790,7 +830,7 @@ export function CalendarManager() {
 
   const getEventsForDate = (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) return []
-    
+
     const dateString = toLocalDateOnly(date.toISOString())
     return events.filter((event) => {
       try {
@@ -811,7 +851,7 @@ export function CalendarManager() {
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    
+
     // Ajuster pour commencer le lundi (0 = dimanche, 1 = lundi, etc.)
     // Si dimanche (0), on le transforme en 6 (dernier jour de la semaine)
     let startingDayOfWeek = firstDay.getDay() - 1
@@ -842,21 +882,31 @@ export function CalendarManager() {
     return days
   }
 
-  const navigateYear = (direction: "prev" | "next") => {
-    setCurrentDate(new Date(currentDate.getFullYear() + (direction === "next" ? 1 : -1), currentDate.getMonth(), 1))
+  const navigateYear = (direction: 'prev' | 'next') => {
+    setCurrentDate(
+      new Date(
+        currentDate.getFullYear() + (direction === 'next' ? 1 : -1),
+        currentDate.getMonth(),
+        1,
+      ),
+    )
   }
 
-  const navigateMonth = (direction: "prev" | "next") => {
+  const navigateMonth = (direction: 'prev' | 'next') => {
     if (selectedMonth) {
       setSelectedMonth(
-        new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + (direction === "next" ? 1 : -1), 1),
+        new Date(
+          selectedMonth.getFullYear(),
+          selectedMonth.getMonth() + (direction === 'next' ? 1 : -1),
+          1,
+        ),
       )
     }
   }
 
   const handleMonthClick = (month: Date) => {
     setSelectedMonth(month)
-    setCalendarView("month")
+    setCalendarView('month')
   }
 
   const handleDateClick = (date: Date) => {
@@ -865,34 +915,42 @@ export function CalendarManager() {
   }
 
   const backToYear = () => {
-    setCalendarView("year")
+    setCalendarView('year')
     setSelectedMonth(null)
   }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "approved":
+      case 'approved':
         return (
-          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"><CheckCircle className="h-4 w-4" /> Approuvé</Badge>
+          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+            <CheckCircle className="h-4 w-4" /> Approuvé
+          </Badge>
         )
-      case "validated":
+      case 'validated':
         return (
-          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400"><CheckCircle className="h-4 w-4" /> Validé</Badge>
+          <Badge className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+            <CheckCircle className="h-4 w-4" /> Validé
+          </Badge>
         )
-      case "moved":
+      case 'moved':
         return (
           <Badge className="flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400">
             <Clock className="h-4 w-4" /> Reporté (non validé)
           </Badge>
         )
-      case "pending":
+      case 'pending':
         return (
           <Badge className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
             <Clock className="h-4 w-4" /> En attente
           </Badge>
         )
-      case "rejected":
-        return <Badge className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"><XCircle className="h-4 w-4" /> Refusé</Badge>
+      case 'rejected':
+        return (
+          <Badge className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400">
+            <XCircle className="h-4 w-4" /> Refusé
+          </Badge>
+        )
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -900,60 +958,62 @@ export function CalendarManager() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
-        return "bg-green-500 dark:bg-green-600"
-      case "validated":
-        return "bg-green-500 dark:bg-green-600"
-      case "moved":
-        return "bg-orange-500 dark:bg-orange-600"
-      case "pending":
-        return "bg-yellow-500 dark:bg-yellow-600"
-      case "rejected":
-        return "bg-red-500 dark:bg-red-600"
+      case 'approved':
+        return 'bg-green-500 dark:bg-green-600'
+      case 'validated':
+        return 'bg-green-500 dark:bg-green-600'
+      case 'moved':
+        return 'bg-orange-500 dark:bg-orange-600'
+      case 'pending':
+        return 'bg-yellow-500 dark:bg-yellow-600'
+      case 'rejected':
+        return 'bg-red-500 dark:bg-red-600'
       default:
-        return "bg-gray-500 dark:bg-gray-600"
+        return 'bg-gray-500 dark:bg-gray-600'
     }
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     })
   }
 
   const formatTime = (timeString?: string) => {
-    if (!timeString) return "Heure non précisée"
+    if (!timeString) return 'Heure non précisée'
     return timeString.slice(0, 5)
   }
 
-  const pendingEvents = events.filter((e) => e.status === "pending")
+  const pendingEvents = events.filter((e) => e.status === 'pending')
   const pendingCount = pendingEvents.length
 
   const monthNames = [
-    "Janvier",
-    "Février",
-    "Mars",
-    "Avril",
-    "Mai",
-    "Juin",
-    "Juillet",
-    "Août",
-    "Septembre",
-    "Octobre",
-    "Novembre",
-    "Décembre",
+    'Janvier',
+    'Février',
+    'Mars',
+    'Avril',
+    'Mai',
+    'Juin',
+    'Juillet',
+    'Août',
+    'Septembre',
+    'Octobre',
+    'Novembre',
+    'Décembre',
   ]
 
-  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+  const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <span className="ml-3 text-lg text-gray-900 dark:text-gray-100">Chargement des événements...</span>
+        <span className="ml-3 text-lg text-gray-900 dark:text-gray-100">
+          Chargement des événements...
+        </span>
       </div>
     )
   }
@@ -968,7 +1028,7 @@ export function CalendarManager() {
         <div className="flex items-center space-x-4">
           {pendingCount > 0 && (
             <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 text-lg px-4 py-2">
-              {pendingCount} événement{pendingCount > 1 ? "s" : ""} en attente
+              {pendingCount} événement{pendingCount > 1 ? 's' : ''} en attente
             </Badge>
           )}
         </div>
@@ -977,59 +1037,57 @@ export function CalendarManager() {
       {/* Navigation entre vues */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <Button
-          variant={activeView === "calendar" ? "default" : "outline"}
-          onClick={() => setActiveView("calendar")}
+          variant={activeView === 'calendar' ? 'default' : 'outline'}
+          onClick={() => setActiveView('calendar')}
           className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-            activeView === "calendar"
-              ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
-              : "border-2 hover:bg-gray-50 bg-white border-gray-300"
+            activeView === 'calendar'
+              ? 'bg-red-600 text-white shadow-lg hover:bg-red-700'
+              : 'border-2 hover:bg-gray-50 bg-white border-gray-300'
           }`}
         >
           <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Vue Calendrier
         </Button>
         <Button
-          variant={activeView === "list" ? "default" : "outline"}
-          onClick={() => setActiveView("list")}
+          variant={activeView === 'list' ? 'default' : 'outline'}
+          onClick={() => setActiveView('list')}
           className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-            activeView === "list"
-              ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
-              : "border-2 hover:bg-gray-50 bg-white border-gray-300"
+            activeView === 'list'
+              ? 'bg-red-600 text-white shadow-lg hover:bg-red-700'
+              : 'border-2 hover:bg-gray-50 bg-white border-gray-300'
           }`}
         >
           <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Liste des Événements
         </Button>
         <Button
-          variant={activeView === "pending" ? "default" : "outline"}
-          onClick={() => setActiveView("pending")}
+          variant={activeView === 'pending' ? 'default' : 'outline'}
+          onClick={() => setActiveView('pending')}
           className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 relative w-full sm:w-auto whitespace-nowrap ${
-            activeView === "pending"
-              ? "bg-orange-600 text-white shadow-lg hover:bg-orange-700"
-              : "border-2 hover:bg-gray-50 bg-white border-gray-300"
+            activeView === 'pending'
+              ? 'bg-orange-600 text-white shadow-lg hover:bg-orange-700'
+              : 'border-2 hover:bg-gray-50 bg-white border-gray-300'
           }`}
         >
           <Bell className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Événements en attente
           {pendingCount > 0 && (
-            <Badge className="ml-2 bg-orange-500 text-white">
-              {pendingCount}
-            </Badge>
+            <Badge className="ml-2 bg-orange-500 text-white">{pendingCount}</Badge>
           )}
         </Button>
       </div>
 
-      {activeView === "calendar" ? (
+      {activeView === 'calendar' ? (
         /* Vue Calendrier */
         <>
-          {calendarView === "year" ? (
+          {calendarView === 'year' ? (
             /* Vue Année */
             <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
               <CardHeader className="pb-4 px-3 md:px-6">
                 <div className="flex items-center justify-between gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => navigateYear("prev")}
+                    onClick={() => navigateYear('prev')}
                     className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -1039,7 +1097,7 @@ export function CalendarManager() {
                   </h3>
                   <Button
                     variant="outline"
-                    onClick={() => navigateYear("next")}
+                    onClick={() => navigateYear('next')}
                     className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -1067,7 +1125,7 @@ export function CalendarManager() {
                               {monthEvents.length}
                             </div>
                             <div className="text-sm text-gray-600 dark:text-gray-400">
-                              événement{monthEvents.length > 1 ? "s" : ""}
+                              événement{monthEvents.length > 1 ? 's' : ''}
                             </div>
                           </div>
                         ) : (
@@ -1097,17 +1155,18 @@ export function CalendarManager() {
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => navigateMonth("prev")}
+                      onClick={() => navigateMonth('prev')}
                       className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <h3 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white text-center min-w-[200px]">
-                      {selectedMonth && `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
+                      {selectedMonth &&
+                        `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
                     </h3>
                     <Button
                       variant="outline"
-                      onClick={() => navigateMonth("next")}
+                      onClick={() => navigateMonth('next')}
                       className="border-2 rounded-xl bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-600 px-2 md:px-4"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -1120,7 +1179,10 @@ export function CalendarManager() {
                 {/* En-têtes des jours */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {dayNames.map((day) => (
-                    <div key={day} className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2">
+                    <div
+                      key={day}
+                      className="text-center font-semibold text-gray-600 dark:text-gray-300 py-2"
+                    >
                       {day}
                     </div>
                   ))}
@@ -1130,7 +1192,9 @@ export function CalendarManager() {
                 <div className="grid grid-cols-7 gap-2">
                   {getDaysInMonth().map((dayInfo, index) => {
                     const dayEvents = getEventsForDate(dayInfo.date)
-                    const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
+                    const isToday =
+                      dayInfo.date.toDateString() === new Date().toDateString() &&
+                      dayInfo.isCurrentMonth
 
                     return (
                       <div
@@ -1145,13 +1209,13 @@ export function CalendarManager() {
                           relative min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
                           ${
                             dayInfo.isCurrentMonth
-                              ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                              : "bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
+                              ? 'bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'
+                              : 'bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
                           }
                           ${
                             isToday
-                              ? "border-red-600 bg-red-50 dark:bg-red-900/20"
-                              : "border-gray-200 dark:border-gray-600"
+                              ? 'border-red-600 bg-red-50 dark:bg-red-900/20'
+                              : 'border-gray-200 dark:border-gray-600'
                           }
                           hover:shadow-md
                         `}
@@ -1175,7 +1239,9 @@ export function CalendarManager() {
                             </div>
                           )}
                           {dayEvents.length === 0 && dayInfo.isCurrentMonth && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">Cliquer sur le "+" pour ajouter</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500 italic">
+                              Cliquer sur le "+" pour ajouter
+                            </div>
                           )}
                         </div>
                         {dayInfo.isCurrentMonth && (
@@ -1198,7 +1264,7 @@ export function CalendarManager() {
             </Card>
           )}
         </>
-      ) : activeView === "list" ? (
+      ) : activeView === 'list' ? (
         /* Vue Liste */
         <div className="space-y-6">
           {events.length === 0 ? (
@@ -1216,7 +1282,9 @@ export function CalendarManager() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{event.title}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          {event.title}
+                        </h3>
                         {getStatusBadge(event.scheduled_status || event.status)}
                       </div>
                       <div className="space-y-2 text-gray-600 dark:text-gray-400">
@@ -1227,20 +1295,31 @@ export function CalendarManager() {
                         <p className="flex items-center space-x-2">
                           <Clock className="h-4 w-4" />
                           <span>
-                            {event.event_time ? `${formatTime(event.event_time)} • Durée : ${event.duration_minutes} minutes` : "Heure non précisée"}
+                            {event.event_time
+                              ? `${formatTime(event.event_time)} • Durée : ${event.duration_minutes} minutes`
+                              : 'Heure non précisée'}
                           </span>
                         </p>
                         {event.description && (
-                          <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
+                          <p className="text-gray-700 dark:text-gray-300 mt-2">
+                            {event.description}
+                          </p>
                         )}
-                        <p className="text-sm text-gray-600 dark:text-gray-300">Assigne a {getAssignedDisplay(event)}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Assigne a {getAssignedDisplay(event)}
                         </p>
-                        {event.status === "rejected" && event.rejection_reason && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Proposé par{' '}
+                          {event.created_by_name || event.created_by_email || 'Utilisateur'}
+                        </p>
+                        {event.status === 'rejected' && event.rejection_reason && (
                           <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
-                            <p className="text-red-700 dark:text-red-400 font-medium">Raison du refus :</p>
-                            <p className="text-red-600 dark:text-red-400">{event.rejection_reason}</p>
+                            <p className="text-red-700 dark:text-red-400 font-medium">
+                              Raison du refus :
+                            </p>
+                            <p className="text-red-600 dark:text-red-400">
+                              {event.rejection_reason}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1257,7 +1336,7 @@ export function CalendarManager() {
                           Supprimer
                         </Button>
                       )}
-                      {event.status === "pending" && (
+                      {event.status === 'pending' && (
                         <>
                           <Button
                             onClick={() => requestApproveEvent(event)}
@@ -1281,7 +1360,7 @@ export function CalendarManager() {
                           </Button>
                         </>
                       )}
-                      {event.status === "approved" && (
+                      {event.status === 'approved' && (
                         <Button
                           onClick={() => {
                             setSelectedEventId(event.id)
@@ -1331,14 +1410,17 @@ export function CalendarManager() {
                         <p className="flex items-center space-x-2">
                           <Clock className="h-4 w-4" />
                           <span>
-                            {event.event_time ? `${formatTime(event.event_time)} • ${event.duration_minutes} minutes` : "Heure non précisée"}
+                            {event.event_time
+                              ? `${formatTime(event.event_time)} • ${event.duration_minutes} minutes`
+                              : 'Heure non précisée'}
                           </span>
                         </p>
                         {event.description && (
                           <p className="text-gray-700 mt-2">{event.description}</p>
                         )}
                         <p className="text-sm text-gray-500">
-                          Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
+                          Proposé par{' '}
+                          {event.created_by_name || event.created_by_email || 'Utilisateur'}
                         </p>
                       </div>
                     </div>
@@ -1373,24 +1455,30 @@ export function CalendarManager() {
       )}
 
       {/* Dialog pour ajouter un événement */}
-      <Dialog open={showAddEventDialog} onOpenChange={(open) => {
-        setShowAddEventDialog(open)
-        if (!open) {
-          setAttemptedSubmit(false)
-          setSelectedDate(null)
-          setNewEvent({
-            title: "",
-            description: "",
-            location: "",
-            event_time: "",
-            duration_minutes: 60,
-            assigned_employee_emails: [],
-            assigned_role_ids: [],
-            requires_validation: false,
-          })
-        }
-      }}>
-        <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
+      <Dialog
+        open={showAddEventDialog}
+        onOpenChange={(open) => {
+          setShowAddEventDialog(open)
+          if (!open) {
+            setAttemptedSubmit(false)
+            setSelectedDate(null)
+            setNewEvent({
+              title: '',
+              description: '',
+              location: '',
+              event_time: '',
+              duration_minutes: 60,
+              assigned_employee_emails: [],
+              assigned_role_ids: [],
+              requires_validation: false,
+            })
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto"
+          aria-describedby="add-event-description"
+        >
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
               <Plus className="h-6 w-6 text-red-600" />
@@ -1399,17 +1487,19 @@ export function CalendarManager() {
             <DialogDescription id="add-event-description" className="text-lg text-gray-600">
               {selectedDate ? (
                 <>
-                  Date sélectionnée :{" "}
+                  Date sélectionnée :{' '}
                   <strong>
-                    {selectedDate.toLocaleDateString("fr-FR", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
+                    {selectedDate.toLocaleDateString('fr-FR', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
                     })}
                   </strong>
                 </>
-              ) : "Sélectionnez les détails de l'événement"}
+              ) : (
+                "Sélectionnez les détails de l'événement"
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1463,7 +1553,10 @@ export function CalendarManager() {
                   type="number"
                   value={newEvent.duration_minutes}
                   onChange={(e) =>
-                    setNewEvent({ ...newEvent, duration_minutes: Number.parseInt(e.target.value) || 60 })
+                    setNewEvent({
+                      ...newEvent,
+                      duration_minutes: Number.parseInt(e.target.value) || 60,
+                    })
                   }
                   min="15"
                   max="480"
@@ -1476,13 +1569,18 @@ export function CalendarManager() {
               <p className="text-sm font-semibold text-gray-800">Assignation (optionnelle)</p>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Employe(s) assigne(s)</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Employe(s) assigne(s)
+                </label>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
                   {employees.length === 0 ? (
                     <p className="text-xs text-gray-500">Aucun employe actif.</p>
                   ) : (
                     employees.map((employee) => (
-                      <label key={employee.id} className="flex items-center gap-2 text-sm text-gray-700">
+                      <label
+                        key={employee.id}
+                        className="flex items-center gap-2 text-sm text-gray-700"
+                      >
                         <Checkbox
                           checked={newEvent.assigned_employee_emails.includes(employee.email)}
                           onCheckedChange={(checked) =>
@@ -1496,7 +1594,9 @@ export function CalendarManager() {
                             })
                           }
                         />
-                        <span>{employee.name} ({employee.email})</span>
+                        <span>
+                          {employee.name} ({employee.email})
+                        </span>
                       </label>
                     ))
                   )}
@@ -1504,13 +1604,18 @@ export function CalendarManager() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Role(s) assigne(s)</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Role(s) assigne(s)
+                </label>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
                   {roles.length === 0 ? (
                     <p className="text-xs text-gray-500">Aucun role disponible.</p>
                   ) : (
                     roles.map((role) => (
-                      <label key={role.id} className="flex items-center gap-2 text-sm text-gray-700">
+                      <label
+                        key={role.id}
+                        className="flex items-center gap-2 text-sm text-gray-700"
+                      >
                         <Checkbox
                           checked={newEvent.assigned_role_ids.includes(role.id)}
                           onCheckedChange={(checked) =>
@@ -1540,7 +1645,10 @@ export function CalendarManager() {
                   }
                 />
                 <div>
-                  <label htmlFor="requires_validation" className="text-sm font-medium text-gray-800 cursor-pointer">
+                  <label
+                    htmlFor="requires_validation"
+                    className="text-sm font-medium text-gray-800 cursor-pointer"
+                  >
                     Restriction de validation
                   </label>
                   <p className="text-xs text-gray-600 mt-1">
@@ -1558,10 +1666,10 @@ export function CalendarManager() {
                 setSelectedDate(null)
                 setAttemptedSubmit(false)
                 setNewEvent({
-                  title: "",
-                  description: "",
-                  location: "",
-                  event_time: "",
+                  title: '',
+                  description: '',
+                  location: '',
+                  event_time: '',
                   duration_minutes: 60,
                   assigned_employee_emails: [],
                   assigned_role_ids: [],
@@ -1572,7 +1680,10 @@ export function CalendarManager() {
             >
               <XCircle className="h-5 w-5" /> Annuler
             </Button>
-            <Button onClick={addEvent} className="bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2 w-full sm:w-auto">
+            <Button
+              onClick={addEvent}
+              className="bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
               <CheckCircle className="h-5 w-5" /> Créer
             </Button>
           </DialogFooter>
@@ -1603,7 +1714,7 @@ export function CalendarManager() {
               variant="outline"
               onClick={() => {
                 setShowRejectionDialog(false)
-                setRejectionReason("")
+                setRejectionReason('')
                 setSelectedEventId(null)
               }}
               className="text-lg px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
@@ -1636,7 +1747,11 @@ export function CalendarManager() {
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-700 dark:text-gray-300">
               <p className="font-semibold">{eventToApprove.title}</p>
               <p>{formatDate(eventToApprove.event_date)}</p>
-              <p>{eventToApprove.event_time ? formatTime(eventToApprove.event_time) : "Heure non precisee"}</p>
+              <p>
+                {eventToApprove.event_time
+                  ? formatTime(eventToApprove.event_time)
+                  : 'Heure non precisee'}
+              </p>
             </div>
           )}
           <DialogFooter className="flex gap-2">
@@ -1651,7 +1766,10 @@ export function CalendarManager() {
             >
               Annuler
             </Button>
-            <Button onClick={confirmApproveEvent} className="bg-green-600 hover:bg-green-700 text-white">
+            <Button
+              onClick={confirmApproveEvent}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
               Valider
             </Button>
           </DialogFooter>
@@ -1699,7 +1817,7 @@ export function CalendarManager() {
                 onValueChange={(value) =>
                   setReminderSettings({
                     ...reminderSettings,
-                    recipient_type: value as "all" | "admins" | "employees",
+                    recipient_type: value as 'all' | 'admins' | 'employees',
                   })
                 }
               >
@@ -1720,7 +1838,9 @@ export function CalendarManager() {
               <Textarea
                 placeholder="Message supplémentaire..."
                 value={reminderSettings.custom_message}
-                onChange={(e) => setReminderSettings({ ...reminderSettings, custom_message: e.target.value })}
+                onChange={(e) =>
+                  setReminderSettings({ ...reminderSettings, custom_message: e.target.value })
+                }
                 className="text-lg border-2 rounded-xl bg-white text-gray-900"
                 rows={3}
               />
@@ -1733,8 +1853,8 @@ export function CalendarManager() {
                 setShowReminderDialog(false)
                 setReminderSettings({
                   days_before: 1,
-                  recipient_type: "all",
-                  custom_message: "",
+                  recipient_type: 'all',
+                  custom_message: '',
                 })
                 setSelectedEventId(null)
               }}
@@ -1769,7 +1889,11 @@ export function CalendarManager() {
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-700 dark:text-gray-300">
               <p className="font-semibold">{eventToDelete.title}</p>
               <p>{formatDate(eventToDelete.event_date)}</p>
-              <p>{eventToDelete.event_time ? formatTime(eventToDelete.event_time) : "Heure non precisee"}</p>
+              <p>
+                {eventToDelete.event_time
+                  ? formatTime(eventToDelete.event_time)
+                  : 'Heure non precisee'}
+              </p>
             </div>
           )}
           <DialogFooter className="flex gap-2">
@@ -1800,65 +1924,77 @@ export function CalendarManager() {
             <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900 dark:text-white">
               <CalendarDays className="h-6 w-6 text-red-600" />
               <span>
-                Événements du {selectedDayForDetails && new Date(selectedDayForDetails).toLocaleDateString("fr-FR", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
+                Événements du{' '}
+                {selectedDayForDetails &&
+                  new Date(selectedDayForDetails).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
               </span>
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
-            {selectedDayForDetails && (() => {
-              const dayEvents = getEventsForDate(selectedDayForDetails).sort((a, b) => {
-                const timeA = a.event_time || "00:00"
-                const timeB = b.event_time || "00:00"
-                return timeA.localeCompare(timeB)
-              })
+            {selectedDayForDetails &&
+              (() => {
+                const dayEvents = getEventsForDate(selectedDayForDetails).sort((a, b) => {
+                  const timeA = a.event_time || '00:00'
+                  const timeB = b.event_time || '00:00'
+                  return timeA.localeCompare(timeB)
+                })
 
-              if (dayEvents.length === 0) {
-                return (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <CalendarDays className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                    <p className="text-lg">Aucun événement pour ce jour</p>
-                  </div>
-                )
-              }
-
-              return dayEvents.map((event) => (
-                <Card
-                  key={event.id}
-                  className="border-2 cursor-pointer hover:shadow-lg transition-all bg-white dark:bg-gray-900"
-                  onClick={() => {
-                    setSelectedEventForDetails(event)
-                    setShowEventDetailsDialog(true)
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-bold text-lg text-gray-900 dark:text-white">{event.title}</h4>
-                      {getStatusBadge(event.scheduled_status || event.status)}
+                if (dayEvents.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <CalendarDays className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-lg">Aucun événement pour ce jour</p>
                     </div>
-                    <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                      <div className="flex items-center space-x-2">
-                        <Clock className="h-4 w-4" />
-                        <span>
-                          {event.event_time ? `${formatTime(event.event_time)} • Durée : ${event.duration_minutes} minutes` : "Heure non précisée"}
-                        </span>
+                  )
+                }
+
+                return dayEvents.map((event) => (
+                  <Card
+                    key={event.id}
+                    className="border-2 cursor-pointer hover:shadow-lg transition-all bg-white dark:bg-gray-900"
+                    onClick={() => {
+                      setSelectedEventForDetails(event)
+                      setShowEventDetailsDialog(true)
+                    }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-bold text-lg text-gray-900 dark:text-white">
+                          {event.title}
+                        </h4>
+                        {getStatusBadge(event.scheduled_status || event.status)}
                       </div>
-                      {event.description && (
-                        <p className="text-gray-700 dark:text-gray-300 mt-2">{event.description}</p>
-                      )}
-                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Assigne a {getAssignedDisplay(event)}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Proposé par {event.created_by_name || event.created_by_email || "Utilisateur"}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            })()}
+                      <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center space-x-2">
+                          <Clock className="h-4 w-4" />
+                          <span>
+                            {event.event_time
+                              ? `${formatTime(event.event_time)} • Durée : ${event.duration_minutes} minutes`
+                              : 'Heure non précisée'}
+                          </span>
+                        </div>
+                        {event.description && (
+                          <p className="text-gray-700 dark:text-gray-300 mt-2">
+                            {event.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                          Assigne a {getAssignedDisplay(event)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                          Proposé par{' '}
+                          {event.created_by_name || event.created_by_email || 'Utilisateur'}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              })()}
           </div>
           <DialogFooter>
             <Button
@@ -1886,9 +2022,11 @@ export function CalendarManager() {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                   {selectedEventForDetails.title}
                 </h3>
-                {getStatusBadge(selectedEventForDetails.scheduled_status || selectedEventForDetails.status)}
+                {getStatusBadge(
+                  selectedEventForDetails.scheduled_status || selectedEventForDetails.status,
+                )}
               </div>
-              
+
               <div className="space-y-2 text-gray-600 dark:text-gray-400">
                 <p className="flex items-center space-x-2">
                   <Calendar className="h-4 w-4" />
@@ -1897,9 +2035,9 @@ export function CalendarManager() {
                 <p className="flex items-center space-x-2">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {selectedEventForDetails.event_time 
-                      ? `${formatTime(selectedEventForDetails.event_time)} • Durée : ${selectedEventForDetails.duration_minutes} minutes` 
-                      : "Heure non précisée"}
+                    {selectedEventForDetails.event_time
+                      ? `${formatTime(selectedEventForDetails.event_time)} • Durée : ${selectedEventForDetails.duration_minutes} minutes`
+                      : 'Heure non précisée'}
                   </span>
                 </p>
                 {selectedEventForDetails.location && (
@@ -1910,21 +2048,31 @@ export function CalendarManager() {
                 )}
                 {selectedEventForDetails.description && (
                   <div className="mt-3">
-                    <p className="font-semibold text-gray-900 dark:text-white mb-1">Description :</p>
-                    <p className="text-gray-700 dark:text-gray-300">{selectedEventForDetails.description}</p>
+                    <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                      Description :
+                    </p>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      {selectedEventForDetails.description}
+                    </p>
                   </div>
                 )}
                 <div className="mt-3">
                   <p className="font-semibold text-gray-900 dark:text-white mb-1">Assigne a :</p>
-                  <p className="text-gray-700 dark:text-gray-300">{getAssignedDisplay(selectedEventForDetails)}</p>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {getAssignedDisplay(selectedEventForDetails)}
+                  </p>
                 </div>
-                {(selectedEventForDetails.scheduled_requires_validation ?? selectedEventForDetails.requires_validation) && (
+                {(selectedEventForDetails.scheduled_requires_validation ??
+                  selectedEventForDetails.requires_validation) && (
                   <div className="mt-3">
-                    <p className="font-semibold text-gray-900 dark:text-white mb-1">Validation de présence :</p>
+                    <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                      Validation de présence :
+                    </p>
                     {(() => {
-                      const validationStatus = selectedEventForDetails.scheduled_status || selectedEventForDetails.status
+                      const validationStatus =
+                        selectedEventForDetails.scheduled_status || selectedEventForDetails.status
 
-                      if (validationStatus === "moved") {
+                      if (validationStatus === 'moved') {
                         return (
                           <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
                             <p className="text-orange-800 dark:text-orange-300 font-medium">
@@ -1934,7 +2082,7 @@ export function CalendarManager() {
                         )
                       }
 
-                      if (validationStatus === "validated") {
+                      if (validationStatus === 'validated') {
                         return (
                           <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
                             <p className="text-green-800 dark:text-green-300 font-medium">
@@ -1955,17 +2103,25 @@ export function CalendarManager() {
                   </div>
                 )}
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                  Proposé par {selectedEventForDetails.created_by_name || selectedEventForDetails.created_by_email || "Utilisateur"}
+                  Proposé par{' '}
+                  {selectedEventForDetails.created_by_name ||
+                    selectedEventForDetails.created_by_email ||
+                    'Utilisateur'}
                 </p>
-                {selectedEventForDetails.status === "rejected" && selectedEventForDetails.rejection_reason && (
-                  <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800 mt-3">
-                    <p className="text-red-700 dark:text-red-400 font-medium">Raison du refus :</p>
-                    <p className="text-red-600 dark:text-red-400">{selectedEventForDetails.rejection_reason}</p>
-                  </div>
-                )}
+                {selectedEventForDetails.status === 'rejected' &&
+                  selectedEventForDetails.rejection_reason && (
+                    <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800 mt-3">
+                      <p className="text-red-700 dark:text-red-400 font-medium">
+                        Raison du refus :
+                      </p>
+                      <p className="text-red-600 dark:text-red-400">
+                        {selectedEventForDetails.rejection_reason}
+                      </p>
+                    </div>
+                  )}
               </div>
 
-              {selectedEventForDetails.status === "pending" && (
+              {selectedEventForDetails.status === 'pending' && (
                 <div className="flex gap-2 pt-4">
                   <Button
                     onClick={() => {
@@ -1991,7 +2147,7 @@ export function CalendarManager() {
                 </div>
               )}
 
-              {selectedEventForDetails.status === "approved" && (
+              {selectedEventForDetails.status === 'approved' && (
                 <Button
                   onClick={() => {
                     setSelectedEventId(selectedEventForDetails.id)
@@ -2021,29 +2177,31 @@ export function CalendarManager() {
                 const today = new Date().toISOString().split('T')[0]
                 const eventDate = selectedEventForDetails.event_date.split('T')[0]
                 const isPast = eventDate < today
-                
-                return !isPast && (
-                  <Button
-                    onClick={() => {
-                      setEventToEdit(selectedEventForDetails)
-                      setNewEvent({
-                        title: selectedEventForDetails.title,
-                        description: selectedEventForDetails.description || "",
-                        location: selectedEventForDetails.location,
-                        event_time: selectedEventForDetails.event_time || "",
-                        duration_minutes: selectedEventForDetails.duration_minutes,
-                        assigned_employee_emails: [],
-                        assigned_role_ids: [],
-                        requires_validation: false,
-                      })
-                      setShowEventDetailsDialog(false)
-                      setShowEditEventDialog(true)
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl w-full mt-4"
-                  >
-                    <Edit2 className="mr-2 h-4 w-4" />
-                    Modifier l'événement
-                  </Button>
+
+                return (
+                  !isPast && (
+                    <Button
+                      onClick={() => {
+                        setEventToEdit(selectedEventForDetails)
+                        setNewEvent({
+                          title: selectedEventForDetails.title,
+                          description: selectedEventForDetails.description || '',
+                          location: selectedEventForDetails.location,
+                          event_time: selectedEventForDetails.event_time || '',
+                          duration_minutes: selectedEventForDetails.duration_minutes,
+                          assigned_employee_emails: [],
+                          assigned_role_ids: [],
+                          requires_validation: false,
+                        })
+                        setShowEventDetailsDialog(false)
+                        setShowEditEventDialog(true)
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl w-full mt-4"
+                    >
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      Modifier l'événement
+                    </Button>
+                  )
                 )
               })()}
             </div>
@@ -2063,23 +2221,26 @@ export function CalendarManager() {
       </Dialog>
 
       {/* Dialog d'édition d'événement */}
-      <Dialog open={showEditEventDialog} onOpenChange={(open) => {
-        setShowEditEventDialog(open)
-        if (!open) {
-          setEventToEdit(null)
-          setNewEvent({
-            title: "",
-            description: "",
-            location: "",
-            event_time: "",
-            duration_minutes: 60,
-            assigned_employee_emails: [],
-            assigned_role_ids: [],
-            requires_validation: false,
-          })
-          setAttemptedSubmit(false)
-        }
-      }}>
+      <Dialog
+        open={showEditEventDialog}
+        onOpenChange={(open) => {
+          setShowEditEventDialog(open)
+          if (!open) {
+            setEventToEdit(null)
+            setNewEvent({
+              title: '',
+              description: '',
+              location: '',
+              event_time: '',
+              duration_minutes: 60,
+              assigned_employee_emails: [],
+              assigned_role_ids: [],
+              requires_validation: false,
+            })
+            setAttemptedSubmit(false)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
@@ -2089,17 +2250,17 @@ export function CalendarManager() {
             <DialogDescription className="text-sm md:text-base text-gray-600">
               {eventToEdit && (
                 <>
-                  {new Date(eventToEdit.event_date).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
+                  {new Date(eventToEdit.event_date).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
                   })}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -2124,9 +2285,7 @@ export function CalendarManager() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Description
-              </label>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Description</label>
               <Textarea
                 placeholder="Description (facultatif)"
                 value={newEvent.description}
@@ -2136,9 +2295,7 @@ export function CalendarManager() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure
-                </label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
                 <Input
                   type="time"
                   value={newEvent.event_time}
@@ -2147,13 +2304,16 @@ export function CalendarManager() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Durée (min)
-                </label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Durée (min)</label>
                 <Input
                   type="number"
                   value={newEvent.duration_minutes}
-                  onChange={(e) => setNewEvent({ ...newEvent, duration_minutes: Number.parseInt(e.target.value) || 60 })}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      duration_minutes: Number.parseInt(e.target.value) || 60,
+                    })
+                  }
                   min="15"
                   max="480"
                   className="border-2 rounded-xl bg-white text-gray-900"

@@ -1,70 +1,88 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TodoList } from "@/components/employee/todo-list"
-import { BreakManager } from "@/components/employee/break-manager"
-import { EmergencyButton } from "@/components/employee/emergency-button"
-import { CalendarView } from "@/components/employee/calendar-view"
-import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
-import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
-import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
-import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
-import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, HardHat, AlertTriangle, Home, Lock, Sunrise, Sunset, Sun, Calendar, ChevronDown } from "lucide-react"
-import * as Icons from "lucide-react"
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TodoList } from '@/components/employee/todo-list'
+import { BreakManager } from '@/components/employee/break-manager'
+import { EmergencyButton } from '@/components/employee/emergency-button'
+import { CalendarView } from '@/components/employee/calendar-view'
+import { SimpleTimeTracker } from '@/components/employee/simple-time-tracker'
+import { WorkScheduleCalendar } from '@/components/employee/work-schedule-calendar'
+import { NewMemberInstructionsDialog } from '@/components/employee/new-member-instructions-dialog'
+import { CustomPageDialog } from '@/components/employee/custom-page-dialog'
+import { useRouter } from 'next/navigation'
+import {
+  MessageCircle,
+  UserPlus,
+  CheckCircle,
+  XCircle,
+  Building,
+  MapPin,
+  HardHat,
+  AlertTriangle,
+  Home,
+  Lock,
+  Sunrise,
+  Sunset,
+  Sun,
+  Calendar,
+  ChevronDown,
+} from 'lucide-react'
+import * as Icons from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from '@/components/ui/select'
 
 export default function EmployeePage() {
-  const [userEmail, setUserEmail] = useState("")
-  const [userName, setUserName] = useState("")
+  const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
   const [userRoleId, setUserRoleId] = useState<string | null>(null)
   const [hasWorkScheduleAccess, setHasWorkScheduleAccess] = useState(false)
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
-  const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
-  const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
+  const [currentView, setCurrentView] = useState<'menu' | 'tasks' | 'calendar' | 'schedule'>('menu')
+  const [selectedPeriod, setSelectedPeriod] = useState<'matin' | 'aprem' | 'journee' | null>(null)
+  const [selectedSubPeriod, setSelectedSubPeriod] = useState<'debut' | 'milieu' | 'fin' | null>(
+    null,
+  )
   const [isOnBreak, setIsOnBreak] = useState(false)
-  const [activeBreakType, setActiveBreakType] = useState<"short" | "lunch" | null>(null)
+  const [activeBreakType, setActiveBreakType] = useState<'short' | 'lunch' | null>(null)
   const [breakStartTime, setBreakStartTime] = useState<Date | null>(null)
   const [accumulatedBreakTime, setAccumulatedBreakTime] = useState(0) // en minutes
   const [shortBreakProgress, setShortBreakProgress] = useState(0) // en minutes pour la pause courte en cours
   const [shortBreaksCompleted, setShortBreaksCompleted] = useState(0)
   const [lunchBreakTaken, setLunchBreakTaken] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [pendingPeriod, setPendingPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
-  const [pendingSubPeriod, setPendingSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
+  const [pendingPeriod, setPendingPeriod] = useState<'matin' | 'aprem' | 'journee' | null>(null)
+  const [pendingSubPeriod, setPendingSubPeriod] = useState<'debut' | 'milieu' | 'fin' | null>(null)
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false)
   const [instructions, setInstructions] = useState<any[]>([])
-  const [whatsappLink, setWhatsappLink] = useState("")
+  const [whatsappLink, setWhatsappLink] = useState('')
   const [assignedGyms, setAssignedGyms] = useState<any[]>([])
   const [selectedGym, setSelectedGym] = useState<any | null>(null)
   const [showGymSelectionDialog, setShowGymSelectionDialog] = useState(false)
   const [showNoTasksDialog, setShowNoTasksDialog] = useState(false)
   const [showSubPeriodRequiredDialog, setShowSubPeriodRequiredDialog] = useState(false)
-  const [noTasksPeriodName, setNoTasksPeriodName] = useState("")
+  const [noTasksPeriodName, setNoTasksPeriodName] = useState('')
   const [showNoGymDialog, setShowNoGymDialog] = useState(false)
   const [showWifiRestrictionDialog, setShowWifiRestrictionDialog] = useState(false)
   const [showLogoutBlockedDialog, setShowLogoutBlockedDialog] = useState(false)
@@ -76,45 +94,47 @@ export default function EmployeePage() {
 
   useEffect(() => {
     // Vérifier l'authentification
-    const role = localStorage.getItem("userRole")
-    const email = localStorage.getItem("userEmail")
-    const name = localStorage.getItem("userName")
-    
+    const role = localStorage.getItem('userRole')
+    const email = localStorage.getItem('userEmail')
+    const name = localStorage.getItem('userName')
+
     if (!email || !role) {
       // Pas connecté, rediriger vers la page de connexion
-      router.push("/")
+      router.push('/')
       return
     }
-    
-    if (role !== "employee") {
+
+    if (role !== 'employee') {
       // Pas un employé, rediriger vers access-denied
-      router.push("/access-denied")
+      router.push('/access-denied')
       return
     }
-    
+
     setUserEmail(email)
-    setUserName(name)
+    setUserName(name ?? '')
 
     // Charger les permissions de l'employé
     loadUserPermissions(email)
 
     // Vérifier si une session existe pour aujourd'hui
     const checkExistingSession = async () => {
-      const userId = localStorage.getItem("userId") || ""
+      const userId = localStorage.getItem('userId') || ''
       const today = new Date().toISOString().split('T')[0]
-      
+
       try {
         // Essayer de charger depuis la base de données d'abord
-        const response = await fetch(`/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`)
+        const response = await fetch(
+          `/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`,
+        )
         if (response.ok) {
           const data = await response.json()
-          const schedules = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-          
+          const schedules = Array.isArray(data.data) ? data.data : data.data ? [data.data] : []
+
           // Trouver une session avec une période définie (sans end_time)
-          const activeSchedule = schedules.find((s: any) => 
-            s.notes?.includes('Période:') && !s.end_time
+          const activeSchedule = schedules.find(
+            (s: any) => s.notes?.includes('Période:') && !s.end_time,
           )
-          
+
           if (activeSchedule && activeSchedule.notes?.includes('Période:')) {
             const periodMatch = activeSchedule.notes.match(/Période:\s*(matin|aprem|journee)/)
             const subPeriodMatch = activeSchedule.notes.match(/Sous-créneau:\s*(debut|milieu|fin)/)
@@ -125,7 +145,7 @@ export default function EmployeePage() {
                 setSelectedSubPeriod(subPeriodMatch[1] as 'debut' | 'milieu' | 'fin')
               }
               setCurrentView('tasks')
-              
+
               // Restaurer aussi la salle depuis la note ou le localStorage
               const gymIdMatch = activeSchedule.notes?.match(/GymId:\s*([a-zA-Z0-9-]+)/)
               if (gymIdMatch && gymIdMatch[1]) {
@@ -136,15 +156,19 @@ export default function EmployeePage() {
             }
           }
         }
-        
+
         // Fallback sur localStorage si pas de session dans la base
         const storedPeriod = localStorage.getItem(`employee_${userId}_period`)
         const storedDate = localStorage.getItem(`employee_${userId}_sessionDate`)
-        
+
         if (storedPeriod && storedDate === today) {
           setSelectedPeriod(storedPeriod as 'matin' | 'aprem' | 'journee')
           const storedSubPeriod = localStorage.getItem(`employee_${userId}_subPeriod`)
-          if (storedSubPeriod === 'debut' || storedSubPeriod === 'milieu' || storedSubPeriod === 'fin') {
+          if (
+            storedSubPeriod === 'debut' ||
+            storedSubPeriod === 'milieu' ||
+            storedSubPeriod === 'fin'
+          ) {
             setSelectedSubPeriod(storedSubPeriod)
           }
           setCurrentView('tasks')
@@ -160,7 +184,7 @@ export default function EmployeePage() {
     loadAssignedGyms(email)
 
     // Restaurer l'état des pauses si existant
-    const savedBreakState = localStorage.getItem("employeeBreakState")
+    const savedBreakState = localStorage.getItem('employeeBreakState')
     if (savedBreakState) {
       const breakState = JSON.parse(savedBreakState)
       setIsOnBreak(breakState.isOnBreak)
@@ -176,7 +200,7 @@ export default function EmployeePage() {
 
     // Charger les instructions de nouveau adhérent
     loadInstructions()
-    
+
     // Charger les pages personnalisées
     loadCustomPages()
   }, [])
@@ -189,11 +213,11 @@ export default function EmployeePage() {
           setHasWorkScheduleAccess(data.has_work_schedule_access !== false)
           setHasCalendarAccess(data.has_calendar_access !== false)
           setHasWorkPeriodAccess(data.has_work_period_access !== false)
-          
+
           // Sauvegarder le roleId pour le filtrage des tâches
           if (data.role_id) {
             setUserRoleId(data.role_id)
-            localStorage.setItem("userRoleId", data.role_id)
+            localStorage.setItem('userRoleId', data.role_id)
           }
         }
       }
@@ -207,7 +231,7 @@ export default function EmployeePage() {
       if (response.ok) {
         const { data } = await response.json()
         setAssignedGyms(data || [])
-        
+
         // Si salle déjà sélectionnée dans localStorage, la restaurer
         const savedGymId = localStorage.getItem(`employee_${email}_selectedGym`)
         if (savedGymId && data) {
@@ -225,14 +249,16 @@ export default function EmployeePage() {
   const loadInstructions = async () => {
     try {
       // Charger les instructions
-      const responseInstructions = await fetch("/api/db/new_member_instruction_items?is_active=true&orderBy=order_index&orderDir=asc")
+      const responseInstructions = await fetch(
+        '/api/db/new_member_instruction_items?is_active=true&orderBy=order_index&orderDir=asc',
+      )
       if (responseInstructions.ok) {
         const result = await responseInstructions.json()
         setInstructions(result.data || [])
       }
 
       // Charger le lien WhatsApp depuis la config
-      const responseConfig = await fetch("/api/db/app_config?key=whatsapp_link")
+      const responseConfig = await fetch('/api/db/app_config?key=whatsapp_link')
       if (responseConfig.ok) {
         const configResult = await responseConfig.json()
         const configArray = configResult.data || []
@@ -247,12 +273,14 @@ export default function EmployeePage() {
 
   const loadCustomPages = async () => {
     try {
-      const response = await fetch("/api/db/custom_pages?is_active=true&orderBy=order_index&orderDir=asc")
+      const response = await fetch(
+        '/api/db/custom_pages?is_active=true&orderBy=order_index&orderDir=asc',
+      )
       if (response.ok) {
         const result = await response.json()
         const pages = result.data || []
         console.log('Custom pages loaded:', pages)
-        
+
         // Filtrer les pages selon le rôle de l'utilisateur
         const filteredPages = pages.filter((page: any) => {
           // Si roleIds est null ou vide, la page est accessible à tous
@@ -266,26 +294,28 @@ export default function EmployeePage() {
           // Par défaut, ne pas afficher la page
           return false
         })
-        
+
         console.log('Filtered pages by role:', filteredPages)
-        
+
         // Charger les items pour chaque page filtrée
         const pagesWithItems = await Promise.all(
           filteredPages.map(async (page: any) => {
-            const itemsResponse = await fetch(`/api/db/custom_page_items?page_id=${page.id}&is_active=true&orderBy=order_index&orderDir=asc`)
+            const itemsResponse = await fetch(
+              `/api/db/custom_page_items?page_id=${page.id}&is_active=true&orderBy=order_index&orderDir=asc`,
+            )
             if (itemsResponse.ok) {
               const itemsResult = await itemsResponse.json()
               console.log(`Items for page ${page.id}:`, itemsResult.data)
               return { ...page, items: itemsResult.data || [] }
             }
             return { ...page, items: [] }
-          })
+          }),
         )
-        
+
         console.log('Pages with items:', pagesWithItems)
-        
+
         // Ne garder que les pages avec au moins un item actif
-        const pagesWithActiveItems = pagesWithItems.filter(page => page.items.length > 0)
+        const pagesWithActiveItems = pagesWithItems.filter((page) => page.items.length > 0)
         console.log('Pages with active items:', pagesWithActiveItems)
         setCustomPages(pagesWithActiveItems)
       }
@@ -301,20 +331,20 @@ export default function EmployeePage() {
 
   // Sauvegarder l'état quand il change
   useEffect(() => {
-    if (currentView !== "menu") {
-      localStorage.setItem("employeeCurrentView", currentView)
+    if (currentView !== 'menu') {
+      localStorage.setItem('employeeCurrentView', currentView)
     }
   }, [currentView])
 
   useEffect(() => {
     if (selectedPeriod) {
-      localStorage.setItem("employeeSelectedPeriod", selectedPeriod)
+      localStorage.setItem('employeeSelectedPeriod', selectedPeriod)
     }
   }, [selectedPeriod])
 
   useEffect(() => {
     if (selectedSubPeriod) {
-      localStorage.setItem("employeeSelectedSubPeriod", selectedSubPeriod)
+      localStorage.setItem('employeeSelectedSubPeriod', selectedSubPeriod)
     }
   }, [selectedSubPeriod])
 
@@ -328,8 +358,16 @@ export default function EmployeePage() {
       lunchBreakTaken,
       breakStartTime: breakStartTime?.toISOString() || null,
     }
-    localStorage.setItem("employeeBreakState", JSON.stringify(breakState))
-  }, [isOnBreak, activeBreakType, accumulatedBreakTime, shortBreakProgress, shortBreaksCompleted, lunchBreakTaken, breakStartTime])
+    localStorage.setItem('employeeBreakState', JSON.stringify(breakState))
+  }, [
+    isOnBreak,
+    activeBreakType,
+    accumulatedBreakTime,
+    shortBreakProgress,
+    shortBreaksCompleted,
+    lunchBreakTaken,
+    breakStartTime,
+  ])
 
   const handleLogout = () => {
     // Bloquer la déconnexion si une période de travail est active et non terminée
@@ -337,16 +375,16 @@ export default function EmployeePage() {
       setShowLogoutBlockedDialog(true)
       return
     }
-    
+
     // Nettoyer l'état de session
-    localStorage.removeItem("employeeCurrentView")
-    localStorage.removeItem("employeeSelectedPeriod")
-    localStorage.removeItem("employeeBreakState")
+    localStorage.removeItem('employeeCurrentView')
+    localStorage.removeItem('employeeSelectedPeriod')
+    localStorage.removeItem('employeeBreakState')
     localStorage.clear()
-    router.push("/")
+    router.push('/')
   }
 
-  const handleBreakStart = (type: "short" | "lunch") => {
+  const handleBreakStart = (type: 'short' | 'lunch') => {
     setIsOnBreak(true)
     setActiveBreakType(type)
     setBreakStartTime(new Date())
@@ -358,7 +396,7 @@ export default function EmployeePage() {
       const sessionDuration = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000 / 60)
       setAccumulatedBreakTime((prev) => prev + sessionDuration)
 
-      if (activeBreakType === "short") {
+      if (activeBreakType === 'short') {
         const nextShortBreakProgress = shortBreakProgress + sessionDuration
         if (nextShortBreakProgress >= 20) {
           setShortBreaksCompleted((prev) => prev + 1)
@@ -368,7 +406,7 @@ export default function EmployeePage() {
         }
       }
 
-      if (activeBreakType === "lunch") {
+      if (activeBreakType === 'lunch') {
         setLunchBreakTaken(true)
       }
     }
@@ -377,13 +415,13 @@ export default function EmployeePage() {
     setActiveBreakType(null)
   }
 
-  const handleBreakResume = (type: "short") => {
+  const handleBreakResume = (type: 'short') => {
     setIsOnBreak(true)
     setActiveBreakType(type)
     setBreakStartTime(new Date())
   }
 
-  const requestPeriodSelection = (period: "matin" | "aprem" | "journee") => {
+  const requestPeriodSelection = (period: 'matin' | 'aprem' | 'journee') => {
     // Vérifier si l'employé a des salles assignées
     if (assignedGyms.length === 0) {
       setShowNoGymDialog(true)
@@ -406,10 +444,10 @@ export default function EmployeePage() {
         const response = await fetch('/api/network-check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gymId: gym.id })
+          body: JSON.stringify({ gymId: gym.id }),
         })
         const data = await response.json()
-        
+
         if (!data.allowed) {
           setShowGymSelectionDialog(false)
           setShowWifiRestrictionDialog(true)
@@ -422,7 +460,7 @@ export default function EmployeePage() {
         return
       }
     }
-    
+
     setSelectedGym(gym)
     localStorage.setItem(`employee_${userEmail}_selectedGym`, gym.id)
     setShowGymSelectionDialog(false)
@@ -431,26 +469,30 @@ export default function EmployeePage() {
 
   const confirmPeriodSelection = async () => {
     if (pendingPeriod) {
-      if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && !pendingSubPeriod) {
+      if ((pendingPeriod === 'matin' || pendingPeriod === 'aprem') && !pendingSubPeriod) {
         setShowSubPeriodRequiredDialog(true)
         return
       }
 
       setShowConfirmDialog(false)
-      
+
       // Vérifier d'abord si des tâches existent pour cette période/salle/rôle
       try {
         let tasksUrl = `/api/db/tasks?period=${pendingPeriod}`
-        
+
         if (selectedGym?.id) {
           tasksUrl += `&gym_id=${selectedGym.id}`
         }
-        
+
         const tasksResponse = await fetch(tasksUrl)
         if (tasksResponse.ok) {
           const tasksData = await tasksResponse.json()
-          let dbTasks = Array.isArray(tasksData.data) ? tasksData.data : (tasksData.data ? [tasksData.data] : [])
-          
+          let dbTasks = Array.isArray(tasksData.data)
+            ? tasksData.data
+            : tasksData.data
+              ? [tasksData.data]
+              : []
+
           // Filtrer par rôle si nécessaire
           if (userRoleId) {
             dbTasks = dbTasks.filter((task: any) => {
@@ -458,9 +500,9 @@ export default function EmployeePage() {
               if (!task.role_ids || task.role_ids === '') {
                 return true
               }
-              
+
               let roleArray: string[] = []
-              
+
               // CAS 1: C'est déjà un tableau
               if (Array.isArray(task.role_ids)) {
                 roleArray = task.role_ids
@@ -486,18 +528,18 @@ export default function EmployeePage() {
                   return false
                 }
               }
-              
+
               // Si le tableau est vide, visible par tous
               if (roleArray.length === 0) {
                 return true
               }
-              
+
               // Vérifier si le rôle de l'utilisateur est dans le tableau
               return roleArray.includes(userRoleId)
             })
           }
 
-          if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod) {
+          if ((pendingPeriod === 'matin' || pendingPeriod === 'aprem') && pendingSubPeriod) {
             dbTasks = dbTasks.filter((task: any) => {
               if (!task.sub_period) {
                 return true
@@ -505,7 +547,7 @@ export default function EmployeePage() {
               return task.sub_period === pendingSubPeriod
             })
           }
-          
+
           // Si aucune tâche trouvée, afficher un dialog et ne pas lancer la vue tâches
           if (dbTasks.length === 0) {
             setNoTasksPeriodName(getPeriodText(pendingPeriod))
@@ -521,43 +563,49 @@ export default function EmployeePage() {
         setSelectedGym(null)
         return
       }
-      
+
       // Si des tâches existent, procéder normalement
       setSelectedPeriod(pendingPeriod)
-      setSelectedSubPeriod((pendingPeriod === "matin" || pendingPeriod === "aprem") ? pendingSubPeriod : null)
-      setCurrentView("tasks")
+      setSelectedSubPeriod(
+        pendingPeriod === 'matin' || pendingPeriod === 'aprem' ? pendingSubPeriod : null,
+      )
+      setCurrentView('tasks')
       setShowConfirmDialog(false)
-      
+
       // Sauvegarder la période dans la base de données
       try {
         const today = new Date().toISOString().split('T')[0]
-        const userId = localStorage.getItem("userId") || ""
-        
+        const userId = localStorage.getItem('userId') || ''
+
         const workScheduleData = {
           user_id: userId,
           employee_email: userEmail,
           employee_name: userName,
           date: today,
           period: pendingPeriod,
-          sub_period: (pendingPeriod === "matin" || pendingPeriod === "aprem") ? pendingSubPeriod : null,
-          start_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          sub_period:
+            pendingPeriod === 'matin' || pendingPeriod === 'aprem' ? pendingSubPeriod : null,
+          start_time: new Date().toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
           end_time: '',
           type: 'work',
           is_temporary: true, // Marquer comme période temporaire (sera nettoyée automatiquement)
-          notes: `Période: ${pendingPeriod}${(pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod ? ` | Sous-créneau: ${pendingSubPeriod}` : ''}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
+          notes: `Période: ${pendingPeriod}${(pendingPeriod === 'matin' || pendingPeriod === 'aprem') && pendingSubPeriod ? ` | Sous-créneau: ${pendingSubPeriod}` : ''}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`,
         }
-        
+
         console.log('📝 Création de la période de travail:', workScheduleData)
-        
+
         // Créer ou mettre à jour le work_schedule avec isTemporary = true
         const response = await fetch('/api/db/work_schedules', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            data: workScheduleData
-          })
+            data: workScheduleData,
+          }),
         })
-        
+
         if (response.ok) {
           const result = await response.json()
           console.log('✅ Période de travail créée avec succès:', result.data)
@@ -565,10 +613,10 @@ export default function EmployeePage() {
           const error = await response.json()
           console.error('❌ Erreur création période:', error)
         }
-        
+
         // Stocker aussi en localStorage comme backup
         localStorage.setItem(`employee_${userId}_period`, pendingPeriod)
-        if ((pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod) {
+        if ((pendingPeriod === 'matin' || pendingPeriod === 'aprem') && pendingSubPeriod) {
           localStorage.setItem(`employee_${userId}_subPeriod`, pendingSubPeriod)
         } else {
           localStorage.removeItem(`employee_${userId}_subPeriod`)
@@ -579,7 +627,7 @@ export default function EmployeePage() {
       } catch (error) {
         // Erreur silencieuse
       }
-      
+
       setPendingPeriod(null)
       setPendingSubPeriod(null)
       // Reset break state for new period
@@ -603,11 +651,11 @@ export default function EmployeePage() {
   const handleSessionEnd = () => {
     // Marquer la session comme terminée pour permettre la déconnexion
     setSessionCompleted(true)
-    
+
     // Réinitialiser l'état de l'employé et revenir au menu
     setSelectedPeriod(null)
     setSelectedSubPeriod(null)
-    setCurrentView("menu")
+    setCurrentView('menu')
     setAccumulatedBreakTime(0)
     setIsOnBreak(false)
     setActiveBreakType(null)
@@ -616,59 +664,59 @@ export default function EmployeePage() {
     setShortBreaksCompleted(0)
     setLunchBreakTaken(false)
     setSelectedGym(null)
-    
+
     // Nettoyer les données de session du localStorage
-    const userId = localStorage.getItem("userId") || ""
+    const userId = localStorage.getItem('userId') || ''
     localStorage.removeItem(`employee_${userId}_period`)
     localStorage.removeItem(`employee_${userId}_subPeriod`)
     localStorage.removeItem(`employee_${userId}_sessionDate`)
   }
 
-  const getPeriodEmoji = (period: "matin" | "aprem" | "journee") => {
+  const getPeriodEmoji = (period: 'matin' | 'aprem' | 'journee') => {
     switch (period) {
-      case "matin":
+      case 'matin':
         return <Sunrise className="h-6 w-6 text-orange-500" />
-      case "aprem":
+      case 'aprem':
         return <Sunset className="h-6 w-6 text-orange-600" />
-      case "journee":
+      case 'journee':
         return <Sun className="h-6 w-6 text-yellow-500" />
     }
   }
 
-  const getPeriodText = (period: "matin" | "aprem" | "journee") => {
+  const getPeriodText = (period: 'matin' | 'aprem' | 'journee') => {
     switch (period) {
-      case "matin":
-        return "Matin"
-      case "aprem":
-        return "Après-midi"
-      case "journee":
-        return "Journée entière"
+      case 'matin':
+        return 'Matin'
+      case 'aprem':
+        return 'Après-midi'
+      case 'journee':
+        return 'Journée entière'
     }
   }
 
-  const getSubPeriodText = (subPeriod: "debut" | "milieu" | "fin", period: "matin" | "aprem") => {
-    if (subPeriod === "debut") {
-      return "Ouverture"
+  const getSubPeriodText = (subPeriod: 'debut' | 'milieu' | 'fin', period: 'matin' | 'aprem') => {
+    if (subPeriod === 'debut') {
+      return 'Ouverture'
     }
-    if (subPeriod === "milieu") {
-      return "Milieu"
+    if (subPeriod === 'milieu') {
+      return 'Milieu'
     }
-    return period === "matin" ? "Fin de matinée" : "Fin d'après-midi"
+    return period === 'matin' ? 'Fin de matinée' : "Fin d'après-midi"
   }
 
-  const getPeriodColor = (period: "matin" | "aprem" | "journee") => {
+  const getPeriodColor = (period: 'matin' | 'aprem' | 'journee') => {
     switch (period) {
-      case "matin":
-        return "bg-red-600"
-      case "aprem":
-        return "bg-red-600"
-      case "journee":
-        return "bg-red-600"
+      case 'matin':
+        return 'bg-red-600'
+      case 'aprem':
+        return 'bg-red-600'
+      case 'journee':
+        return 'bg-red-600'
     }
   }
 
   // Menu principal
-  if (currentView === "menu") {
+  if (currentView === 'menu') {
     return (
       <div className="min-h-screen bg-white">
         {/* Header */}
@@ -679,9 +727,7 @@ export default function EmployeePage() {
                 <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Espace Employé
-                </h1>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">Espace Employé</h1>
                 <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
                   {userName} • {userEmail}
                 </p>
@@ -710,32 +756,30 @@ export default function EmployeePage() {
               <CardTitle className="text-2xl md:text-3xl text-gray-900">
                 Que souhaitez-vous faire ?
               </CardTitle>
-              <p className="text-gray-600 text-base md:text-lg mt-2">Choisissez votre action pour aujourd'hui</p>
+              <p className="text-gray-600 text-base md:text-lg mt-2">
+                Choisissez votre action pour aujourd'hui
+              </p>
             </CardHeader>
             <CardContent className="space-y-4 md:space-y-6 pb-6 md:pb-8">
               <div className="grid gap-4 md:gap-6">
                 {/* Bouton Calendrier */}
                 <Button
-                  onClick={() => setCurrentView("calendar")}
+                  onClick={() => setCurrentView('calendar')}
                   className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
                 >
                   <Calendar className="w-8 h-8 md:w-10 md:h-10" />
                   <div className="text-left">
-                    <div className="font-bold text-base md:text-xl">
-                      Calendrier & Planning
-                    </div>
+                    <div className="font-bold text-base md:text-xl">Calendrier & Planning</div>
                     <div className="text-xs md:text-sm opacity-90">
                       Événements et horaires de travail
                     </div>
                   </div>
                 </Button>
 
-
-
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
                   <Button
-                    onClick={() => window.open(whatsappLink, "_blank")}
+                    onClick={() => window.open(whatsappLink, '_blank')}
                     className="h-16 md:h-20 text-base md:text-lg bg-green-600 hover:bg-green-700 flex items-center justify-center space-x-2 md:space-x-3 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
                   >
                     <MessageCircle className="w-6 h-6 md:w-8 md:h-8" />
@@ -752,50 +796,54 @@ export default function EmployeePage() {
                     <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
                       Commencer ma période de travail
                     </h3>
-                  <div className="grid gap-3 md:gap-4">
-                    <Button
-                      onClick={() => requestPeriodSelection("matin")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sunrise className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Matin</div>
-                        <div className="text-xs md:text-sm opacity-90">Ouverture et contrôles</div>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => requestPeriodSelection("aprem")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sunset className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Après-midi</div>
-                        <div className="text-xs md:text-sm opacity-90">Maintenance et nettoyage</div>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => requestPeriodSelection("journee")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sun className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Journée entière</div>
-                        <div className="text-xs md:text-sm opacity-90">Ouverture à fermeture</div>
-                      </div>
-                    </Button>
+                    <div className="grid gap-3 md:gap-4">
+                      <Button
+                        onClick={() => requestPeriodSelection('matin')}
+                        className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                      >
+                        <Sunrise className="w-7 h-7 md:w-9 md:h-9" />
+                        <div className="text-left">
+                          <div className="font-bold text-base md:text-lg">Matin</div>
+                          <div className="text-xs md:text-sm opacity-90">
+                            Ouverture et contrôles
+                          </div>
+                        </div>
+                      </Button>
+                      <Button
+                        onClick={() => requestPeriodSelection('aprem')}
+                        className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                      >
+                        <Sunset className="w-7 h-7 md:w-9 md:h-9" />
+                        <div className="text-left">
+                          <div className="font-bold text-base md:text-lg">Après-midi</div>
+                          <div className="text-xs md:text-sm opacity-90">
+                            Maintenance et nettoyage
+                          </div>
+                        </div>
+                      </Button>
+                      <Button
+                        onClick={() => requestPeriodSelection('journee')}
+                        className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
+                      >
+                        <Sun className="w-7 h-7 md:w-9 md:h-9" />
+                        <div className="text-left">
+                          <div className="font-bold text-base md:text-lg">Journée entière</div>
+                          <div className="text-xs md:text-sm opacity-90">Ouverture à fermeture</div>
+                        </div>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Section Pointage Simple (pour les employés sans accès aux périodes de travail) */}
-              {!hasWorkPeriodAccess && (
-                <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-200">
-                  <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
-                    Pointage
-                  </h3>
-                  <SimpleTimeTracker />
-                </div>
-              )}
+                {/* Section Pointage Simple (pour les employés sans accès aux périodes de travail) */}
+                {!hasWorkPeriodAccess && (
+                  <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
+                      Pointage
+                    </h3>
+                    <SimpleTimeTracker />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -843,8 +891,8 @@ export default function EmployeePage() {
             </DialogHeader>
             <div className="text-base md:text-lg space-y-2 text-gray-600 px-3 md:px-6 py-3 md:py-4">
               <div>
-                <strong>Période :</strong>{" "}
-                {pendingPeriod && getPeriodEmoji(pendingPeriod)} {pendingPeriod && getPeriodText(pendingPeriod)}
+                <strong>Période :</strong> {pendingPeriod && getPeriodEmoji(pendingPeriod)}{' '}
+                {pendingPeriod && getPeriodText(pendingPeriod)}
               </div>
               {selectedGym && (
                 <div>
@@ -852,12 +900,14 @@ export default function EmployeePage() {
                   {selectedGym.address && <span className="text-sm"> - {selectedGym.address}</span>}
                 </div>
               )}
-              {(pendingPeriod === "matin" || pendingPeriod === "aprem") && (
+              {(pendingPeriod === 'matin' || pendingPeriod === 'aprem') && (
                 <div className="space-y-2">
                   <strong>Sous-créneau :</strong>
                   <Select
-                    value={pendingSubPeriod || ""}
-                    onValueChange={(value) => setPendingSubPeriod(value as "debut" | "milieu" | "fin")}
+                    value={pendingSubPeriod || ''}
+                    onValueChange={(value) =>
+                      setPendingSubPeriod(value as 'debut' | 'milieu' | 'fin')
+                    }
                   >
                     <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
                       <SelectValue placeholder="Choisir Ouverture, Milieu ou Fin" />
@@ -866,24 +916,29 @@ export default function EmployeePage() {
                       <SelectItem value="debut">Ouverture</SelectItem>
                       <SelectItem value="milieu">Milieu</SelectItem>
                       <SelectItem value="fin">
-                        {pendingPeriod === "matin" ? "Fin de matinée" : "Fin d'après-midi"}
+                        {pendingPeriod === 'matin' ? 'Fin de matinée' : "Fin d'après-midi"}
                       </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
-              {selectedSubPeriod && selectedPeriod && selectedPeriod !== "journee" && (
+              {selectedSubPeriod && selectedPeriod && selectedPeriod !== 'journee' && (
                 <div>
-                  <strong>Sous-créneau actif :</strong> {getSubPeriodText(selectedSubPeriod, selectedPeriod)}
+                  <strong>Sous-créneau actif :</strong>{' '}
+                  {getSubPeriodText(selectedSubPeriod, selectedPeriod)}
                 </div>
               )}
               <div className="text-sm md:text-base text-red-700 bg-red-50 p-2 md:p-3 rounded-lg border border-red-200">
-                <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de période jusqu'à la fin
-                de votre session de travail.
+                <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de
+                période jusqu'à la fin de votre session de travail.
               </div>
             </div>
             <DialogFooter className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                onClick={cancelPeriodSelection}
+                className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto flex items-center justify-center gap-2"
+              >
                 <XCircle className="h-5 w-5" /> Annuler
               </Button>
               <Button
@@ -907,7 +962,8 @@ export default function EmployeePage() {
             </DialogHeader>
             <div className="py-4">
               <p className="text-sm text-gray-600 mb-4">
-                Plusieurs salles vous sont assignées. Sélectionnez celle où vous travaillez aujourd'hui :
+                Plusieurs salles vous sont assignées. Sélectionnez celle où vous travaillez
+                aujourd'hui :
               </p>
               <div className="space-y-2">
                 {assignedGyms.map((gym) => (
@@ -947,10 +1003,12 @@ export default function EmployeePage() {
             </DialogHeader>
             <div className="py-4">
               <p className="text-sm md:text-base text-gray-600">
-                Aucune tâche n'a été assignée pour le créneau <strong>{noTasksPeriodName}</strong> dans la salle <strong>{selectedGym?.name || "sélectionnée"}</strong>.
+                Aucune tâche n'a été assignée pour le créneau <strong>{noTasksPeriodName}</strong>{' '}
+                dans la salle <strong>{selectedGym?.name || 'sélectionnée'}</strong>.
               </p>
               <p className="text-sm text-gray-500 mt-3">
-                Contactez un administrateur pour qu'il attribue des tâches à votre rôle pour cette période.
+                Contactez un administrateur pour qu'il attribue des tâches à votre rôle pour cette
+                période.
               </p>
             </div>
             <DialogFooter>
@@ -973,7 +1031,8 @@ export default function EmployeePage() {
               </DialogTitle>
             </DialogHeader>
             <div className="py-2 text-sm md:text-base text-gray-700">
-              Veuillez sélectionner un sous-créneau avant de commencer votre période: Ouverture, Milieu ou Fin.
+              Veuillez sélectionner un sous-créneau avant de commencer votre période: Ouverture,
+              Milieu ou Fin.
             </div>
             <DialogFooter>
               <Button
@@ -1000,7 +1059,8 @@ export default function EmployeePage() {
                 Cette salle nécessite que vous soyez connecté au réseau WiFi de l'établissement.
               </p>
               <p className="text-sm text-gray-500">
-                Veuillez vous connecter au WiFi de la salle et réessayer. Si vous pensez être déjà connecté au bon réseau, contactez un administrateur.
+                Veuillez vous connecter au WiFi de la salle et réessayer. Si vous pensez être déjà
+                connecté au bon réseau, contactez un administrateur.
               </p>
             </div>
             <DialogFooter className="flex gap-2">
@@ -1028,7 +1088,8 @@ export default function EmployeePage() {
                 Vous avez une période de travail en cours qui n'est pas terminée.
               </p>
               <p className="text-sm text-gray-500">
-                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
+                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de
+                pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
               </p>
             </div>
             <DialogFooter className="flex gap-2">
@@ -1056,7 +1117,8 @@ export default function EmployeePage() {
                 Aucune salle de sport ne vous est actuellement assignée.
               </p>
               <p className="text-sm text-gray-500">
-                Pour démarrer une période de travail, vous devez d'abord être assigné à une salle. Veuillez contacter un administrateur pour plus d'informations.
+                Pour démarrer une période de travail, vous devez d'abord être assigné à une salle.
+                Veuillez contacter un administrateur pour plus d'informations.
               </p>
             </div>
             <DialogFooter className="flex gap-2">
@@ -1084,11 +1146,11 @@ export default function EmployeePage() {
   }
 
   // Vue Calendrier
-  if (currentView === "calendar") {
+  if (currentView === 'calendar') {
     return (
       <div className="min-h-screen bg-white">
         {/* Header */}
-                {/* Header */}
+        {/* Header */}
         <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
             <div className="flex items-center space-x-3 md:space-x-4">
@@ -1096,9 +1158,7 @@ export default function EmployeePage() {
                 <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Espace Employé
-                </h1>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">Espace Employé</h1>
                 <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
                   {userName} • {userEmail}
                 </p>
@@ -1108,7 +1168,7 @@ export default function EmployeePage() {
               {/* Si période en cours, bouton retour aux tâches, sinon menu */}
               {selectedPeriod ? (
                 <Button
-                  onClick={() => setCurrentView("tasks")}
+                  onClick={() => setCurrentView('tasks')}
                   variant="outline"
                   size="sm"
                   className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
@@ -1117,7 +1177,7 @@ export default function EmployeePage() {
                 </Button>
               ) : (
                 <Button
-                  onClick={() => setCurrentView("menu")}
+                  onClick={() => setCurrentView('menu')}
                   variant="outline"
                   size="sm"
                   className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
@@ -1138,9 +1198,9 @@ export default function EmployeePage() {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
-          <CalendarView 
-            hasWorkScheduleAccess={hasWorkScheduleAccess} 
-            hasCalendarAccess={hasCalendarAccess} 
+          <CalendarView
+            hasWorkScheduleAccess={hasWorkScheduleAccess}
+            hasCalendarAccess={hasCalendarAccess}
           />
         </div>
 
@@ -1158,7 +1218,8 @@ export default function EmployeePage() {
                 Vous avez une période de travail en cours qui n'est pas terminée.
               </p>
               <p className="text-sm text-gray-500">
-                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter.
+                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de
+                pouvoir vous déconnecter.
               </p>
             </div>
             <DialogFooter className="flex gap-2">
@@ -1194,7 +1255,7 @@ export default function EmployeePage() {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                {selectedPeriod ? getPeriodText(selectedPeriod) : "Mes Tâches"}
+                {selectedPeriod ? getPeriodText(selectedPeriod) : 'Mes Tâches'}
               </h1>
               <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
                 {userName} • {userEmail}
@@ -1204,7 +1265,7 @@ export default function EmployeePage() {
           <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto flex-wrap gap-2">
             {/* Bouton Calendrier */}
             <Button
-              onClick={() => setCurrentView("calendar")}
+              onClick={() => setCurrentView('calendar')}
               variant="outline"
               size="sm"
               className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
@@ -1250,7 +1311,7 @@ export default function EmployeePage() {
                 )}
               </div>
             </div>
-            
+
             {/* Instructions et boutons */}
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex-1">
@@ -1307,7 +1368,7 @@ export default function EmployeePage() {
                   </DropdownMenu>
                 ) : null}
                 <BreakManager
-                  period={selectedPeriod || "matin"}
+                  period={selectedPeriod || 'matin'}
                   isOnBreak={isOnBreak}
                   breakType={activeBreakType}
                   breakStartTime={breakStartTime}
@@ -1325,7 +1386,16 @@ export default function EmployeePage() {
           </div>
         </div>
 
-        {selectedPeriod && <TodoList period={selectedPeriod} subPeriod={selectedSubPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} roleId={userRoleId} onSessionEnd={handleSessionEnd} />}
+        {selectedPeriod && (
+          <TodoList
+            period={selectedPeriod}
+            subPeriod={selectedSubPeriod}
+            isBlocked={isOnBreak}
+            gymId={selectedGym?.id}
+            roleId={userRoleId}
+            onSessionEnd={handleSessionEnd}
+          />
+        )}
       </div>
 
       {/* Dialog pour afficher les instructions */}
@@ -1361,7 +1431,8 @@ export default function EmployeePage() {
               Vous avez une période de travail en cours qui n'est pas terminée.
             </p>
             <p className="text-sm text-gray-500">
-              Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
+              Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de
+              pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
             </p>
           </div>
           <DialogFooter className="flex gap-2">

@@ -1,22 +1,73 @@
-"use client"
+'use client'
 
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
+import { useState, useEffect, useRef } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
-import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+} from '@/components/ui/select'
+import {
+  Plus,
+  Trash2,
+  UserCheck,
+  UserX,
+  Shield,
+  Users,
+  User,
+  Building2,
+  Loader2,
+  AlertCircle,
+  X,
+  Check,
+  MessageCircle,
+  Save,
+  QrCode,
+  CheckCircle,
+  XCircle,
+  Pencil,
+} from 'lucide-react'
+interface Employee {
+  id: string
+  name: string
+  email: string
+  is_active: boolean
+  remote_work_enabled?: boolean
+  role_id?: string
+  employee_role?: { id: string; name: string; color: string }
+  has_calendar_access?: boolean
+  has_event_proposal_access?: boolean
+  has_work_schedule_access?: boolean
+  has_work_period_access?: boolean
+  gym_ids?: string[]
+  gyms?: Gym[]
+  created_at: string
+}
+
+interface Admin {
+  id: string
+  name: string
+  email: string
+  is_active: boolean
+  is_super_admin?: boolean
+  created_at: string
+}
+
+interface Gym {
+  id: string
+  name: string
+  location?: string
+  is_active: boolean
+  created_at: string
+}
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 import {
   Dialog,
   DialogContent,
@@ -24,16 +75,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 
 // Couleurs prédéfinies pour les rôles
 const ROLE_COLORS = [
-  { name: "Rouge", value: "rouge", hex: "#ef4444" },
-  { name: "Bleu", value: "bleu", hex: "#3b82f6" },
-  { name: "Orange", value: "orange", hex: "#f97316" },
-  { name: "Jaune", value: "jaune", hex: "#eab308" },
-  { name: "Noir", value: "noir", hex: "#1f2937" },
-  { name: "Mauve", value: "mauve", hex: "#a855f7" },
+  { name: 'Rouge', value: 'rouge', hex: '#ef4444' },
+  { name: 'Bleu', value: 'bleu', hex: '#3b82f6' },
+  { name: 'Orange', value: 'orange', hex: '#f97316' },
+  { name: 'Jaune', value: 'jaune', hex: '#eab308' },
+  { name: 'Noir', value: 'noir', hex: '#1f2937' },
+  { name: 'Mauve', value: 'mauve', hex: '#a855f7' },
 ]
 
 interface Role {
@@ -47,29 +98,29 @@ export function EmployeeManager() {
   const [admins, setAdmins] = useState<Admin[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [roles, setRoles] = useState<Role[]>([])
-  const [newEmployee, setNewEmployee] = useState({ 
-    name: "", 
-    email: "", 
-    gymIds: [] as string[], 
-    remoteWork: false, 
-    roleId: "",
-    newRoleName: "",
-    newRoleColor: "bleu",
+  const [newEmployee, setNewEmployee] = useState({
+    name: '',
+    email: '',
+    gymIds: [] as string[],
+    remoteWork: false,
+    roleId: '',
+    newRoleName: '',
+    newRoleColor: 'bleu',
     hasCalendarAccess: true,
     hasEventProposalAccess: true,
     hasWorkScheduleAccess: true,
-    hasWorkPeriodAccess: true
+    hasWorkPeriodAccess: true,
   })
-  const [newAdmin, setNewAdmin] = useState({ name: "", email: "" })
+  const [newAdmin, setNewAdmin] = useState({ name: '', email: '' })
   const [isAddingAdmin, setIsAddingAdmin] = useState(false)
-  const [adminValidationErrors, setAdminValidationErrors] = useState<{[key: string]: boolean}>({})
+  const [adminValidationErrors, setAdminValidationErrors] = useState<{ [key: string]: boolean }>({})
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [isEditingEmployee, setIsEditingEmployee] = useState(false)
-  const [validationErrors, setValidationErrors] = useState<{[key: string]: boolean}>({})
-  const [editValidationErrors, setEditValidationErrors] = useState<{[key: string]: boolean}>({})
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: boolean }>({})
+  const [editValidationErrors, setEditValidationErrors] = useState<{ [key: string]: boolean }>({})
   const [showAddFormConflict, setShowAddFormConflict] = useState(false)
   const [showEditFormConflict, setShowEditFormConflict] = useState(false)
-  
+
   // Refs pour le scroll automatique
   const nameInputRef = useRef<HTMLInputElement>(null)
   const emailInputRef = useRef<HTMLInputElement>(null)
@@ -78,24 +129,24 @@ export function EmployeeManager() {
   const editRoleSelectRef = useRef<HTMLButtonElement>(null)
   const addFormRef = useRef<HTMLDivElement>(null)
   const editFormRef = useRef<HTMLDivElement>(null)
-  const [editEmployee, setEditEmployee] = useState<{ 
-    id: string; 
-    name: string; 
-    email: string; 
-    gymIds: string[]; 
-    remoteWork: boolean;
-    roleId: string;
-    newRoleName: string;
-    newRoleColor: string;
-    hasCalendarAccess: boolean;
-    hasEventProposalAccess: boolean;
-    hasWorkScheduleAccess: boolean;
-    hasWorkPeriodAccess: boolean;
+  const [editEmployee, setEditEmployee] = useState<{
+    id: string
+    name: string
+    email: string
+    gymIds: string[]
+    remoteWork: boolean
+    roleId: string
+    newRoleName: string
+    newRoleColor: string
+    hasCalendarAccess: boolean
+    hasEventProposalAccess: boolean
+    hasWorkScheduleAccess: boolean
+    hasWorkPeriodAccess: boolean
   } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
-  const [whatsappLink, setWhatsappLink] = useState("")
-  const [siteUrl, setSiteUrl] = useState("")
+  const [activeTab, setActiveTab] = useState<'employees' | 'admins'>('employees')
+  const [whatsappLink, setWhatsappLink] = useState('')
+  const [siteUrl, setSiteUrl] = useState('')
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false)
   const [isSavingSiteUrl, setIsSavingSiteUrl] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
@@ -105,55 +156,59 @@ export function EmployeeManager() {
   const [selectedUser, setSelectedUser] = useState<{
     id: string
     name: string
-    type: "employee" | "admin" | "network"
+    type: 'employee' | 'admin' | 'network'
     isSuperAdmin?: boolean
   } | null>(null)
 
   const loadData = async () => {
     try {
-      // Charger les employés
-      const { data: employeesData, error: employeesError } = await supabase.from("employees").select("*").order("name")
-      if (!employeesError && employeesData) {
-        // Charger les salles assignées pour chaque employé
+      const empResponse = await fetch('/api/db/employees?orderBy=name')
+      if (empResponse.ok) {
+        const empResult = await empResponse.json()
+        const employeesData = empResult.data || []
         const employeesWithGyms = await Promise.all(
-          employeesData.map(async (emp) => {
+          employeesData.map(async (emp: any) => {
             const response = await fetch(`/api/employee-gyms?employeeId=${emp.id}`)
             if (response.ok) {
               const { data: gymsData } = await response.json()
               return {
                 ...emp,
                 gym_ids: gymsData?.map((g: any) => g.id) || [],
-                gyms: gymsData || []
+                gyms: gymsData || [],
               }
             }
             return emp
-          })
+          }),
         )
         setEmployees(employeesWithGyms)
       }
 
-      // Charger les admins
-      const { data: adminsData, error: adminsError } = await supabase.from("admins").select("*").order("name")
-      if (!adminsError) {
-        setAdmins(adminsData || [])
+      const admResponse = await fetch('/api/db/admins?orderBy=name')
+      if (admResponse.ok) {
+        const admResult = await admResponse.json()
+        setAdmins(admResult.data || [])
       }
 
-      // Charger les salles
-      const { data: gymsData, error: gymsError } = await supabase.from("gyms").select("*").order("name")
-      if (!gymsError) {
-        setGyms(gymsData || [])
+      const gymsResponse = await fetch('/api/db/gyms?orderBy=name')
+      if (gymsResponse.ok) {
+        const gymsResult = await gymsResponse.json()
+        setGyms(gymsResult.data || [])
       }
 
-      // Charger le lien WhatsApp
-      const { data: whatsappData } = await supabase.from("app_config").select("*").eq("key", "whatsapp_link").single()
-      if (whatsappData) {
-        setWhatsappLink(whatsappData.value || "")
+      const whatsappResponse = await fetch('/api/db/app_config?key=whatsapp_link&single=true')
+      if (whatsappResponse.ok) {
+        const whatsappResult = await whatsappResponse.json()
+        if (whatsappResult.data) {
+          setWhatsappLink(whatsappResult.data.value || '')
+        }
       }
 
-      // Charger l'URL du site
-      const { data: siteUrlData } = await supabase.from("app_config").select("*").eq("key", "site_url").single()
-      if (siteUrlData) {
-        setSiteUrl(siteUrlData.value || "")
+      const siteUrlResponse = await fetch('/api/db/app_config?key=site_url&single=true')
+      if (siteUrlResponse.ok) {
+        const siteUrlResult = await siteUrlResponse.json()
+        if (siteUrlResult.data) {
+          setSiteUrl(siteUrlResult.data.value || '')
+        }
       }
 
       // Charger les rôles
@@ -165,22 +220,22 @@ export function EmployeeManager() {
 
   const loadRoles = async () => {
     try {
-      const response = await fetch("/api/roles")
+      const response = await fetch('/api/roles')
       if (response.ok) {
         const { data } = await response.json()
         setRoles(data || [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des rôles:", error)
+      console.error('Erreur lors du chargement des rôles:', error)
     }
   }
 
   useEffect(() => {
     loadData()
     // Vérifier si l'utilisateur est super admin
-    const userRole = localStorage.getItem("userRole")
-    const isSuperAdminFlag = localStorage.getItem("isSuperAdmin") === "true"
-    setIsSuperAdmin(userRole === "superadmin" || isSuperAdminFlag)
+    const userRole = localStorage.getItem('userRole')
+    const isSuperAdminFlag = localStorage.getItem('isSuperAdmin') === 'true'
+    setIsSuperAdmin(userRole === 'superadmin' || isSuperAdminFlag)
   }, [])
 
   // Rafraîchissement automatique toutes les 15 secondes
@@ -188,11 +243,11 @@ export function EmployeeManager() {
 
   const addEmployee = async () => {
     // Validation des champs obligatoires
-    const errors: {[key: string]: boolean} = {}
+    const errors: { [key: string]: boolean } = {}
     if (!newEmployee.name) errors.name = true
     if (!newEmployee.email) errors.email = true
     if (!newEmployee.roleId) errors.roleId = true
-    
+
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors)
       // Scroll vers le premier champ en erreur
@@ -208,26 +263,27 @@ export function EmployeeManager() {
       }
       return
     }
-    
+
     // Reset les erreurs
     setValidationErrors({})
 
     try {
       // Gérer le rôle (existant ou nouveau)
       let roleId = newEmployee.roleId
-      let roleName = ""
-      let roleColor = ""
+      let roleName = ''
+      let roleColor = ''
 
-      if (roleId === "new" && newEmployee.newRoleName) {
+      if (roleId === 'new' && newEmployee.newRoleName) {
         // Créer un nouveau rôle
-        const colorHex = ROLE_COLORS.find(c => c.value === newEmployee.newRoleColor)?.hex || "#3b82f6"
+        const colorHex =
+          ROLE_COLORS.find((c) => c.value === newEmployee.newRoleColor)?.hex || '#3b82f6'
         const roleResponse = await fetch('/api/roles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: newEmployee.newRoleName,
-            color: colorHex
-          })
+            color: colorHex,
+          }),
         })
         if (roleResponse.ok) {
           const roleResult = await roleResponse.json()
@@ -236,10 +292,10 @@ export function EmployeeManager() {
           roleColor = roleResult.data.color
           await loadRoles()
         }
-      } else if (roleId && roleId !== "new") {
-        const selectedRole = roles.find(r => r.id === roleId)
-        roleName = selectedRole?.name || ""
-        roleColor = selectedRole?.color || ""
+      } else if (roleId && roleId !== 'new') {
+        const selectedRole = roles.find((r) => r.id === roleId)
+        roleName = selectedRole?.name || ''
+        roleColor = selectedRole?.color || ''
       }
 
       const response = await fetch('/api/db/users', {
@@ -252,20 +308,20 @@ export function EmployeeManager() {
             password: 'temppass123', // Mot de passe temporaire
             role: 'employee',
             remote_work_enabled: newEmployee.remoteWork,
-            role_id: roleId && roleId !== "new" ? roleId : null,
+            role_id: roleId && roleId !== 'new' ? roleId : null,
             has_calendar_access: newEmployee.hasCalendarAccess,
             has_event_proposal_access: newEmployee.hasEventProposalAccess,
             has_work_schedule_access: newEmployee.hasWorkScheduleAccess,
             has_work_period_access: newEmployee.hasWorkPeriodAccess,
-            active: true
-          }
-        })
+            active: true,
+          },
+        }),
       })
 
-      if (!response.ok) throw new Error('Erreur lors de l\'ajout')
+      if (!response.ok) throw new Error("Erreur lors de l'ajout")
 
       const result = await response.json()
-      
+
       // Gérer les assignations de salles
       if (result.data && newEmployee.gymIds.length > 0) {
         await fetch('/api/employee-gyms', {
@@ -273,24 +329,24 @@ export function EmployeeManager() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             employeeEmail: newEmployee.email,
-            gymIds: newEmployee.gymIds
-          })
+            gymIds: newEmployee.gymIds,
+          }),
         })
       }
 
       await loadData() // Recharger pour avoir les relations
-      setNewEmployee({ 
-        name: "", 
-        email: "", 
-        gymIds: [], 
+      setNewEmployee({
+        name: '',
+        email: '',
+        gymIds: [],
         remoteWork: false,
-        roleId: "",
-        newRoleName: "",
-        newRoleColor: "bleu",
+        roleId: '',
+        newRoleName: '',
+        newRoleColor: 'bleu',
         hasCalendarAccess: true,
         hasEventProposalAccess: true,
         hasWorkScheduleAccess: true,
-        hasWorkPeriodAccess: true
+        hasWorkPeriodAccess: true,
       })
       setIsAddingEmployee(false)
     } catch (error) {
@@ -307,10 +363,10 @@ export function EmployeeManager() {
       setTimeout(() => setShowAddFormConflict(false), 5000)
       return
     }
-    
+
     // Trouver le roleId à partir du role_id ou employee_role
-    let roleId = employee.role_id || ""
-    
+    let roleId = employee.role_id || ''
+
     // Si employee_role est un objet (relation chargée), utiliser son id
     if (employee.employee_role && typeof employee.employee_role === 'object') {
       roleId = employee.employee_role.id
@@ -323,12 +379,12 @@ export function EmployeeManager() {
       gymIds: employee.gym_ids || [],
       remoteWork: employee.remote_work_enabled || false,
       roleId: roleId,
-      newRoleName: "",
-      newRoleColor: "bleu",
+      newRoleName: '',
+      newRoleColor: 'bleu',
       hasCalendarAccess: employee.has_calendar_access !== false,
       hasEventProposalAccess: employee.has_event_proposal_access !== false,
       hasWorkScheduleAccess: employee.has_work_schedule_access !== false,
-      hasWorkPeriodAccess: employee.has_work_period_access !== false
+      hasWorkPeriodAccess: employee.has_work_period_access !== false,
     })
     setShowEditFormConflict(false)
     setIsEditingEmployee(true)
@@ -336,12 +392,12 @@ export function EmployeeManager() {
 
   const saveEditEmployee = async () => {
     if (!editEmployee) return
-    
+
     // Validation des champs obligatoires
-    const errors: {[key: string]: boolean} = {}
+    const errors: { [key: string]: boolean } = {}
     if (!editEmployee.name) errors.name = true
     if (!editEmployee.roleId) errors.roleId = true
-    
+
     if (Object.keys(errors).length > 0) {
       setEditValidationErrors(errors)
       // Scroll vers le premier champ en erreur
@@ -354,26 +410,27 @@ export function EmployeeManager() {
       }
       return
     }
-    
+
     // Reset les erreurs
     setEditValidationErrors({})
-    
+
     try {
       // Gérer le rôle (existant ou nouveau)
       let roleId = editEmployee.roleId
-      let roleName = ""
-      let roleColor = ""
+      let roleName = ''
+      let roleColor = ''
 
-      if (roleId === "new" && editEmployee.newRoleName) {
+      if (roleId === 'new' && editEmployee.newRoleName) {
         // Créer un nouveau rôle
-        const colorHex = ROLE_COLORS.find(c => c.value === editEmployee.newRoleColor)?.hex || "#3b82f6"
+        const colorHex =
+          ROLE_COLORS.find((c) => c.value === editEmployee.newRoleColor)?.hex || '#3b82f6'
         const roleResponse = await fetch('/api/roles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: editEmployee.newRoleName,
-            color: colorHex
-          })
+            color: colorHex,
+          }),
         })
         if (roleResponse.ok) {
           const roleResult = await roleResponse.json()
@@ -382,10 +439,10 @@ export function EmployeeManager() {
           roleColor = roleResult.data.color
           await loadRoles()
         }
-      } else if (roleId && roleId !== "new") {
-        const selectedRole = roles.find(r => r.id === roleId)
-        roleName = selectedRole?.name || ""
-        roleColor = selectedRole?.color || ""
+      } else if (roleId && roleId !== 'new') {
+        const selectedRole = roles.find((r) => r.id === roleId)
+        roleName = selectedRole?.name || ''
+        roleColor = selectedRole?.color || ''
       }
 
       // Mettre à jour les informations de base de l'employé
@@ -395,12 +452,12 @@ export function EmployeeManager() {
         body: JSON.stringify({
           name: editEmployee.name,
           remote_work_enabled: editEmployee.remoteWork,
-          role_id: roleId && roleId !== "new" ? roleId : null,
+          role_id: roleId && roleId !== 'new' ? roleId : null,
           has_calendar_access: editEmployee.hasCalendarAccess,
           has_event_proposal_access: editEmployee.hasEventProposalAccess,
           has_work_schedule_access: editEmployee.hasWorkScheduleAccess,
-          has_work_period_access: editEmployee.hasWorkPeriodAccess
-        })
+          has_work_period_access: editEmployee.hasWorkPeriodAccess,
+        }),
       })
 
       if (!response.ok) throw new Error('Erreur lors de la modification')
@@ -411,8 +468,8 @@ export function EmployeeManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: editEmployee.id,
-          gymIds: editEmployee.gymIds
-        })
+          gymIds: editEmployee.gymIds,
+        }),
       })
 
       await loadData()
@@ -423,7 +480,7 @@ export function EmployeeManager() {
     }
   }
 
-  const confirmDelete = (id: string, name: string, type: "employee" | "admin") => {
+  const confirmDelete = (id: string, name: string, type: 'employee' | 'admin') => {
     setSelectedUser({ id, name, type })
     setShowDeleteDialog(true)
   }
@@ -433,26 +490,31 @@ export function EmployeeManager() {
 
     try {
       const response = await fetch(`/api/db/users/${selectedUser.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       if (!response.ok) throw new Error('Erreur lors de la suppression')
 
-      if (selectedUser.type === "employee") {
+      if (selectedUser.type === 'employee') {
         setEmployees(employees.filter((emp) => emp.id !== selectedUser.id))
-      } else if (selectedUser.type === "admin") {
+      } else if (selectedUser.type === 'admin') {
         setAdmins(admins.filter((adm) => adm.id !== selectedUser.id))
       }
 
       setShowDeleteDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
+      console.error('Erreur lors de la suppression:', error)
     }
   }
 
-  const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isSuperAdmin = false) => {
-    if (type === "admin" && isSuperAdmin) {
+  const confirmStatusChange = (
+    id: string,
+    name: string,
+    type: 'employee' | 'admin',
+    isSuperAdmin = false,
+  ) => {
+    if (type === 'admin' && isSuperAdmin) {
       return
     }
     setSelectedUser({ id, name, type, isSuperAdmin })
@@ -463,48 +525,57 @@ export function EmployeeManager() {
     if (!selectedUser) return
 
     try {
-      const table = selectedUser.type === "employee" ? "employees" : "admins"
       const currentUser =
-        selectedUser.type === "employee"
+        selectedUser.type === 'employee'
           ? employees.find((emp) => emp.id === selectedUser.id)
           : admins.find((adm) => adm.id === selectedUser.id)
 
       if (!currentUser) return
 
-      const { error } = await supabase
-        .from(table)
-        .update({ is_active: !currentUser.is_active })
-        .eq("id", selectedUser.id)
+      const statusResponse = await fetch(`/api/db/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !currentUser.is_active }),
+      })
 
-      if (error) throw error
+      if (!statusResponse.ok) throw new Error('Erreur lors de la mise à jour')
 
-      if (selectedUser.type === "employee") {
-        setEmployees(employees.map((emp) => (emp.id === selectedUser.id ? { ...emp, is_active: !emp.is_active } : emp)))
+      if (selectedUser.type === 'employee') {
+        setEmployees(
+          employees.map((emp) =>
+            emp.id === selectedUser.id ? { ...emp, is_active: !emp.is_active } : emp,
+          ),
+        )
       } else {
-        setAdmins(admins.map((adm) => (adm.id === selectedUser.id ? { ...adm, is_active: !adm.is_active } : adm)))
+        setAdmins(
+          admins.map((adm) =>
+            adm.id === selectedUser.id ? { ...adm, is_active: !adm.is_active } : adm,
+          ),
+        )
       }
 
       setShowStatusDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
+      console.error('Erreur lors de la mise à jour:', error)
     }
   }
 
   const saveWhatsappLink = async () => {
     setIsSavingWhatsapp(true)
     try {
-      const userName = localStorage.getItem("userName") || "Admin"
-      
-      await supabase
-        .from("app_config")
-        .update({
-          value: whatsappLink,
-          updated_by: userName
-        })
-        .eq("key", "whatsapp_link")
+      const userName = localStorage.getItem('userName') || 'Admin'
+
+      await fetch('/api/db/app_config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: { value: whatsappLink, updated_by: userName },
+          where: { key: 'whatsapp_link' },
+        }),
+      })
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
+      console.error('Erreur lors de la sauvegarde:', error)
     } finally {
       setIsSavingWhatsapp(false)
     }
@@ -513,34 +584,29 @@ export function EmployeeManager() {
   const saveSiteUrl = async () => {
     setIsSavingSiteUrl(true)
     try {
-      const userName = localStorage.getItem("userName") || "Admin"
-      
-      // Vérifier si la config existe déjà
-      const { data: existing } = await supabase
-        .from("app_config")
-        .select("*")
-        .eq("key", "site_url")
-        .single()
+      const userName = localStorage.getItem('userName') || 'Admin'
 
-      if (existing) {
-        await supabase
-          .from("app_config")
-          .update({
-            value: siteUrl,
-            updated_by: userName
-          })
-          .eq("key", "site_url")
+      const existingResponse = await fetch('/api/db/app_config?key=site_url&single=true')
+      const existingResult = existingResponse.ok ? await existingResponse.json() : { data: null }
+
+      if (existingResult.data) {
+        await fetch('/api/db/app_config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: { value: siteUrl, updated_by: userName },
+            where: { key: 'site_url' },
+          }),
+        })
       } else {
-        await supabase
-          .from("app_config")
-          .insert({
-            key: "site_url",
-            value: siteUrl,
-            updated_by: userName
-          })
+        await fetch('/api/db/app_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { key: 'site_url', value: siteUrl, updated_by: userName } }),
+        })
       }
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
+      console.error('Erreur lors de la sauvegarde:', error)
     } finally {
       setIsSavingSiteUrl(false)
     }
@@ -567,11 +633,11 @@ export function EmployeeManager() {
       {/* Navigation entre employés et admins */}
       <div className="flex space-x-1 md:space-x-2 border-b border-gray-200 overflow-x-auto">
         <button
-          onClick={() => setActiveTab("employees")}
+          onClick={() => setActiveTab('employees')}
           className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === "employees"
-              ? "text-red-600 border-b-2 border-red-600"
-              : "text-gray-500 hover:text-gray-700"
+            activeTab === 'employees'
+              ? 'text-red-600 border-b-2 border-red-600'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <User className="w-4 h-4" />
@@ -581,11 +647,11 @@ export function EmployeeManager() {
           </span>
         </button>
         <button
-          onClick={() => setActiveTab("admins")}
+          onClick={() => setActiveTab('admins')}
           className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === "admins"
-              ? "text-red-600 border-b-2 border-red-600"
-              : "text-gray-500 hover:text-gray-700"
+            activeTab === 'admins'
+              ? 'text-red-600 border-b-2 border-red-600'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Shield className="w-4 h-4" />
@@ -643,7 +709,9 @@ export function EmployeeManager() {
             <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
               <div className="flex items-center gap-2 text-blue-600">
                 <QrCode className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="text-sm md:text-base font-medium">URL du site (pour QR Codes)</span>
+                <span className="text-sm md:text-base font-medium">
+                  URL du site (pour QR Codes)
+                </span>
               </div>
               <div className="flex-1 w-full flex flex-col sm:flex-row gap-2">
                 <Input
@@ -672,14 +740,15 @@ export function EmployeeManager() {
               </div>
             </div>
             <p className="text-xs text-blue-600 mt-2 ml-7">
-              Cette URL sera utilisée pour générer tous les QR Codes des salles (pour le pointage des employés)
+              Cette URL sera utilisée pour générer tous les QR Codes des salles (pour le pointage
+              des employés)
             </p>
           </CardContent>
         </Card>
       )}
 
       {/* Section Employés */}
-      {activeTab === "employees" && (
+      {activeTab === 'employees' && (
         <div className="space-y-6">
           <div className="flex justify-end">
             <Button
@@ -700,7 +769,7 @@ export function EmployeeManager() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              {isSuperAdmin ? "Ajouter un utilisateur" : "Ajouter un employé"}
+              {isSuperAdmin ? 'Ajouter un utilisateur' : 'Ajouter un employé'}
             </Button>
           </div>
 
@@ -712,7 +781,9 @@ export function EmployeeManager() {
               <CardContent className="space-y-4 p-4 md:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="emp-name">Nom complet <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="emp-name">
+                      Nom complet <span className="text-red-600">*</span>
+                    </Label>
                     <Input
                       ref={nameInputRef}
                       id="emp-name"
@@ -728,7 +799,9 @@ export function EmployeeManager() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="emp-email">Email <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="emp-email">
+                      Email <span className="text-red-600">*</span>
+                    </Label>
                     <Input
                       ref={emailInputRef}
                       id="emp-email"
@@ -778,7 +851,9 @@ export function EmployeeManager() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="emp-role">Rôle <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="emp-role">
+                      Rôle <span className="text-red-600">*</span>
+                    </Label>
                     <Select
                       value={newEmployee.roleId}
                       onValueChange={(value) => {
@@ -788,9 +863,9 @@ export function EmployeeManager() {
                         }
                       }}
                     >
-                      <SelectTrigger 
+                      <SelectTrigger
                         ref={roleSelectRef}
-                        id="emp-role" 
+                        id="emp-role"
                         className={`border ${validationErrors.roleId ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                       >
                         <SelectValue placeholder="Sélectionner un rôle" />
@@ -799,8 +874,8 @@ export function EmployeeManager() {
                         {roles.map((role) => (
                           <SelectItem key={role.id} value={role.id}>
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
+                              <div
+                                className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: role.color }}
                               />
                               {role.name}
@@ -812,14 +887,16 @@ export function EmployeeManager() {
                     </Select>
                   </div>
 
-                  {newEmployee.roleId === "new" && (
+                  {newEmployee.roleId === 'new' && (
                     <div className="space-y-3 p-3 bg-gray-50 rounded border border-gray-200">
                       <div className="space-y-2">
                         <Label htmlFor="new-role-name">Nom du nouveau rôle</Label>
                         <Input
                           id="new-role-name"
                           value={newEmployee.newRoleName}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, newRoleName: e.target.value })}
+                          onChange={(e) =>
+                            setNewEmployee({ ...newEmployee, newRoleName: e.target.value })
+                          }
                           placeholder="Ex: Coach, Formateur..."
                           className="border border-gray-300"
                         />
@@ -831,10 +908,12 @@ export function EmployeeManager() {
                             <button
                               key={color.value}
                               type="button"
-                              onClick={() => setNewEmployee({ ...newEmployee, newRoleColor: color.value })}
+                              onClick={() =>
+                                setNewEmployee({ ...newEmployee, newRoleColor: color.value })
+                              }
                               className={`w-8 h-8 rounded-full border-2 transition-all ${
-                                newEmployee.newRoleColor === color.value 
-                                  ? 'border-gray-900 scale-110' 
+                                newEmployee.newRoleColor === color.value
+                                  ? 'border-gray-900 scale-110'
                                   : 'border-gray-300 hover:scale-105'
                               }`}
                               style={{ backgroundColor: color.hex }}
@@ -854,7 +933,9 @@ export function EmployeeManager() {
                       <Checkbox
                         id="perm-calendar"
                         checked={newEmployee.hasCalendarAccess}
-                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasCalendarAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setNewEmployee({ ...newEmployee, hasCalendarAccess: checked as boolean })
+                        }
                       />
                       <Label htmlFor="perm-calendar" className="text-sm text-gray-700">
                         Accès au calendrier d'événements
@@ -864,7 +945,12 @@ export function EmployeeManager() {
                       <Checkbox
                         id="perm-schedule"
                         checked={newEmployee.hasWorkScheduleAccess}
-                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasWorkScheduleAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setNewEmployee({
+                            ...newEmployee,
+                            hasWorkScheduleAccess: checked as boolean,
+                          })
+                        }
                       />
                       <Label htmlFor="perm-schedule" className="text-sm text-gray-700">
                         Accès au planning de travail
@@ -874,15 +960,20 @@ export function EmployeeManager() {
                       <Checkbox
                         id="perm-period"
                         checked={newEmployee.hasWorkPeriodAccess}
-                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasWorkPeriodAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setNewEmployee({
+                            ...newEmployee,
+                            hasWorkPeriodAccess: checked as boolean,
+                          })
+                        }
                       />
                       <Label htmlFor="perm-period" className="text-sm text-gray-700">
                         Accès aux périodes de travail
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {newEmployee.hasWorkPeriodAccess 
-                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                      {newEmployee.hasWorkPeriodAccess
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)"
                         : "L'employé n'aura pas accès aux périodes de travail"}
                     </div>
                   </div>
@@ -892,7 +983,9 @@ export function EmployeeManager() {
                   <Checkbox
                     id="remote-work"
                     checked={newEmployee.remoteWork}
-                    onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, remoteWork: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setNewEmployee({ ...newEmployee, remoteWork: checked as boolean })
+                    }
                   />
                   <Label htmlFor="remote-work" className="text-sm text-gray-700">
                     Télétravail autorisé (pas de restriction réseau)
@@ -916,11 +1009,12 @@ export function EmployeeManager() {
                     Annuler
                   </Button>
                 </div>
-                
+
                 {showAddFormConflict && (
                   <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
                     <p className="text-orange-800 text-sm font-medium">
-                      ⚠️ Veuillez terminer ou annuler l'ajout de cet employé avant de modifier un employé existant.
+                      ⚠️ Veuillez terminer ou annuler l'ajout de cet employé avant de modifier un
+                      employé existant.
                     </p>
                   </div>
                 )}
@@ -940,7 +1034,9 @@ export function EmployeeManager() {
               <CardContent className="space-y-4 p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-name">Nom complet <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="edit-name">
+                      Nom complet <span className="text-red-600">*</span>
+                    </Label>
                     <Input
                       ref={editNameInputRef}
                       id="edit-name"
@@ -1000,7 +1096,9 @@ export function EmployeeManager() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-role">Rôle <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="edit-role">
+                      Rôle <span className="text-red-600">*</span>
+                    </Label>
                     <Select
                       value={editEmployee.roleId}
                       onValueChange={(value) => {
@@ -1010,9 +1108,9 @@ export function EmployeeManager() {
                         }
                       }}
                     >
-                      <SelectTrigger 
+                      <SelectTrigger
                         ref={editRoleSelectRef}
-                        id="edit-role" 
+                        id="edit-role"
                         className={`border ${editValidationErrors.roleId ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                       >
                         <SelectValue placeholder="Sélectionner un rôle" />
@@ -1021,8 +1119,8 @@ export function EmployeeManager() {
                         {roles.map((role) => (
                           <SelectItem key={role.id} value={role.id}>
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
+                              <div
+                                className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: role.color }}
                               />
                               {role.name}
@@ -1034,14 +1132,16 @@ export function EmployeeManager() {
                     </Select>
                   </div>
 
-                  {editEmployee.roleId === "new" && (
+                  {editEmployee.roleId === 'new' && (
                     <div className="space-y-3 p-3 bg-gray-50 rounded border border-gray-200">
                       <div className="space-y-2">
                         <Label htmlFor="edit-new-role-name">Nom du nouveau rôle</Label>
                         <Input
                           id="edit-new-role-name"
                           value={editEmployee.newRoleName}
-                          onChange={(e) => setEditEmployee({ ...editEmployee, newRoleName: e.target.value })}
+                          onChange={(e) =>
+                            setEditEmployee({ ...editEmployee, newRoleName: e.target.value })
+                          }
                           placeholder="Ex: Coach, Formateur..."
                           className="border border-gray-300"
                         />
@@ -1053,10 +1153,12 @@ export function EmployeeManager() {
                             <button
                               key={color.value}
                               type="button"
-                              onClick={() => setEditEmployee({ ...editEmployee, newRoleColor: color.value })}
+                              onClick={() =>
+                                setEditEmployee({ ...editEmployee, newRoleColor: color.value })
+                              }
                               className={`w-8 h-8 rounded-full border-2 transition-all ${
-                                editEmployee.newRoleColor === color.value 
-                                  ? 'border-gray-900 scale-110' 
+                                editEmployee.newRoleColor === color.value
+                                  ? 'border-gray-900 scale-110'
                                   : 'border-gray-300 hover:scale-105'
                               }`}
                               style={{ backgroundColor: color.hex }}
@@ -1076,7 +1178,12 @@ export function EmployeeManager() {
                       <Checkbox
                         id="edit-perm-calendar"
                         checked={editEmployee.hasCalendarAccess}
-                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasCalendarAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setEditEmployee({
+                            ...editEmployee,
+                            hasCalendarAccess: checked as boolean,
+                          })
+                        }
                       />
                       <Label htmlFor="edit-perm-calendar" className="text-sm text-gray-700">
                         Accès au calendrier d'événements
@@ -1086,7 +1193,12 @@ export function EmployeeManager() {
                       <Checkbox
                         id="edit-perm-schedule"
                         checked={editEmployee.hasWorkScheduleAccess}
-                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasWorkScheduleAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setEditEmployee({
+                            ...editEmployee,
+                            hasWorkScheduleAccess: checked as boolean,
+                          })
+                        }
                       />
                       <Label htmlFor="edit-perm-schedule" className="text-sm text-gray-700">
                         Accès au planning de travail
@@ -1096,15 +1208,20 @@ export function EmployeeManager() {
                       <Checkbox
                         id="edit-perm-period"
                         checked={editEmployee.hasWorkPeriodAccess}
-                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasWorkPeriodAccess: checked as boolean })}
+                        onCheckedChange={(checked) =>
+                          setEditEmployee({
+                            ...editEmployee,
+                            hasWorkPeriodAccess: checked as boolean,
+                          })
+                        }
                       />
                       <Label htmlFor="edit-perm-period" className="text-sm text-gray-700">
                         Accès aux périodes de travail
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {editEmployee.hasWorkPeriodAccess 
-                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                      {editEmployee.hasWorkPeriodAccess
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)"
                         : "L'employé n'aura pas accès aux périodes de travail"}
                     </div>
                   </div>
@@ -1114,7 +1231,9 @@ export function EmployeeManager() {
                   <Checkbox
                     id="edit-remote-work"
                     checked={editEmployee.remoteWork}
-                    onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, remoteWork: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setEditEmployee({ ...editEmployee, remoteWork: checked as boolean })
+                    }
                   />
                   <Label htmlFor="edit-remote-work" className="text-sm text-gray-700">
                     Télétravail autorisé (pas de restriction réseau)
@@ -1139,11 +1258,12 @@ export function EmployeeManager() {
                     Annuler
                   </Button>
                 </div>
-                
+
                 {showEditFormConflict && (
                   <div className="bg-orange-50 border-2 border-orange-400 rounded-xl p-4 mt-4">
                     <p className="text-orange-800 text-sm font-medium">
-                      ⚠️ Veuillez terminer ou annuler la modification de cet employé avant d'en ajouter un nouveau.
+                      ⚠️ Veuillez terminer ou annuler la modification de cet employé avant d'en
+                      ajouter un nouveau.
                     </p>
                   </div>
                 )}
@@ -1162,7 +1282,10 @@ export function EmployeeManager() {
               </Card>
             ) : (
               employees.map((employee) => (
-                <Card key={employee.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
+                <Card
+                  key={employee.id}
+                  className="border border-gray-200 bg-white hover:border-gray-300 transition-colors"
+                >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
@@ -1173,15 +1296,18 @@ export function EmployeeManager() {
                           <h3 className="font-medium text-sm text-gray-900">{employee.name}</h3>
                           <p className="text-xs text-gray-500">{employee.email}</p>
                           <div className="flex items-center space-x-2 mt-1">
-                            <Badge variant={employee.is_active ? "default" : "secondary"} className="text-xs px-2 py-0">
-                              {employee.is_active ? "Actif" : "Inactif"}
+                            <Badge
+                              variant={employee.is_active ? 'default' : 'secondary'}
+                              className="text-xs px-2 py-0"
+                            >
+                              {employee.is_active ? 'Actif' : 'Inactif'}
                             </Badge>
                             {employee.employee_role && (
-                              <Badge 
-                                className="text-xs px-2 py-0" 
-                                style={{ 
-                                  backgroundColor: employee.employee_role.color, 
-                                  color: '#fff'
+                              <Badge
+                                className="text-xs px-2 py-0"
+                                style={{
+                                  backgroundColor: employee.employee_role.color,
+                                  color: '#fff',
                                 }}
                               >
                                 {employee.employee_role.name}
@@ -1208,14 +1334,20 @@ export function EmployeeManager() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => confirmStatusChange(employee.id, employee.name, "employee")}
+                          onClick={() =>
+                            confirmStatusChange(employee.id, employee.name, 'employee')
+                          }
                         >
-                          {employee.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                          {employee.is_active ? (
+                            <UserX className="h-4 w-4" />
+                          ) : (
+                            <UserCheck className="h-4 w-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => confirmDelete(employee.id, employee.name, "employee")}
+                          onClick={() => confirmDelete(employee.id, employee.name, 'employee')}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1231,7 +1363,7 @@ export function EmployeeManager() {
       )}
 
       {/* Section Admins */}
-      {activeTab === "admins" && (
+      {activeTab === 'admins' && (
         <div className="space-y-6">
           {isSuperAdmin && (
             <div className="flex justify-end">
@@ -1248,12 +1380,16 @@ export function EmployeeManager() {
           {isAddingAdmin && isSuperAdmin && (
             <Card className="border border-gray-200 bg-white">
               <CardHeader className="border-b border-gray-200 bg-gray-50">
-                <CardTitle className="text-lg font-medium text-gray-900">Nouvel administrateur</CardTitle>
+                <CardTitle className="text-lg font-medium text-gray-900">
+                  Nouvel administrateur
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 p-4 md:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="admin-name">Nom complet <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="admin-name">
+                      Nom complet <span className="text-red-600">*</span>
+                    </Label>
                     <Input
                       id="admin-name"
                       value={newAdmin.name}
@@ -1268,7 +1404,9 @@ export function EmployeeManager() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="admin-email">Email <span className="text-red-600">*</span></Label>
+                    <Label htmlFor="admin-email">
+                      Email <span className="text-red-600">*</span>
+                    </Label>
                     <Input
                       id="admin-email"
                       type="email"
@@ -1287,15 +1425,15 @@ export function EmployeeManager() {
                 <div className="flex space-x-2">
                   <Button
                     onClick={async () => {
-                      const errors: {[key: string]: boolean} = {}
+                      const errors: { [key: string]: boolean } = {}
                       if (!newAdmin.name) errors.name = true
                       if (!newAdmin.email) errors.email = true
-                      
+
                       if (Object.keys(errors).length > 0) {
                         setAdminValidationErrors(errors)
                         return
                       }
-                      
+
                       try {
                         const response = await fetch('/api/db/users', {
                           method: 'POST',
@@ -1306,15 +1444,15 @@ export function EmployeeManager() {
                               email: newAdmin.email,
                               password: 'temppass123',
                               role: 'admin',
-                              active: true
-                            }
-                          })
+                              active: true,
+                            },
+                          }),
                         })
-                        
-                        if (!response.ok) throw new Error('Erreur lors de l\'ajout')
-                        
+
+                        if (!response.ok) throw new Error("Erreur lors de l'ajout")
+
                         await loadData()
-                        setNewAdmin({ name: "", email: "" })
+                        setNewAdmin({ name: '', email: '' })
                         setIsAddingAdmin(false)
                         setAdminValidationErrors({})
                       } catch (error) {
@@ -1329,7 +1467,7 @@ export function EmployeeManager() {
                   <Button
                     onClick={() => {
                       setIsAddingAdmin(false)
-                      setNewAdmin({ name: "", email: "" })
+                      setNewAdmin({ name: '', email: '' })
                       setAdminValidationErrors({})
                     }}
                     variant="outline"
@@ -1351,22 +1489,23 @@ export function EmployeeManager() {
               </Card>
             ) : (
               admins.map((admin) => (
-                <Card key={admin.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
+                <Card
+                  key={admin.id}
+                  className="border border-gray-200 bg-white hover:border-gray-300 transition-colors"
+                >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            admin.is_super_admin
-                              ? "bg-red-100"
-                              : "bg-red-100"
+                            admin.is_super_admin ? 'bg-red-100' : 'bg-red-100'
                           }`}
                         >
-                          <Shield className={`h-5 w-5 ${
-                            admin.is_super_admin
-                              ? "text-red-600"
-                              : "text-red-600"
-                          }`} />
+                          <Shield
+                            className={`h-5 w-5 ${
+                              admin.is_super_admin ? 'text-red-600' : 'text-red-600'
+                            }`}
+                          />
                         </div>
                         <div>
                           <div className="flex items-center space-x-2">
@@ -1378,8 +1517,11 @@ export function EmployeeManager() {
                             )}
                           </div>
                           <p className="text-xs text-gray-500">{admin.email}</p>
-                          <Badge variant={admin.is_active ? "default" : "secondary"} className="text-xs px-2 py-0 mt-1">
-                            {admin.is_active ? "Actif" : "Inactif"}
+                          <Badge
+                            variant={admin.is_active ? 'default' : 'secondary'}
+                            className="text-xs px-2 py-0 mt-1"
+                          >
+                            {admin.is_active ? 'Actif' : 'Inactif'}
                           </Badge>
                         </div>
                       </div>
@@ -1387,15 +1529,21 @@ export function EmployeeManager() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => confirmStatusChange(admin.id, admin.name, "admin", admin.is_super_admin)}
+                          onClick={() =>
+                            confirmStatusChange(admin.id, admin.name, 'admin', admin.is_super_admin)
+                          }
                           disabled={admin.is_super_admin && admin.is_active}
                         >
-                          {admin.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                          {admin.is_active ? (
+                            <UserX className="h-4 w-4" />
+                          ) : (
+                            <UserCheck className="h-4 w-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => confirmDelete(admin.id, admin.name, "admin")}
+                          onClick={() => confirmDelete(admin.id, admin.name, 'admin')}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1452,17 +1600,17 @@ export function EmployeeManager() {
             <DialogDescription className="text-lg text-gray-600">
               {selectedUser && (
                 <>
-                  Voulez-vous{" "}
+                  Voulez-vous{' '}
                   {(
-                    selectedUser.type === "employee"
+                    selectedUser.type === 'employee'
                       ? employees.find((e) => e.id === selectedUser.id)?.is_active
                       : admins.find((a) => a.id === selectedUser.id)?.is_active
                   )
-                    ? "désactiver"
-                    : "activer"}{" "}
+                    ? 'désactiver'
+                    : 'activer'}{' '}
                   le compte de <strong>{selectedUser.name}</strong> ?
                   <br />
-                  {(selectedUser.type === "employee"
+                  {(selectedUser.type === 'employee'
                     ? employees.find((e) => e.id === selectedUser.id)?.is_active
                     : admins.find((a) => a.id === selectedUser.id)?.is_active) && (
                     <span className="text-amber-600 font-medium">
