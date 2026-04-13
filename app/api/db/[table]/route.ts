@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
 import { validateTableData, sanitizeObject } from '@/lib/validation'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { auth } from '@/lib/auth'
 
 // Mapping des tables
 const tableMapping: { [key: string]: string } = {
@@ -277,8 +277,8 @@ export async function GET(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -422,8 +422,8 @@ export async function POST(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const authUserId = await verifyAuth(request)
-  if (!authUserId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -461,9 +461,16 @@ export async function POST(
       }
     }
     
-    // Sanitizer les données pour prévenir XSS
+    // Preserve raw passwords before sanitization (sanitizeObject corrupts special chars)
+    const rawPasswords = items.map((item: any) => item.password)
+
     const sanitizedData = sanitizeObject(items)
-    
+
+    // Restore raw passwords after sanitization
+    sanitizedData.forEach((item: any, i: number) => {
+      if (rawPasswords[i]) item.password = rawPasswords[i]
+    })
+
     // Convertir snake_case vers camelCase
     const convertedItems = await Promise.all(sanitizedData.map(async (item: any) => {
       const converted: any = {}
@@ -696,8 +703,8 @@ export async function PUT(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -718,9 +725,13 @@ export async function PUT(
       )
     }
     
-    // Sanitizer les données
+    // Preserve raw password before sanitization
+    const rawPassword = data.password
+
     const sanitizedData = sanitizeObject(data)
-    
+
+    if (rawPassword) sanitizedData.password = rawPassword
+
     // Convertir snake_case vers camelCase
     const converted: any = {}
     for (const [key, value] of Object.entries(sanitizedData)) {
@@ -774,8 +785,15 @@ export async function PUT(
       delete converted.role
     }
     
-    const result = await (prisma as any)[prismaModel].updateMany({
-      where,
+    if (!where?.id) {
+      return NextResponse.json(
+        { data: null, error: { message: 'Update requires an id in the where clause' } },
+        { status: 400 }
+      )
+    }
+
+    const result = await (prisma as any)[prismaModel].update({
+      where: { id: where.id },
       data: converted,
     })
     
@@ -795,8 +813,8 @@ export async function PATCH(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -821,7 +839,7 @@ export async function PATCH(
     }
     
     // Construire le where selon ce qui est fourni
-    const where: any = id ? { id: parseInt(id) } : { email }
+    const where: any = id ? { id } : { email }
     
     // Convertir snake_case vers camelCase
     const converted: any = {}
@@ -904,8 +922,8 @@ export async function DELETE(
   { params }: { params: Promise<{ table: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -927,7 +945,7 @@ export async function DELETE(
     
     // Supprimer l'enregistrement par ID
     const result = await (prisma as any)[prismaModel].delete({
-      where: { id: parseInt(id) }
+      where: { id }
     })
     
     return NextResponse.json({ data: result, error: null })

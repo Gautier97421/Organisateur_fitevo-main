@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { auth } from '@/lib/auth'
 
-// GET - Récupérer les pointages
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const userEmail = searchParams.get('user_email')
     const gymId = searchParams.get('gym_id')
@@ -13,8 +18,11 @@ export async function GET(request: NextRequest) {
     
     const where: any = {}
     
-    if (userEmail) {
+    const isAdmin = ['admin', 'superadmin'].includes(session.user.role)
+    if (isAdmin && userEmail) {
       where.employeeEmail = userEmail
+    } else if (!isAdmin) {
+      where.userId = session.user.id
     }
     
     if (gymId) {
@@ -49,9 +57,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Créer un pointage
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { user_email, gym_id } = await request.json()
     
     if (!user_email || !gym_id) {
@@ -61,7 +73,6 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Récupérer l'utilisateur
     const user = await prisma.user.findUnique({ 
       where: { email: user_email }
     })
@@ -73,8 +84,6 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Vérifier que l'utilisateur a accès au pointage simple (pas d'accès au planning)
-    // Note: hasWorkScheduleAccess sera disponible après régénération du client Prisma
     // @ts-ignore - Le champ existe dans le schéma mais le client doit être régénéré
     if ((user as any).hasWorkScheduleAccess) {
       return NextResponse.json(
@@ -83,7 +92,6 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Créer le pointage
     // @ts-ignore - Le modèle TimeEntry existe dans le schéma mais le client doit être régénéré
     const entry = await (prisma as any).timeEntry.create({
       data: {

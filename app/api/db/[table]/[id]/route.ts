@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { auth } from '@/lib/auth'
 
 // Mapping des tables
 const tableMapping: { [key: string]: string } = {
@@ -272,8 +272,8 @@ export async function GET(
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -309,8 +309,8 @@ export async function PUT(
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -355,8 +355,8 @@ export async function PATCH(
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
@@ -372,8 +372,8 @@ export async function DELETE(
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
   // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }

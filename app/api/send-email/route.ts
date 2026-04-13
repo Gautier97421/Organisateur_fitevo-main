@@ -1,22 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import logger from "@/lib/logger"
+import { auth } from "@/lib/auth"
 
+// TODO: This endpoint is a stub — no emails are actually sent.
+// Implement a real email provider (e.g. Resend, SendGrid) before using in production.
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { type, data } = body
 
-    // Log uniquement en développement (pas d'infos sensibles en production)
     logger.info("Email envoyé:", { type, timestamp: new Date().toISOString() })
 
     if (type === "emergency") {
-      // Envoi d'email d'urgence
       return NextResponse.json({
         success: true,
         message: "Alerte d'urgence envoyée",
       })
     } else if (type === "todolist") {
-      // Envoi de la to-do list complétée
       return NextResponse.json({
         success: true,
         message: "To-do list envoyée",

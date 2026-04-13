@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { auth } from '@/lib/auth'
 
-// GET - Récupérer tous les rôles
 export async function GET() {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const roles = await (prisma as any).role.findMany({
       orderBy: { createdAt: 'asc' }
     })
@@ -19,9 +24,16 @@ export async function GET() {
   }
 }
 
-// POST - Créer un nouveau rôle
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { name, color } = await request.json()
     
     if (!name || !color) {
@@ -31,13 +43,11 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Vérifier si le rôle existe déjà
     const existing = await (prisma as any).role.findUnique({ where: { name } })
     if (existing) {
       return NextResponse.json({ data: existing })
     }
     
-    // Créer le rôle
     const role = await (prisma as any).role.create({
       data: { name, color }
     })

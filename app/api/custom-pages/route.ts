@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,6 @@ export async function GET(request: NextRequest) {
     
     const where: any = {}
     
-    // Si on ne demande pas spécifiquement les inactives, on ne prend que les actives
     if (!includeInactive) {
       where.isActive = true
     }
@@ -35,10 +35,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { title, icon, description, roleIds, createdBy } = body
 
-    // Récupérer le dernier orderIndex
     const lastPage = await prisma.customPage.findFirst({
       orderBy: { orderIndex: "desc" }
     })
@@ -68,6 +75,14 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
     
@@ -96,6 +111,14 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
     

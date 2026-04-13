@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Récupérer l'adresse IP du client depuis plusieurs sources possibles
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const forwarded = request.headers.get('x-forwarded-for')
     const realIp = request.headers.get('x-real-ip')
-    const cfConnectingIp = request.headers.get('cf-connecting-ip') // Cloudflare
-    const trueClientIp = request.headers.get('true-client-ip') // Akamai
+    const cfConnectingIp = request.headers.get('cf-connecting-ip')
+    const trueClientIp = request.headers.get('true-client-ip')
     
     const clientIp = cfConnectingIp || trueClientIp || forwarded?.split(',')[0]?.trim() || realIp || 'unknown'
 
     return NextResponse.json({
       success: true,
       ip: clientIp,
-      debug: {
-        forwarded,
-        realIp,
-        cfConnectingIp,
-        trueClientIp
-      }
     })
   } catch (error) {
     return NextResponse.json(
@@ -31,6 +30,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { gymId } = await request.json()
 
     if (!gymId) {
@@ -40,7 +44,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Récupérer les informations de la salle
     const gym = await prisma.gym.findUnique({
       where: { id: gymId }
     })
@@ -52,7 +55,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Si la salle n'a pas de restriction WiFi, autoriser
     if (!gym.wifiRestricted) {
       return NextResponse.json({
         success: true,
@@ -61,7 +63,6 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Récupérer l'adresse IP du client depuis plusieurs sources
     const forwarded = request.headers.get('x-forwarded-for')
     const realIp = request.headers.get('x-real-ip')
     const cfConnectingIp = request.headers.get('cf-connecting-ip')
@@ -69,11 +70,9 @@ export async function POST(request: NextRequest) {
     
     const clientIp = cfConnectingIp || trueClientIp || forwarded?.split(',')[0]?.trim() || realIp || 'unknown'
 
-    // Vérifier si l'IP du client correspond à celle de la salle
     const expectedIp = gym.ipAddress
 
     if (!expectedIp) {
-      // Pas d'IP configurée, mais restriction activée = erreur de config
       return NextResponse.json({
         success: true,
         allowed: false,
@@ -83,14 +82,12 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Comparaison des IPs
-    // Accepter les IPs locales/Docker pour le développement
     const isLocalDev = clientIp === '127.0.0.1' || 
                        clientIp === '::1' || 
                        clientIp === 'unknown' ||
-                       clientIp.startsWith('172.') || // Docker network
-                       clientIp.startsWith('192.168.') || // LAN
-                       clientIp.startsWith('10.') // Private network
+                       clientIp.startsWith('172.') ||
+                       clientIp.startsWith('192.168.') ||
+                       clientIp.startsWith('10.')
                        
     const ipMatches = clientIp === expectedIp || isLocalDev
 

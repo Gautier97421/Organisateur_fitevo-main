@@ -1,40 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { auth } from '@/lib/auth'
 
-/**
- * API pour nettoyer les périodes de travail temporaires (is_temporary = true)
- * 
- * Les périodes temporaires sont celles lancées par les employés via "Commencer ma période de travail"
- * Elles sont automatiquement supprimées après la fin de la journée pour ne pas encombrer la base de données
- * 
- * Les périodes de calendrier (is_temporary = false) sont conservées pour le suivi des heures et la paie
- * 
- * Cette API peut être appelée manuellement ou via un cron job
- */
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     logger.info('Début du nettoyage des périodes temporaires')
     
-    // Calculer la date d'hier à minuit
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     yesterday.setHours(0, 0, 0, 0)
     
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
 
-    // Supprimer toutes les périodes temporaires datant d'avant aujourd'hui
     // @ts-ignore - Le champ isTemporary existe dans le schéma mais le client doit être rechargé
     const workSchedulesResult = await prisma.workSchedule.deleteMany({
       where: {
         isTemporary: true,
         date: {
-          lt: todayStart // Avant aujourd'hui à minuit
+          lt: todayStart
         }
       }
     })
 
-    // Supprimer les tâches complétées des jours précédents (historique quotidien non nécessaire)
     const tasksResult = await prisma.task.deleteMany({
       where: {
         status: 'completed',
@@ -61,11 +57,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * GET - Vérifier combien de périodes temporaires peuvent être nettoyées
- */
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!['admin', 'superadmin'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
 
     // @ts-ignore - Le champ isTemporary existe dans le schéma mais le client doit être rechargé
