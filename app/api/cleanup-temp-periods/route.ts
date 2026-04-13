@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Début du nettoyage des périodes temporaires')
-    
+
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     yesterday.setHours(0, 0, 0, 0)
-    
+
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
 
     // @ts-ignore - Le champ isTemporary existe dans le schéma mais le client doit être rechargé
@@ -26,33 +26,35 @@ export async function POST(request: NextRequest) {
       where: {
         isTemporary: true,
         date: {
-          lt: todayStart
-        }
-      }
+          lt: todayStart,
+        },
+      },
     })
 
     const tasksResult = await prisma.task.deleteMany({
       where: {
         status: 'completed',
         updatedAt: {
-          lt: todayStart
-        }
-      }
+          lt: todayStart,
+        },
+      },
     })
-    
-    logger.info(`Nettoyage terminé: ${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`)
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    logger.info(
+      `Nettoyage terminé: ${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`,
+    )
+
+    return NextResponse.json({
+      success: true,
       message: `${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`,
       workSchedulesDeleted: workSchedulesResult.count,
-      completedTasksDeleted: tasksResult.count 
+      completedTasksDeleted: tasksResult.count,
     })
   } catch (error: any) {
     logger.error('Erreur lors du nettoyage des périodes temporaires', error)
     return NextResponse.json(
       { success: false, error: error.message || 'Erreur lors du nettoyage' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
@@ -74,31 +76,31 @@ export async function GET(request: NextRequest) {
       where: {
         isTemporary: true,
         date: {
-          lt: todayStart
-        }
-      }
+          lt: todayStart,
+        },
+      },
     })
 
     const completedTasksCount = await prisma.task.count({
       where: {
         status: 'completed',
         updatedAt: {
-          lt: todayStart
-        }
-      }
+          lt: todayStart,
+        },
+      },
     })
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    return NextResponse.json({
+      success: true,
       workSchedulesCount,
       completedTasksCount,
-      message: `${workSchedulesCount} périodes temporaires et ${completedTasksCount} tâches complétées peuvent être supprimées`
+      message: `${workSchedulesCount} périodes temporaires et ${completedTasksCount} tâches complétées peuvent être supprimées`,
     })
   } catch (error: any) {
     logger.error('Erreur lors de la vérification des périodes temporaires', error)
     return NextResponse.json(
       { success: false, error: error.message || 'Erreur lors de la vérification' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

@@ -11,16 +11,13 @@ export async function GET() {
     }
 
     const roles = await (prisma as any).role.findMany({
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'asc' },
     })
-    
+
     return NextResponse.json({ data: roles, error: null })
   } catch (error: any) {
     logger.error('Erreur GET roles', error)
-    return NextResponse.json(
-      { error: 'Erreur lors de la récupération des rôles' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Erreur lors de la récupération des rôles' }, { status: 500 })
   }
 }
 
@@ -35,29 +32,23 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, color } = await request.json()
-    
+
     if (!name || !color) {
-      return NextResponse.json(
-        { error: 'Le nom et la couleur sont requis' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Le nom et la couleur sont requis' }, { status: 400 })
     }
-    
+
     const existing = await (prisma as any).role.findUnique({ where: { name } })
     if (existing) {
       return NextResponse.json({ data: existing })
     }
-    
+
     const role = await (prisma as any).role.create({
-      data: { name, color }
+      data: { name, color },
     })
-    
+
     return NextResponse.json({ data: role })
   } catch (error: any) {
     logger.error('Erreur POST role', error)
-    return NextResponse.json(
-      { error: 'Erreur lors de la création du rôle' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Erreur lors de la création du rôle' }, { status: 500 })
   }
 }

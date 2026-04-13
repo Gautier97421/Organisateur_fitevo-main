@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react"
+import { useEffect, useRef, useCallback } from 'react'
 
 /**
  * Hook pour rafraîchir automatiquement les données toutes les X secondes
@@ -9,7 +9,7 @@ import { useEffect, useRef, useCallback } from "react"
 export function useAutoRefresh(
   callback: () => void | Promise<void>,
   interval: number = 30000,
-  dependencies: any[] = []
+  dependencies: any[] = [],
 ) {
   const savedCallback = useRef<() => void | Promise<void>>(callback)
   const intervalId = useRef<NodeJS.Timeout | undefined>(undefined)

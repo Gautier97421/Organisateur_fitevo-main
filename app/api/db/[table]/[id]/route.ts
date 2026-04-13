@@ -22,7 +22,7 @@ const tableMapping: { [key: string]: string } = {
 // Mapper les champs du client vers le schéma Prisma
 function mapFieldsFromClient(table: string, data: any): any {
   const mapped = { ...data }
-  
+
   if (table === 'users' || table === 'admins' || table === 'employees') {
     if (mapped.is_first_login !== undefined) {
       mapped.isFirstLogin = mapped.is_first_login
@@ -61,7 +61,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.role_id
     }
   }
-  
+
   if (table === 'tasks') {
     if (mapped.order_index !== undefined) {
       mapped.orderIndex = mapped.order_index
@@ -99,7 +99,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.value
     }
   }
-  
+
   if (table === 'gyms') {
     // Mapper location vers address
     if (mapped.location !== undefined) {
@@ -128,7 +128,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.qr_code_enabled
     }
   }
-  
+
   if (table === 'work_schedules') {
     if (mapped.work_date !== undefined) {
       mapped.date = mapped.work_date
@@ -155,16 +155,16 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.user_id
     }
   }
-  
+
   return mapped
 }
 
 // Mapper les champs du schéma Prisma vers les noms attendus par le client
 function mapFieldsToClient(table: string, data: any): any {
   if (!data) return data
-  
+
   const mapped = { ...data }
-  
+
   if (table === 'users' || table === 'admins' || table === 'employees') {
     if (mapped.isFirstLogin !== undefined) {
       mapped.is_first_login = mapped.isFirstLogin
@@ -195,7 +195,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.roleId
     }
   }
-  
+
   if (table === 'tasks') {
     if (mapped.orderIndex !== undefined) {
       mapped.order_index = mapped.orderIndex
@@ -226,7 +226,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.roleIds
     }
   }
-  
+
   if (table === 'gyms') {
     if (mapped.address !== undefined) {
       mapped.location = mapped.address
@@ -253,7 +253,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.qrCodeEnabled
     }
   }
-  
+
   if (mapped.createdAt !== undefined) {
     mapped.created_at = mapped.createdAt
     delete mapped.createdAt
@@ -262,40 +262,37 @@ function mapFieldsToClient(table: string, data: any): any {
     mapped.updated_at = mapped.updatedAt
     delete mapped.updatedAt
   }
-  
+
   return mapped
 }
 
 // GET - Récupérer une entrée par ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string; id: string }> }
+  { params }: { params: Promise<{ table: string; id: string }> },
 ) {
   // Vérifier l'authentification
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   const { table, id } = await params
   try {
     const prismaModel = tableMapping[table] || table
-    
+
     // @ts-ignore - Accès dynamique au modèle Prisma
     const result = await prisma[prismaModel].findUnique({
       where: { id },
     })
-    
+
     if (!result) {
       return NextResponse.json({ error: 'Entrée non trouvée' }, { status: 404 })
     }
-    
+
     // Mapper les champs de retour
     const mappedResult = mapFieldsToClient(table, result)
-    
+
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
     logger.error('Erreur GET', error)
@@ -306,42 +303,39 @@ export async function GET(
 // PUT - Mettre à jour une entrée
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string; id: string }> }
+  { params }: { params: Promise<{ table: string; id: string }> },
 ) {
   // Vérifier l'authentification
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   const { table, id } = await params
   try {
     const body = await request.json()
-    
+
     const prismaModel = tableMapping[table] || table
-    
+
     // Mapper les champs du client vers Prisma
     const mappedData = mapFieldsFromClient(table, body)
-    
+
     // Hacher le mot de passe s'il est présent (pour les users)
     if ((table === 'users' || table === 'employees' || table === 'admins') && mappedData.password) {
       mappedData.password = await hashPassword(mappedData.password)
       // Marquer que ce n'est plus la première connexion
       mappedData.isFirstLogin = false
     }
-    
+
     // @ts-ignore - Accès dynamique au modèle Prisma
     const result = await prisma[prismaModel].update({
       where: { id },
       data: mappedData,
     })
-    
+
     // Mapper les champs de retour
     const mappedResult = mapFieldsToClient(table, result)
-    
+
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
     logger.error('Erreur PUT:', error)
@@ -352,43 +346,37 @@ export async function PUT(
 // PATCH - Mettre à jour partiellement une entrée (alias de PUT)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string; id: string }> }
+  { params }: { params: Promise<{ table: string; id: string }> },
 ) {
   // Vérifier l'authentification
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   return PUT(request, { params })
 }
 
 // DELETE - Supprimer une entrée
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ table: string; id: string }> }
+  { params }: { params: Promise<{ table: string; id: string }> },
 ) {
   // Vérifier l'authentification
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json(
-      { error: 'Authentification requise' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
-  
+
   const { table, id } = await params
   try {
     const prismaModel = tableMapping[table] || table
-    
+
     // @ts-ignore - Accès dynamique au modèle Prisma
     await prisma[prismaModel].delete({
       where: { id },
     })
-    
+
     return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
   } catch (error: any) {
     logger.error('Erreur DELETE:', error)

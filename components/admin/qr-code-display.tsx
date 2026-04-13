@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import { useEffect, useRef, useState } from "react"
-import QRCode from "qrcode"
-import { Button } from "@/components/ui/button"
-import { Download, QrCode as QrCodeIcon } from "lucide-react"
+import { useEffect, useRef, useState } from 'react'
+import QRCode from 'qrcode'
+import { Button } from '@/components/ui/button'
+import { Download, QrCode as QrCodeIcon } from 'lucide-react'
 
 interface QRCodeDisplayProps {
   gymId: string
@@ -13,7 +13,7 @@ interface QRCodeDisplayProps {
 
 export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [qrUrl, setQrUrl] = useState("")
+  const [qrUrl, setQrUrl] = useState('')
 
   useEffect(() => {
     const generateQR = async () => {
@@ -28,12 +28,12 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
           width: 200,
           margin: 2,
           color: {
-            dark: "#000000",
-            light: "#FFFFFF"
-          }
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
         })
       } catch (error) {
-        console.error("Erreur génération QR Code:", error)
+        console.error('Erreur génération QR Code:', error)
       }
     }
 
@@ -44,9 +44,9 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
     if (!canvasRef.current) return
 
     const canvas = canvasRef.current
-    const url = canvas.toDataURL("image/png")
-    const link = document.createElement("a")
-    link.download = `qr-code-${gymName.replace(/\s+/g, "-").toLowerCase()}.png`
+    const url = canvas.toDataURL('image/png')
+    const link = document.createElement('a')
+    link.download = `qr-code-${gymName.replace(/\s+/g, '-').toLowerCase()}.png`
     link.href = url
     link.click()
   }

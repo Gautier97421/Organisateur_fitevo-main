@@ -1,12 +1,12 @@
-"use client"
+'use client'
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Trash2, Check, GripVertical, X } from "lucide-react"
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Trash2, Check, GripVertical, X } from 'lucide-react'
 
 interface InstructionItem {
   id: number
@@ -47,14 +47,9 @@ export function SortableInstructionItem({
   setEditTitle,
   setEditDescription,
 }: SortableInstructionItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -67,7 +62,7 @@ export function SortableInstructionItem({
       ref={setNodeRef}
       style={style}
       className={`border-2 shadow-sm ${
-        item.is_active ? "border-red-200 bg-white" : "border-gray-200 bg-gray-50 opacity-70"
+        item.is_active ? 'border-red-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-70'
       }`}
     >
       <CardContent className="p-3 md:p-4">
@@ -132,8 +127,8 @@ export function SortableInstructionItem({
                 onClick={() => onToggleActive(item)}
                 variant="ghost"
                 size="sm"
-                className={`${item.is_active ? "text-green-600 hover:text-green-700" : "text-gray-400 hover:text-gray-500"} px-2`}
-                title={item.is_active ? "Désactiver" : "Activer"}
+                className={`${item.is_active ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-500'} px-2`}
+                title={item.is_active ? 'Désactiver' : 'Activer'}
               >
                 <Check className="w-3 h-3 md:w-4 md:h-4" />
               </Button>

@@ -1,26 +1,26 @@
-import { NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
-import logger from "@/lib/logger"
+import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+import { verifyAuth } from '@/lib/auth-middleware'
+import logger from '@/lib/logger'
 
 function normalizeMonth(input?: string): string {
   if (input && /^\d{4}-\d{2}$/.test(input)) {
     return input
   }
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 export async function GET(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
     const { searchParams } = new URL(request.url)
-    const month = normalizeMonth(searchParams.get("month") || undefined)
-    const gymId = searchParams.get("gym_id")
+    const month = normalizeMonth(searchParams.get('month') || undefined)
+    const gymId = searchParams.get('gym_id')
 
     const where: any = { entryMonth: month }
     if (gymId) {
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     const entries = await prisma.cashRegisterEntry.findMany({
       where,
-      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ entryDate: 'asc' }, { createdAt: 'asc' }],
     })
 
     const data = entries.map((entry) => ({
@@ -51,15 +51,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    logger.error("Erreur récupération récap caisse", error)
-    return NextResponse.json({ error: "Impossible de récupérer le récap caisse" }, { status: 500 })
+    logger.error('Erreur récupération récap caisse', error)
+    return NextResponse.json({ error: 'Impossible de récupérer le récap caisse' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
+  const userId = await verifyAuth()
   if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
   }
 
   try {
@@ -78,26 +78,32 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!period || !userEmail) {
-      return NextResponse.json({ error: "period et userEmail sont obligatoires" }, { status: 400 })
+      return NextResponse.json({ error: 'period et userEmail sont obligatoires' }, { status: 400 })
     }
 
-    if (customValues && typeof customValues === "object") {
+    if (customValues && typeof customValues === 'object') {
       for (const [key, value] of Object.entries(customValues as Record<string, any>)) {
-        if (value === "" || value === null || value === undefined) {
+        if (value === '' || value === null || value === undefined) {
           continue
         }
 
-        if (typeof value === "number") {
+        if (typeof value === 'number') {
           if (value < 0) {
-            return NextResponse.json({ error: `Valeur négative interdite pour ${key}` }, { status: 400 })
+            return NextResponse.json(
+              { error: `Valeur négative interdite pour ${key}` },
+              { status: 400 },
+            )
           }
           continue
         }
 
-        if (typeof value === "string") {
+        if (typeof value === 'string') {
           const parsed = Number(value)
           if (!Number.isNaN(parsed) && parsed < 0) {
-            return NextResponse.json({ error: `Valeur négative interdite pour ${key}` }, { status: 400 })
+            return NextResponse.json(
+              { error: `Valeur négative interdite pour ${key}` },
+              { status: 400 },
+            )
           }
         }
       }
@@ -105,10 +111,10 @@ export async function POST(request: NextRequest) {
 
     const parsedDate = entryDate ? new Date(entryDate) : new Date()
     if (Number.isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: "entryDate invalide" }, { status: 400 })
+      return NextResponse.json({ error: 'entryDate invalide' }, { status: 400 })
     }
 
-    const entryMonth = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}`
+    const entryMonth = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}`
 
     const created = await prisma.cashRegisterEntry.create({
       data: {
@@ -128,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: created }, { status: 201 })
   } catch (error) {
-    logger.error("Erreur création entrée caisse", error)
+    logger.error('Erreur création entrée caisse', error)
     return NextResponse.json({ error: "Impossible de créer l'entrée caisse" }, { status: 500 })
   }
 }

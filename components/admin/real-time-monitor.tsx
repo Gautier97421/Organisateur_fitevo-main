@@ -1,16 +1,16 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Clock, Coffee, Loader2, MapPin, Sunrise, Sunset, Sun } from "lucide-react"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Clock, Coffee, Loader2, MapPin, Sunrise, Sunset, Sun } from 'lucide-react'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 
 interface EmployeeStatus {
   id: string
   name: string
   email: string
-  currentPeriod: "matin" | "aprem" | "journee" | null
+  currentPeriod: 'matin' | 'aprem' | 'journee' | null
   startTime: string
   workDuration: string // Durée en texte (ex: "2h 30min")
   gymName: string | null
@@ -31,10 +31,10 @@ export function RealTimeMonitor() {
         setIsLoading(false)
         return
       }
-      
+
       const employeesData = await responseEmployees.json()
       const allUsers = employeesData.data || []
-      
+
       const employees = allUsers.filter((u: any) => {
         const isEmployee = u.role === 'employee'
         const isActive = u.is_active === true || u.active === true
@@ -48,45 +48,47 @@ export function RealTimeMonitor() {
       }
 
       const today = new Date().toISOString().split('T')[0]
-      
+
       const statusPromises = employees.map(async (emp: any) => {
         const scheduleUrl = `/api/db/work_schedules?user_id=${emp.id}&work_date=${today}`
         const responseSchedule = await fetch(scheduleUrl)
-        let currentPeriod: "matin" | "aprem" | "journee" | null = null
-        let startTime = ""
-        let workDuration = ""
+        let currentPeriod: 'matin' | 'aprem' | 'journee' | null = null
+        let startTime = ''
+        let workDuration = ''
         let gymName: string | null = null
         let isOnBreak = false
         let breakStartTime: string | undefined = undefined
-        
+
         if (responseSchedule.ok) {
           const scheduleData = await responseSchedule.json()
           const schedules = Array.isArray(scheduleData.data) ? scheduleData.data : []
-          
-          const activeWork = schedules.find((s: any) => s.type === 'work' && (!s.end_time || s.end_time === ''))
-          
+
+          const activeWork = schedules.find(
+            (s: any) => s.type === 'work' && (!s.end_time || s.end_time === ''),
+          )
+
           if (activeWork) {
             if (activeWork.notes) {
               const periodMatch = activeWork.notes.match(/Période:\s*(matin|aprem|journee)/)
               if (periodMatch) {
-                currentPeriod = periodMatch[1] as "matin" | "aprem" | "journee"
-                startTime = activeWork.start_time || ""
-                
+                currentPeriod = periodMatch[1] as 'matin' | 'aprem' | 'journee'
+                startTime = activeWork.start_time || ''
+
                 const now = new Date()
                 const [hours, minutes] = startTime.split(':').map(Number)
                 const startDate = new Date()
                 startDate.setHours(hours, minutes, 0, 0)
-                
+
                 const diffMs = now.getTime() - startDate.getTime()
                 const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
                 const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-                
+
                 if (diffHours > 0) {
                   workDuration = `${diffHours}h ${diffMinutes}min`
                 } else {
                   workDuration = `${diffMinutes}min`
                 }
-                
+
                 const gymIdMatch = activeWork.notes.match(/GymId:\s*([a-zA-Z0-9-]+)/)
                 if (gymIdMatch && gymIdMatch[1]) {
                   try {
@@ -102,8 +104,10 @@ export function RealTimeMonitor() {
               }
             }
           }
-          
-          const activeBreak = schedules.find((s: any) => s.type === 'break' && (!s.end_time || s.end_time === ''))
+
+          const activeBreak = schedules.find(
+            (s: any) => s.type === 'break' && (!s.end_time || s.end_time === ''),
+          )
           if (activeBreak) {
             isOnBreak = true
             breakStartTime = activeBreak.start_time
@@ -120,17 +124,17 @@ export function RealTimeMonitor() {
           gymName: gymName,
           isOnBreak: isOnBreak,
           breakStartTime: breakStartTime,
-          lastUpdate: new Date().toLocaleTimeString("fr-FR", {
-            hour: "2-digit",
-            minute: "2-digit",
+          lastUpdate: new Date().toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
           }),
         }
       })
 
       const statuses = await Promise.all(statusPromises)
-      
-      const activeStatuses = statuses.filter(s => s.currentPeriod !== null)
-      
+
+      const activeStatuses = statuses.filter((s) => s.currentPeriod !== null)
+
       setEmployeeStatuses(activeStatuses)
     } catch (error) {
       // Load error handled silently
@@ -147,26 +151,26 @@ export function RealTimeMonitor() {
   useAutoRefresh(loadEmployeeData, 10000)
 
   const getPeriodLabel = (period: string | null) => {
-    if (!period) return "Non démarré"
+    if (!period) return 'Non démarré'
     switch (period) {
-      case "matin":
-        return "Matin"
-      case "aprem":
-        return "Après-midi"
-      case "journee":
-        return "Journée entière"
+      case 'matin':
+        return 'Matin'
+      case 'aprem':
+        return 'Après-midi'
+      case 'journee':
+        return 'Journée entière'
       default:
         return period
     }
   }
 
-  const getPeriodIcon = (period: "matin" | "aprem" | "journee" | null) => {
+  const getPeriodIcon = (period: 'matin' | 'aprem' | 'journee' | null) => {
     switch (period) {
-      case "matin":
+      case 'matin':
         return <Sunrise className="h-5 w-5 text-orange-500" />
-      case "aprem":
+      case 'aprem':
         return <Sunset className="h-5 w-5 text-orange-600" />
-      case "journee":
+      case 'journee':
         return <Sun className="h-5 w-5 text-yellow-500" />
       default:
         return <Clock className="h-5 w-5 text-gray-400" />
@@ -179,7 +183,7 @@ export function RealTimeMonitor() {
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Suivi Temps Réel</h2>
         <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
           <Clock className="h-4 w-4" />
-          <span>Mise à jour : {new Date().toLocaleTimeString("fr-FR")}</span>
+          <span>Mise à jour : {new Date().toLocaleTimeString('fr-FR')}</span>
         </div>
       </div>
 
@@ -200,7 +204,10 @@ export function RealTimeMonitor() {
       ) : (
         <div className="grid gap-4">
           {employeeStatuses.map((employee) => (
-            <Card key={employee.id} className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+            <Card
+              key={employee.id}
+              className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800"
+            >
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -215,7 +222,10 @@ export function RealTimeMonitor() {
                     </div>
                   </div>
                   {employee.isOnBreak && (
-                    <Badge variant="secondary" className="flex items-center space-x-1 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center space-x-1 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+                    >
                       <Coffee className="h-3 w-3" />
                       <span>En pause</span>
                     </Badge>
@@ -231,29 +241,29 @@ export function RealTimeMonitor() {
                       {getPeriodLabel(employee.currentPeriod)}
                     </p>
                   </div>
-                  
+
                   {/* Heure de début */}
                   <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Démarré à</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {employee.startTime || "-"}
+                      {employee.startTime || '-'}
                     </p>
                   </div>
-                  
+
                   {/* Durée de travail */}
                   <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Depuis</p>
                     <p className="text-sm font-semibold text-red-600 dark:text-red-400">
-                      {employee.workDuration || "-"}
+                      {employee.workDuration || '-'}
                     </p>
                   </div>
-                  
+
                   {/* Salle */}
                   <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Salle</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center space-x-1">
                       <MapPin className="h-3 w-3" />
-                      <span>{employee.gymName || "Non définie"}</span>
+                      <span>{employee.gymName || 'Non définie'}</span>
                     </p>
                   </div>
                 </div>
@@ -279,13 +289,15 @@ export function RealTimeMonitor() {
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
                 <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-                  {employeeStatuses.filter(emp => !emp.isOnBreak).length}
+                  {employeeStatuses.filter((emp) => !emp.isOnBreak).length}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">Employés en activité</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  Employés en activité
+                </div>
               </div>
               <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
                 <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                  {employeeStatuses.filter(emp => emp.isOnBreak).length}
+                  {employeeStatuses.filter((emp) => emp.isOnBreak).length}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">En pause</div>
               </div>

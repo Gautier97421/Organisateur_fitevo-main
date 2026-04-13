@@ -9,7 +9,7 @@ async function main() {
 
   // Vérifier si des instructions existent déjà
   const existing = await prisma.newMemberInstructionItem.findFirst()
-  
+
   if (existing) {
     console.log('ℹ️  Les instructions existent déjà')
     return
@@ -55,8 +55,8 @@ async function main() {
 
 N'hésitez pas à poser des questions si vous avez oublié une étape !`,
       orderIndex: 1,
-      isActive: true
-    }
+      isActive: true,
+    },
   })
 
   console.log('✅ Instructions de nouveau adhérent créées')

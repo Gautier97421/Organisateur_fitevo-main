@@ -1,16 +1,28 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
-import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign, AlertTriangle } from "lucide-react"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { CashRegisterForm } from "./cash-register-form"
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
+import {
+  Lock,
+  CheckCircle,
+  XCircle,
+  Pause,
+  BarChart3,
+  FileText,
+  PartyPopper,
+  List as ListIcon,
+  Hourglass,
+  DollarSign,
+  AlertTriangle,
+} from 'lucide-react'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
+import { CashRegisterForm } from './cash-register-form'
 import {
   Dialog,
   DialogContent,
@@ -18,13 +30,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 
 interface Task {
   id: string
   title: string
   description: string
-  type: "checkbox" | "text" | "qcm"
+  type: 'checkbox' | 'text' | 'qcm'
   options?: string[]
   qcmAllowMultiple?: boolean
   required: boolean
@@ -32,29 +44,36 @@ interface Task {
   validated: boolean
   validated_at?: string
   value?: string
-  sub_period?: "debut" | "milieu" | "fin" // Sous-créneau
+  sub_period?: 'debut' | 'milieu' | 'fin' // Sous-créneau
 }
 
 interface TodoListProps {
-  period: "matin" | "aprem" | "journee"
-  subPeriod?: "debut" | "milieu" | "fin" | null
+  period: 'matin' | 'aprem' | 'journee'
+  subPeriod?: 'debut' | 'milieu' | 'fin' | null
   isBlocked: boolean
   gymId?: string // ID de la salle sélectionnée
   roleId?: string | null // ID du rôle de l'employé
   onSessionEnd?: () => void
 }
 
-export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, onSessionEnd }: TodoListProps) {
+export function TodoList({
+  period,
+  subPeriod = null,
+  isBlocked,
+  gymId,
+  roleId,
+  onSessionEnd,
+}: TodoListProps) {
   const [showValidationDialog, setShowValidationDialog] = useState(false)
   const [showCashRegisterForm, setShowCashRegisterForm] = useState(false)
-  const [cashFormMode, setCashFormMode] = useState<"start" | "end">("end")
+  const [cashFormMode, setCashFormMode] = useState<'start' | 'end'>('end')
   const [showOptionalTextWarningDialog, setShowOptionalTextWarningDialog] = useState(false)
   const [unvalidatedOptionalTextTasks, setUnvalidatedOptionalTextTasks] = useState<Task[]>([])
   const [taskToValidate, setTaskToValidate] = useState<Task | null>(null)
   const [textValues, setTextValues] = useState<Record<string, string>>({})
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const [isCheckingCashStatus, setIsCheckingCashStatus] = useState(false)
-  const [cashSaveError, setCashSaveError] = useState("")
+  const [cashSaveError, setCashSaveError] = useState('')
 
   useEffect(() => {
     const runDailyCleanup = async () => {
@@ -83,7 +102,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         return { options: value.map((opt) => String(opt)), qcmAllowMultiple: false }
       }
 
-      if (value && typeof value === "object") {
+      if (value && typeof value === 'object') {
         const choices = Array.isArray(value.choices)
           ? value.choices.map((opt: any) => String(opt))
           : Array.isArray(value.options)
@@ -98,7 +117,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       return { options: [], qcmAllowMultiple: false }
     }
 
-    if (typeof rawOptions === "string") {
+    if (typeof rawOptions === 'string') {
       try {
         return parseAny(JSON.parse(rawOptions))
       } catch {
@@ -122,66 +141,66 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const formatTaskValueForDisplay = (task: Task): string => {
-    if (!task.value) return ""
+    if (!task.value) return ''
     if (!task.qcmAllowMultiple) return task.value
 
     const values = getQcmSelectedValues(task)
-    return values.join(", ")
+    return values.join(', ')
   }
 
   const parseStoredResponseValue = (rawOptions: any, task: Task): string => {
-    if (!rawOptions) return ""
+    if (!rawOptions) return ''
 
     let parsed = rawOptions
-    if (typeof rawOptions === "string") {
+    if (typeof rawOptions === 'string') {
       try {
         parsed = JSON.parse(rawOptions)
       } catch {
-        return ""
+        return ''
       }
     }
 
-    if (!parsed || typeof parsed !== "object") return ""
+    if (!parsed || typeof parsed !== 'object') return ''
 
     const response = (parsed as any).response
-    if (response === null || response === undefined) return ""
+    if (response === null || response === undefined) return ''
 
-    if (task.type === "qcm") {
+    if (task.type === 'qcm') {
       if (Array.isArray(response)) {
         return JSON.stringify(response)
       }
       return String(response)
     }
 
-    if (task.type === "checkbox") {
-      return response ? "true" : ""
+    if (task.type === 'checkbox') {
+      return response ? 'true' : ''
     }
 
     return String(response)
   }
 
   // Fonction pour récupérer les tâches depuis la BDD selon la période
-  const getTasksForPeriod = async (period: "matin" | "aprem" | "journee"): Promise<Task[]> => {
+  const getTasksForPeriod = async (period: 'matin' | 'aprem' | 'journee'): Promise<Task[]> => {
     try {
       // Charger les tâches "modèles" (templates) depuis l'API
       // Ces tâches sont créées par l'admin et n'ont pas de statut completed par défaut
       // On ne filtre PAS par user_id car ce sont des templates globaux
       let url = `/api/db/tasks?period=${period}`
-      
+
       // Ajouter le filtre gym si défini
       if (gymId) {
         url += `&gym_id=${gymId}`
       }
-      
+
       const response = await fetch(url)
       if (!response.ok) {
         throw new Error('Erreur lors du chargement des tâches')
       }
-      
+
       const data = await response.json()
-      
-      let dbTasks = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-      
+
+      let dbTasks = Array.isArray(data.data) ? data.data : data.data ? [data.data] : []
+
       // Filtrer pour ne garder que les tâches "modèles" (templates)
       // Les tâches templates ont soit status='pending' soit pas de status du tout
       // Les tâches complétées par les users ont status='completed'
@@ -189,7 +208,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         // Garder les tâches qui ne sont pas complétées
         return !task.status || task.status === 'pending'
       })
-      
+
       // Filtrage côté client par roleId
       if (roleId) {
         dbTasks = dbTasks.filter((task: any) => {
@@ -197,16 +216,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           if (!task.role_ids || (Array.isArray(task.role_ids) && task.role_ids.length === 0)) {
             return true
           }
-          
+
           // Sinon, vérifier si le roleId de l'utilisateur est dans le tableau
-          const roleIds = Array.isArray(task.role_ids) 
-            ? task.role_ids 
-            : (typeof task.role_ids === 'string' ? JSON.parse(task.role_ids) : [])
+          const roleIds = Array.isArray(task.role_ids)
+            ? task.role_ids
+            : typeof task.role_ids === 'string'
+              ? JSON.parse(task.role_ids)
+              : []
           return roleIds.includes(roleId)
         })
       }
 
-      if ((period === "matin" || period === "aprem") && subPeriod) {
+      if ((period === 'matin' || period === 'aprem') && subPeriod) {
         dbTasks = dbTasks.filter((task: any) => {
           if (!task.sub_period) {
             return true
@@ -214,7 +235,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           return task.sub_period === subPeriod
         })
       }
-      
+
       // Convertir les tâches de la BDD au format attendu
       return dbTasks.map((task: any) => {
         const parsedQcm = parseQcmOptions(task.options)
@@ -222,13 +243,13 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           id: task.id,
           title: task.title,
           description: task.description || '',
-          type: task.type as "checkbox" | "text" | "qcm",
-          options: task.type === "qcm" ? parsedQcm.options : undefined,
+          type: task.type as 'checkbox' | 'text' | 'qcm',
+          options: task.type === 'qcm' ? parsedQcm.options : undefined,
           qcmAllowMultiple: parsedQcm.qcmAllowMultiple,
           required: task.required,
           completed: false, // Par défaut non complété
           validated: false, // Par défaut non validé
-          value: ''
+          value: '',
         }
       })
     } catch (error) {
@@ -242,12 +263,12 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   useEffect(() => {
     const loadTasksFromDb = async () => {
       setIsLoadingTasks(true)
-      const userId = localStorage.getItem("userId") || ""
-      
+      const userId = localStorage.getItem('userId') || ''
+
       try {
         // Charger les tâches "modèles" de la BDD pour cette période/salle
         const dbTasks = await getTasksForPeriod(period)
-        
+
         if (dbTasks.length > 0) {
           // Vérifier si l'utilisateur a déjà complété certaines de ces tâches
           // On cherche les tâches complétées par cet utilisateur pour cette période
@@ -257,24 +278,28 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           dayEnd.setHours(23, 59, 59, 999)
 
           const userTasksUrl = `/api/db/tasks?user_id=${userId}&period=${period}&status=completed&updated_at_gte=${encodeURIComponent(dayStart.toISOString())}&updated_at_lte=${encodeURIComponent(dayEnd.toISOString())}`
-          
+
           const userResponse = await fetch(userTasksUrl)
           if (userResponse.ok) {
             const userData = await userResponse.json()
-            const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
-            
+            const userTasks = Array.isArray(userData.data)
+              ? userData.data
+              : userData.data
+                ? [userData.data]
+                : []
+
             console.log('Tâches templates:', dbTasks.length)
             console.log('Tâches complétées:', userTasks.length)
-            
+
             // Mettre à jour le statut des tâches selon les données utilisateur
-            const mergedTasks = dbTasks.map(task => {
+            const mergedTasks = dbTasks.map((task) => {
               // Chercher si l'utilisateur a complété une tâche avec le même titre
               // On compare juste par titre car c'est l'identifiant unique le plus fiable
               const userTask = userTasks.find((t: any) => {
                 // Comparaison flexible : même titre ET même période
                 return t.title === task.title
               })
-              
+
               if (userTask && userTask.status === 'completed') {
                 console.log(`Tâche "${task.title}" trouvée comme complétée`)
                 const restoredValue = parseStoredResponseValue(userTask.options, task)
@@ -283,13 +308,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                   completed: true,
                   validated: true,
                   validated_at: userTask.updated_at,
-                  value: restoredValue
+                  value: restoredValue,
                 }
               }
               return task
             })
-            
-            console.log('Tâches fusionnées:', mergedTasks.filter(t => t.completed).length, 'complétées sur', mergedTasks.length)
+
+            console.log(
+              'Tâches fusionnées:',
+              mergedTasks.filter((t) => t.completed).length,
+              'complétées sur',
+              mergedTasks.length,
+            )
             setTasks(mergedTasks)
           } else {
             setTasks(dbTasks)
@@ -306,9 +336,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         setIsLoadingTasks(false)
       }
     }
-    
+
     loadTasksFromDb()
-    
+
     // Recharger toutes les 30 secondes SAUF si le formulaire de caisse est ouvert
     let interval: NodeJS.Timeout | undefined
     if (!showCashRegisterForm && !showValidationDialog) {
@@ -352,7 +382,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const handleTextValidateClick = (task: Task) => {
-    const value = (textValues[task.id] ?? task.value ?? "").trim()
+    const value = (textValues[task.id] ?? task.value ?? '').trim()
     if (!value) {
       return
     }
@@ -384,7 +414,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   const handleQcmValidateClick = (task: Task) => {
     const hasValue = task.qcmAllowMultiple
       ? getQcmSelectedValues(task).length > 0
-      : Boolean((task.value || "").trim())
+      : Boolean((task.value || '').trim())
 
     if (!hasValue) {
       return
@@ -392,7 +422,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
     const valueToSave = task.qcmAllowMultiple
       ? JSON.stringify(getQcmSelectedValues(task))
-      : (task.value || "")
+      : task.value || ''
 
     setTaskToValidate({
       ...task,
@@ -408,17 +438,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     try {
       const validationTime = new Date().toISOString()
       const userAgent = navigator.userAgent
-      const userId = localStorage.getItem("userId") || ""
-      const userEmail = localStorage.getItem("userEmail") || ""
+      const userId = localStorage.getItem('userId') || ''
+      const userEmail = localStorage.getItem('userEmail') || ''
       const today = new Date().toISOString().split('T')[0]
       const actorId = userId || userEmail
-      const responseValue = taskToValidate.type === "checkbox"
-        ? true
-        : taskToValidate.type === "qcm"
-          ? (taskToValidate.qcmAllowMultiple
+      const responseValue =
+        taskToValidate.type === 'checkbox'
+          ? true
+          : taskToValidate.type === 'qcm'
+            ? taskToValidate.qcmAllowMultiple
               ? getQcmSelectedValues(taskToValidate)
-              : (taskToValidate.value || ""))
-          : (taskToValidate.value || "")
+              : taskToValidate.value || ''
+            : taskToValidate.value || ''
 
       const responseOptionsPayload = {
         responseType: taskToValidate.type,
@@ -429,16 +460,16 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       // Sauvegarder dans la base de données
       const taskData = {
         title: taskToValidate.title,
-        description: taskToValidate.description || "",
+        description: taskToValidate.description || '',
         type: taskToValidate.type,
         period: period,
         sub_period: subPeriod || null,
         due_date: `${today}T00:00:00.000Z`,
-        status: "completed",
+        status: 'completed',
         user_id: actorId,
         created_by: actorId,
         options: responseOptionsPayload,
-        required: taskToValidate.required
+        required: taskToValidate.required,
       }
 
       // Vérifier si la tâche existe déjà dans la base
@@ -448,16 +479,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       dayEnd.setHours(23, 59, 59, 999)
 
       const existingTaskResponse = await fetch(
-        `/api/db/tasks?user_id=${userId}&title=${encodeURIComponent(taskToValidate.title)}&period=${period}&updated_at_gte=${encodeURIComponent(dayStart.toISOString())}&updated_at_lte=${encodeURIComponent(dayEnd.toISOString())}`
+        `/api/db/tasks?user_id=${userId}&title=${encodeURIComponent(taskToValidate.title)}&period=${period}&updated_at_gte=${encodeURIComponent(dayStart.toISOString())}&updated_at_lte=${encodeURIComponent(dayEnd.toISOString())}`,
       )
 
       if (!existingTaskResponse.ok) {
-        throw new Error("Impossible de vérifier la tâche existante")
+        throw new Error('Impossible de vérifier la tâche existante')
       }
-      
+
       const existingTaskData = await existingTaskResponse.json()
-      const existingTask = Array.isArray(existingTaskData.data) ? existingTaskData.data[0] : existingTaskData.data
-      
+      const existingTask = Array.isArray(existingTaskData.data)
+        ? existingTaskData.data[0]
+        : existingTaskData.data
+
       if (existingTask) {
         // Mettre à jour la tâche existante
         const updateResponse = await fetch(`/api/db/tasks/${existingTask.id}`, {
@@ -466,18 +499,18 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           body: JSON.stringify({
             status: 'completed',
             options: responseOptionsPayload,
-          })
+          }),
         })
 
         if (!updateResponse.ok) {
-          throw new Error("La validation de la tâche a échoué")
+          throw new Error('La validation de la tâche a échoué')
         }
       } else {
         // Créer une nouvelle tâche
         const createResponse = await fetch('/api/db/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: taskData })
+          body: JSON.stringify({ data: taskData }),
         })
 
         if (!createResponse.ok) {
@@ -501,11 +534,11 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
       setShowValidationDialog(false)
       setTaskToValidate(null)
-      
+
       console.log('Tâche validée et sauvegardée en BDD:', taskToValidate.title)
     } catch (error) {
-      console.error("Erreur lors de la validation:", error)
-      alert("Impossible de valider la tâche. Veuillez réessayer.")
+      console.error('Erreur lors de la validation:', error)
+      alert('Impossible de valider la tâche. Veuillez réessayer.')
     }
   }
 
@@ -515,7 +548,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const isFirstWorkSessionOfDay = async (): Promise<boolean> => {
-    const userId = localStorage.getItem("userId") || ""
+    const userId = localStorage.getItem('userId') || ''
     if (!userId) return false
 
     const today = new Date().toISOString().split('T')[0]
@@ -527,20 +560,22 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     }
 
     const data = await response.json()
-    const schedules = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-    const workSessions = schedules.filter((schedule: any) => (schedule.notes || "").includes("Période:"))
+    const schedules = Array.isArray(data.data) ? data.data : data.data ? [data.data] : []
+    const workSessions = schedules.filter((schedule: any) =>
+      (schedule.notes || '').includes('Période:'),
+    )
 
     return workSessions.length <= 1
   }
 
   const finalizeSession = async (cashData?: any, markCashRegisterDone?: boolean) => {
     try {
-      const userId = localStorage.getItem("userId") || ""
+      const userId = localStorage.getItem('userId') || ''
       const today = new Date().toISOString().split('T')[0]
-      const gymKey = gymId || "global"
-      
+      const gymKey = gymId || 'global'
+
       // Récupérer le temps de pause depuis le localStorage
-      const breakState = localStorage.getItem("employeeBreakState")
+      const breakState = localStorage.getItem('employeeBreakState')
       let totalBreakTime = 0
       if (breakState) {
         const parsed = JSON.parse(breakState)
@@ -549,38 +584,50 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         if (parsed.isOnBreak && parsed.breakStartTime) {
           const now = new Date()
           const breakStart = new Date(parsed.breakStartTime)
-          const currentBreakDuration = Math.floor((now.getTime() - breakStart.getTime()) / 1000 / 60)
+          const currentBreakDuration = Math.floor(
+            (now.getTime() - breakStart.getTime()) / 1000 / 60,
+          )
           totalBreakTime += currentBreakDuration
         }
       }
 
       // Mettre à jour work_schedules pour marquer la fin de la session
-      const scheduleResponse = await fetch(`/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`)
+      const scheduleResponse = await fetch(
+        `/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`,
+      )
       if (scheduleResponse.ok) {
         const scheduleData = await scheduleResponse.json()
-        const schedules = Array.isArray(scheduleData.data) ? scheduleData.data : (scheduleData.data ? [scheduleData.data] : [])
-        
+        const schedules = Array.isArray(scheduleData.data)
+          ? scheduleData.data
+          : scheduleData.data
+            ? [scheduleData.data]
+            : []
+
         // Trouver la session active (celle avec la période mais sans end_time)
-        const activeSchedule = schedules.find((s: any) => 
-          s.notes?.includes('Période:') && !s.end_time
+        const activeSchedule = schedules.find(
+          (s: any) => s.notes?.includes('Période:') && !s.end_time,
         )
-        
+
         if (activeSchedule) {
           // Mettre à jour avec l'heure de fin et le temps de pause
           const cashMarker = markCashRegisterDone
             ? ` | [CASH_REGISTER_DONE:${gymKey}:${today}]`
-            : ""
-          const cashSummary = markCashRegisterDone && cashData
-            ? ` | Caisse: ${Number(cashData.total_register || 0).toFixed(2)} EUR`
-            : ""
-          const updatedNotes = `${activeSchedule.notes || ""} | Pause: ${totalBreakTime} min${cashMarker}${cashSummary}`
+            : ''
+          const cashSummary =
+            markCashRegisterDone && cashData
+              ? ` | Caisse: ${Number(cashData.total_register || 0).toFixed(2)} EUR`
+              : ''
+          const updatedNotes = `${activeSchedule.notes || ''} | Pause: ${totalBreakTime} min${cashMarker}${cashSummary}`
           await fetch(`/api/db/work_schedules/${activeSchedule.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              end_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-              notes: updatedNotes
-            })
+              end_time: new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              notes: updatedNotes,
+            }),
           })
         }
       }
@@ -591,7 +638,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       localStorage.removeItem(`employee_${userId}_subPeriod`)
 
       setShowCashRegisterForm(false)
-      
+
       // Appeler le callback pour réinitialiser la vue
       if (onSessionEnd) {
         onSessionEnd()
@@ -601,12 +648,12 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     }
   }
 
-  const persistCashRegisterEntry = async (cashData: any, mode: "start" | "end") => {
-    setCashSaveError("")
+  const persistCashRegisterEntry = async (cashData: any, mode: 'start' | 'end') => {
+    setCashSaveError('')
 
-    const userEmail = localStorage.getItem("userEmail") || ""
-    const userName = localStorage.getItem("userName") || ""
-    const userId = localStorage.getItem("userId") || ""
+    const userEmail = localStorage.getItem('userEmail') || ''
+    const userName = localStorage.getItem('userName') || ''
+    const userId = localStorage.getItem('userId') || ''
 
     if (!userEmail || !userId) {
       setCashSaveError("Session utilisateur invalide: impossible d'enregistrer la caisse.")
@@ -614,15 +661,15 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       return false
     }
 
-    const modePrefix = mode === "start" ? "[OUVERTURE]" : "[FIN_PERIODE]"
-    const mergedNotes = [modePrefix, cashData.notes || ""].filter(Boolean).join(" ").trim()
+    const modePrefix = mode === 'start' ? '[OUVERTURE]' : '[FIN_PERIODE]'
+    const mergedNotes = [modePrefix, cashData.notes || ''].filter(Boolean).join(' ').trim()
 
-    const response = await fetch("/api/db/cash-register-entries", {
-      method: "POST",
+    const response = await fetch('/api/db/cash-register-entries', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "x-user-id": userId,
-        "x-user-email": userEmail,
+        'Content-Type': 'application/json',
+        'x-user-id': userId,
+        'x-user-email': userEmail,
       },
       body: JSON.stringify({
         entryDate: new Date().toISOString(),
@@ -632,26 +679,27 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         userName,
         totalRegister: Number(cashData.total_register || 0),
         cashAmount: Number(cashData.cash_amount || 0),
-        coinsDetail: cashData.coins_detail || "",
+        coinsDetail: cashData.coins_detail || '',
         notes: mergedNotes,
         customValues: Object.fromEntries(
-          Object.entries(cashData).filter(([key]) =>
-            !["cash_amount", "total_register", "coins_detail", "notes"].includes(key)
-          )
+          Object.entries(cashData).filter(
+            ([key]) => !['cash_amount', 'total_register', 'coins_detail', 'notes'].includes(key),
+          ),
         ),
       }),
     })
 
     if (!response.ok) {
-      let apiMessage = ""
+      let apiMessage = ''
       try {
         const payload = await response.json()
-        apiMessage = payload?.error || payload?.message || ""
+        apiMessage = payload?.error || payload?.message || ''
       } catch {
-        apiMessage = ""
+        apiMessage = ''
       }
 
-      const message = apiMessage || `Erreur API (${response.status}) lors de l'enregistrement de la caisse.`
+      const message =
+        apiMessage || `Erreur API (${response.status}) lors de l'enregistrement de la caisse.`
       setCashSaveError(message)
       alert(message)
       return false
@@ -664,7 +712,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     const saved = await persistCashRegisterEntry(cashData, cashFormMode)
     if (!saved) return
 
-    if (cashFormMode === "start") {
+    if (cashFormMode === 'start') {
       setShowCashRegisterForm(false)
       return
     }
@@ -674,10 +722,10 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
   const submitTodoList = async () => {
     const optionalTextFilledNotValidated = tasks.filter((task) => {
-      if (task.type !== "text" || task.required || task.validated) {
+      if (task.type !== 'text' || task.required || task.validated) {
         return false
       }
-      const value = (textValues[task.id] ?? task.value ?? "").trim()
+      const value = (textValues[task.id] ?? task.value ?? '').trim()
       return value.length > 0
     })
 
@@ -687,13 +735,13 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       return
     }
 
-    setCashFormMode("end")
+    setCashFormMode('end')
     setShowCashRegisterForm(true)
   }
 
   const continueToCashRegisterAfterWarning = () => {
     setShowOptionalTextWarningDialog(false)
-    setCashFormMode("end")
+    setCashFormMode('end')
     setShowCashRegisterForm(true)
   }
 
@@ -711,7 +759,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         return
       }
 
-      const userId = localStorage.getItem("userId") || ""
+      const userId = localStorage.getItem('userId') || ''
       if (!userId) return
 
       const today = new Date().toISOString().split('T')[0]
@@ -724,7 +772,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         setIsCheckingCashStatus(true)
         const shouldOpen = await isFirstWorkSessionOfDay()
         if (shouldOpen) {
-          setCashFormMode("start")
+          setCashFormMode('start')
           setShowCashRegisterForm(true)
           localStorage.setItem(sessionKey, '1')
         }
@@ -801,14 +849,16 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                 {completedTasks}/{totalTasks}
               </div>
               <div className="text-sm text-gray-600">
-                {validatedTasks} validée{validatedTasks > 1 ? "s" : ""}
+                {validatedTasks} validée{validatedTasks > 1 ? 's' : ''}
               </div>
             </div>
           </div>
           <Progress value={progress} className="h-4" />
           <p className="text-center mt-2 text-gray-600 flex items-center justify-center gap-2">
             {progress === 100 ? (
-              <><PartyPopper className="h-5 w-5 text-green-600" /> Toutes les tâches terminées !</>
+              <>
+                <PartyPopper className="h-5 w-5 text-green-600" /> Toutes les tâches terminées !
+              </>
             ) : (
               `${Math.round(progress)}% terminé`
             )}
@@ -821,12 +871,12 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         {tasks.map((task, index) => (
           <Card
             key={task.id}
-            className={`${isBlocked ? "opacity-50" : ""} ${
+            className={`${isBlocked ? 'opacity-50' : ''} ${
               task.validated
-                ? "border-red-300 bg-red-50"
+                ? 'border-red-300 bg-red-50'
                 : task.completed
-                  ? "border-green-300 bg-green-50"
-                  : "border-gray-200 bg-white"
+                  ? 'border-green-300 bg-green-50'
+                  : 'border-gray-200 bg-white'
             }`}
           >
             <CardHeader className="pb-3">
@@ -847,7 +897,11 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                       )}
                       {task.sub_period && (
                         <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-                          {task.sub_period === "debut" ? "Début" : task.sub_period === "milieu" ? "Milieu" : "Fin"}
+                          {task.sub_period === 'debut'
+                            ? 'Début'
+                            : task.sub_period === 'milieu'
+                              ? 'Milieu'
+                              : 'Fin'}
                         </span>
                       )}
                       {task.validated && (
@@ -858,7 +912,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                       )}
                       {task.validated && task.validated_at && (
                         <span className="text-xs text-gray-500">
-                          {new Date(task.validated_at).toLocaleTimeString("fr-FR")}
+                          {new Date(task.validated_at).toLocaleTimeString('fr-FR')}
                         </span>
                       )}
                     </div>
@@ -868,7 +922,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {task.type === "checkbox" && (
+              {task.type === 'checkbox' && (
                 <div className="flex items-center space-x-3">
                   <Checkbox
                     id={task.id}
@@ -877,19 +931,22 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                     disabled={isBlocked || task.validated}
                     className="w-6 h-6"
                   />
-                  <Label htmlFor={task.id} className="text-lg cursor-pointer text-gray-900 flex items-center gap-2">
+                  <Label
+                    htmlFor={task.id}
+                    className="text-lg cursor-pointer text-gray-900 flex items-center gap-2"
+                  >
                     <CheckCircle className="h-5 w-5" /> Marquer comme terminé
                   </Label>
                 </div>
               )}
 
-              {task.type === "text" && (
+              {task.type === 'text' && (
                 <div className="space-y-3">
                   <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
                     <FileText className="h-5 w-5" /> Votre réponse :
                   </Label>
                   <Textarea
-                    value={textValues[task.id] ?? task.value ?? ""}
+                    value={textValues[task.id] ?? task.value ?? ''}
                     onChange={(e) => handleTextChange(task.id, e.target.value)}
                     placeholder="Écrivez votre réponse ici..."
                     disabled={isBlocked || task.validated}
@@ -899,7 +956,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                     <Button
                       type="button"
                       onClick={() => handleTextValidateClick(task)}
-                      disabled={isBlocked || !(textValues[task.id] ?? task.value ?? "").trim()}
+                      disabled={isBlocked || !(textValues[task.id] ?? task.value ?? '').trim()}
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
                       <Lock className="h-4 w-4 mr-2" /> Valider ma réponse
@@ -908,11 +965,13 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                 </div>
               )}
 
-              {task.type === "qcm" && task.options && (
+              {task.type === 'qcm' && task.options && (
                 <div className="space-y-3">
                   <Label className="text-lg font-medium text-gray-900 flex items-center gap-2">
                     <ListIcon className="h-5 w-5" />
-                    {task.qcmAllowMultiple ? "Choisissez une ou plusieurs options :" : "Choisissez une option :"}
+                    {task.qcmAllowMultiple
+                      ? 'Choisissez une ou plusieurs options :'
+                      : 'Choisissez une option :'}
                   </Label>
                   {task.qcmAllowMultiple ? (
                     <div className="space-y-3">
@@ -942,7 +1001,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                     </div>
                   ) : (
                     <RadioGroup
-                      value={task.value || ""}
+                      value={task.value || ''}
                       onValueChange={(value) => handleQcmChange(task.id, value)}
                       disabled={isBlocked || task.validated}
                       className="space-y-3"
@@ -969,10 +1028,16 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                     <Button
                       type="button"
                       onClick={() => handleQcmValidateClick(task)}
-                      disabled={isBlocked || (task.qcmAllowMultiple ? getQcmSelectedValues(task).length === 0 : !(task.value || "").trim())}
+                      disabled={
+                        isBlocked ||
+                        (task.qcmAllowMultiple
+                          ? getQcmSelectedValues(task).length === 0
+                          : !(task.value || '').trim())
+                      }
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
-                      <Lock className="h-4 w-4 mr-2" /> {task.qcmAllowMultiple ? "Valider mes choix" : "Valider mon choix"}
+                      <Lock className="h-4 w-4 mr-2" />{' '}
+                      {task.qcmAllowMultiple ? 'Valider mes choix' : 'Valider mon choix'}
                     </Button>
                   )}
                 </div>
@@ -1002,7 +1067,8 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                   </p>
                 ) : (
                   <p className="text-sm mt-2 text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
-                    <DollarSign className="h-4 w-4" /> Vous devez remplir la fiche de caisse pour terminer votre période.
+                    <DollarSign className="h-4 w-4" /> Vous devez remplir la fiche de caisse pour
+                    terminer votre période.
                   </p>
                 )}
               </div>
@@ -1029,7 +1095,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               <span>Valider la tâche</span>
             </DialogTitle>
             <DialogDescription id="validation-description" className="text-base text-gray-600">
-              Confirmez la validation de cette tâche 
+              Confirmez la validation de cette tâche
             </DialogDescription>
           </DialogHeader>
           <div className="text-base text-gray-600 mb-4">
@@ -1049,10 +1115,17 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
             )}
           </div>
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button variant="outline" onClick={cancelValidation} className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={cancelValidation}
+              className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
+            >
               <XCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Annuler
             </Button>
-            <Button onClick={confirmValidation} className="bg-red-600 hover:bg-red-700 text-sm sm:text-lg px-4 sm:px-6 w-full sm:w-auto">
+            <Button
+              onClick={confirmValidation}
+              className="bg-red-600 hover:bg-red-700 text-sm sm:text-lg px-4 sm:px-6 w-full sm:w-auto"
+            >
               <Lock className="mr-2 h-4 w-4" />
               Valider
             </Button>
@@ -1062,13 +1135,19 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
       {/* Dialog d'avertissement: réponses optionnelles non validées */}
       <Dialog open={showOptionalTextWarningDialog} onOpenChange={setShowOptionalTextWarningDialog}>
-        <DialogContent className="sm:max-w-lg bg-white" aria-describedby="optional-text-warning-description">
+        <DialogContent
+          className="sm:max-w-lg bg-white"
+          aria-describedby="optional-text-warning-description"
+        >
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
               <AlertTriangle className="h-6 w-6 text-amber-600" />
               <span>Réponses non validées</span>
             </DialogTitle>
-            <DialogDescription id="optional-text-warning-description" className="text-base text-gray-600">
+            <DialogDescription
+              id="optional-text-warning-description"
+              className="text-base text-gray-600"
+            >
               Vous avez rempli une ou plusieurs réponses optionnelles sans les valider.
             </DialogDescription>
           </DialogHeader>

@@ -1,17 +1,17 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { X, LucideIcon } from "lucide-react"
-import * as Icons from "lucide-react"
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { X, LucideIcon } from 'lucide-react'
+import * as Icons from 'lucide-react'
 
 interface PageItem {
   id: number
@@ -59,21 +59,27 @@ export function CustomPageDialog({
 
   // Récupérer l'icône Lucide dynamiquement
   const IconComponent = (Icons as any)[pageIcon] || Icons.FileText
-  
-  const activeItems = Array.isArray(items) ? items.filter(item => item.is_active) : []
+
+  const activeItems = Array.isArray(items) ? items.filter((item) => item.is_active) : []
   const completedCount = checkedItems.size
   const totalCount = activeItems.length
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby="custom-page-description">
+      <DialogContent
+        className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto"
+        aria-describedby="custom-page-description"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg md:text-xl font-semibold text-gray-900">
             <IconComponent className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
             {pageTitle}
           </DialogTitle>
           {pageDescription && (
-            <DialogDescription id="custom-page-description" className="text-xs md:text-sm text-gray-500">
+            <DialogDescription
+              id="custom-page-description"
+              className="text-xs md:text-sm text-gray-500"
+            >
               {pageDescription}
             </DialogDescription>
           )}
@@ -96,8 +102,8 @@ export function CustomPageDialog({
                 key={item.id}
                 className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
                   checkedItems.has(item.id)
-                    ? "bg-green-50 border-green-200"
-                    : "bg-white border-gray-200 hover:border-red-300"
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-white border-gray-200 hover:border-red-300'
                 }`}
               >
                 <Checkbox
@@ -106,19 +112,14 @@ export function CustomPageDialog({
                   onCheckedChange={() => handleToggle(item.id)}
                   className="mt-1 flex-shrink-0"
                 />
-                <label
-                  htmlFor={`item-${item.id}`}
-                  className="flex-1 cursor-pointer"
-                >
+                <label htmlFor={`item-${item.id}`} className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2 mb-1">
                     <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
                       {index + 1}
                     </div>
                     <h3
                       className={`font-medium text-sm md:text-base ${
-                        checkedItems.has(item.id)
-                          ? "text-gray-500 line-through"
-                          : "text-gray-900"
+                        checkedItems.has(item.id) ? 'text-gray-500 line-through' : 'text-gray-900'
                       }`}
                     >
                       {item.title}
@@ -127,7 +128,7 @@ export function CustomPageDialog({
                   {item.description && (
                     <p
                       className={`text-xs md:text-sm ml-6 md:ml-8 ${
-                        checkedItems.has(item.id) ? "text-gray-400" : "text-gray-600"
+                        checkedItems.has(item.id) ? 'text-gray-400' : 'text-gray-600'
                       }`}
                     >
                       {item.description}

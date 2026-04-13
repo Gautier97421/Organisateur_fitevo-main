@@ -1,10 +1,10 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Clock, MapPin, CheckCircle, Loader2 } from "lucide-react"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Clock, MapPin, CheckCircle, Loader2 } from 'lucide-react'
 interface Gym {
   id: string
   name: string
@@ -26,10 +26,10 @@ export function SimpleTimeTracker() {
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPunching, setIsPunching] = useState(false)
-  const [userEmail, setUserEmail] = useState("")
+  const [userEmail, setUserEmail] = useState('')
 
   useEffect(() => {
-    const email = localStorage.getItem("userEmail")
+    const email = localStorage.getItem('userEmail')
     if (email) {
       setUserEmail(email)
       loadData(email)
@@ -42,7 +42,8 @@ export function SimpleTimeTracker() {
       const gymsResponse = await fetch('/api/db/gyms?is_active=true')
       if (gymsResponse.ok) {
         const gymsResult = await gymsResponse.json()
-        if (gymsResult.data) setGyms(Array.isArray(gymsResult.data) ? gymsResult.data : [gymsResult.data])
+        if (gymsResult.data)
+          setGyms(Array.isArray(gymsResult.data) ? gymsResult.data : [gymsResult.data])
       }
 
       // Charger les 5 derniers pointages
@@ -54,7 +55,7 @@ export function SimpleTimeTracker() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors du chargement:", error)
+      console.error('Erreur lors du chargement:', error)
     } finally {
       setIsLoading(false)
     }
@@ -63,9 +64,9 @@ export function SimpleTimeTracker() {
   const punchIn = async (gymId: string, gymName: string) => {
     setIsPunching(true)
     try {
-      const response = await fetch("/api/time-entries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/time-entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_email: userEmail,
           gym_id: gymId,
@@ -74,17 +75,17 @@ export function SimpleTimeTracker() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error?.message || "Erreur lors du pointage")
+        throw new Error(error.error?.message || 'Erreur lors du pointage')
       }
 
       const result = await response.json()
-      
+
       // Ajouter le nouveau pointage en haut de la liste
       if (result.data) {
         setRecentEntries([result.data, ...recentEntries.slice(0, 4)])
       }
     } catch (error: any) {
-      console.error("Erreur pointage:", error)
+      console.error('Erreur pointage:', error)
     } finally {
       setIsPunching(false)
     }
@@ -92,12 +93,12 @@ export function SimpleTimeTracker() {
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    return date.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     })
   }
 
@@ -122,7 +123,7 @@ export function SimpleTimeTracker() {
           <p className="text-gray-600">
             Sélectionnez la salle où vous vous trouvez pour enregistrer votre pointage :
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {gyms.map((gym) => (
               <Button
@@ -149,9 +150,7 @@ export function SimpleTimeTracker() {
       {recentEntries.length > 0 && (
         <Card className="border-0 shadow-xl bg-white">
           <CardHeader className="border-b border-gray-200 bg-gray-50">
-            <CardTitle className="text-lg font-bold text-gray-900">
-              Derniers pointages
-            </CardTitle>
+            <CardTitle className="text-lg font-bold text-gray-900">Derniers pointages</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-3">

@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -11,19 +11,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { XCircle, AlertTriangle, Send } from "lucide-react"
+} from '@/components/ui/dialog'
+import { XCircle, AlertTriangle, Send } from 'lucide-react'
 
 export function EmergencyButton() {
   const [isOpen, setIsOpen] = useState(false)
-  const [message, setMessage] = useState("")
+  const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
 
   // TODO: Implement actual emergency alert sending (e.g. via /api/send-email or push notification service)
   const sendEmergencyAlert = async () => {
     setIsSending(true)
     await new Promise((resolve) => setTimeout(resolve, 1000))
-    setMessage("")
+    setMessage('')
     setIsOpen(false)
     setIsSending(false)
   }
@@ -31,7 +31,12 @@ export function EmergencyButton() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive" disabled className="bg-red-600 hover:bg-red-700 text-xl px-6 py-3 h-auto flex items-center gap-2 opacity-50 cursor-not-allowed" title="Fonctionnalité en cours de développement">
+        <Button
+          variant="destructive"
+          disabled
+          className="bg-red-600 hover:bg-red-700 text-xl px-6 py-3 h-auto flex items-center gap-2 opacity-50 cursor-not-allowed"
+          title="Fonctionnalité en cours de développement"
+        >
           <AlertTriangle className="h-6 w-6" /> URGENCE (bientôt disponible)
         </Button>
       </DialogTrigger>
@@ -57,7 +62,12 @@ export function EmergencyButton() {
           />
         </div>
         <DialogFooter className="flex space-x-3">
-          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isSending} className="text-lg px-6">
+          <Button
+            variant="outline"
+            onClick={() => setIsOpen(false)}
+            disabled={isSending}
+            className="text-lg px-6"
+          >
             <XCircle className="h-5 w-5 mr-2" /> Annuler
           </Button>
           <Button
