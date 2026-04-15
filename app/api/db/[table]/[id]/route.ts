@@ -154,6 +154,26 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.userId = mapped.user_id
       delete mapped.user_id
     }
+    if (mapped.gym_id !== undefined) {
+      mapped.gymId = mapped.gym_id
+      delete mapped.gym_id
+    }
+    if (mapped.sub_period !== undefined) {
+      mapped.subPeriod = mapped.sub_period
+      delete mapped.sub_period
+    }
+    if (mapped.is_temporary !== undefined) {
+      mapped.isTemporary = mapped.is_temporary
+      delete mapped.is_temporary
+    }
+    if (mapped.tasks_completed !== undefined) {
+      mapped.tasksCompleted = mapped.tasks_completed
+      delete mapped.tasks_completed
+    }
+    if (mapped.total_tasks !== undefined) {
+      mapped.totalTasks = mapped.total_tasks
+      delete mapped.total_tasks
+    }
   }
   
   return mapped
@@ -251,6 +271,53 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.qrCodeEnabled !== undefined) {
       mapped.qr_code_enabled = mapped.qrCodeEnabled
       delete mapped.qrCodeEnabled
+    }
+  }
+  
+  if (table === 'work_schedules') {
+    if (mapped.date !== undefined) {
+      mapped.work_date = mapped.date
+      delete mapped.date
+    }
+    if (mapped.startTime !== undefined) {
+      mapped.start_time = mapped.startTime
+      delete mapped.startTime
+    }
+    if (mapped.endTime !== undefined) {
+      mapped.end_time = mapped.endTime
+      delete mapped.endTime
+    }
+    if (mapped.employeeEmail !== undefined) {
+      mapped.employee_email = mapped.employeeEmail
+      delete mapped.employeeEmail
+    }
+    if (mapped.employeeName !== undefined) {
+      mapped.employee_name = mapped.employeeName
+      delete mapped.employeeName
+    }
+    if (mapped.userId !== undefined) {
+      mapped.user_id = mapped.userId
+      delete mapped.userId
+    }
+    if (mapped.gymId !== undefined) {
+      mapped.gym_id = mapped.gymId
+      delete mapped.gymId
+    }
+    if (mapped.subPeriod !== undefined) {
+      mapped.sub_period = mapped.subPeriod
+      delete mapped.subPeriod
+    }
+    if (mapped.isTemporary !== undefined) {
+      mapped.is_temporary = mapped.isTemporary
+      delete mapped.isTemporary
+    }
+    if (mapped.tasksCompleted !== undefined) {
+      mapped.tasks_completed = mapped.tasksCompleted
+      delete mapped.tasksCompleted
+    }
+    if (mapped.totalTasks !== undefined) {
+      mapped.total_tasks = mapped.totalTasks
+      delete mapped.totalTasks
     }
   }
   

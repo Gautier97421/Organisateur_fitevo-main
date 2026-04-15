@@ -291,13 +291,28 @@ export function WorkScheduleManager() {
       if (!response.ok) {
         const error = await response.json()
         console.error('Erreur API:', error)
+        setErrorMessage(`Erreur lors de la mise à jour: ${error.error || "Erreur inconnue"}`)
         throw new Error(error.error || "Erreur lors de la mise à jour")
       }
 
       // Recharger les schedules depuis le serveur
       await loadSchedules()
+      
+      // Afficher un message de succès
+      if (newStatus === 'confirmed') {
+        setErrorMessage('Planning confirmé avec succès')
+      } else if (newStatus === 'completed') {
+        setErrorMessage('Planning marqué comme terminé avec succès')
+      }
+      
+      // Fermer le dialog après une courte attente
+      setTimeout(() => {
+        setShowDetailsDialog(false)
+        setErrorMessage('')
+      }, 1000)
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error)
+      setErrorMessage(`Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
     }
   }
 

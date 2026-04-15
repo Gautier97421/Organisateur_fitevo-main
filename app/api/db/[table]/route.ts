@@ -146,9 +146,17 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.end_time = mapped.endTime
       delete mapped.endTime
     }
+    if (mapped.userId !== undefined) {
+      mapped.user_id = mapped.userId
+      delete mapped.userId
+    }
     if (mapped.gymId !== undefined) {
       mapped.gym_id = mapped.gymId
       delete mapped.gymId
+    }
+    if (mapped.subPeriod !== undefined) {
+      mapped.sub_period = mapped.subPeriod
+      delete mapped.subPeriod
     }
     if (mapped.isTemporary !== undefined) {
       mapped.is_temporary = mapped.isTemporary
