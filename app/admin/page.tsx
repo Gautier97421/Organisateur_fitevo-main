@@ -39,6 +39,17 @@ export default function AdminPage() {
     const email = localStorage.getItem("userEmail") || ""
     const name = localStorage.getItem("userName") || ""
     const role = localStorage.getItem("userRole") || ""
+
+    if (!email || !role) {
+      router.push("/")
+      return
+    }
+
+    if (role !== "admin" && role !== "superadmin") {
+      router.push("/access-denied")
+      return
+    }
+
     setUserEmail(email)
     setUserName(name)
     setUserRole(role)
@@ -84,7 +95,8 @@ export default function AdminPage() {
     }
   }, [userRole])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
     localStorage.clear()
     router.push("/")
   }

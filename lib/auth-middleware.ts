@@ -1,70 +1,77 @@
 /**
  * Middleware d'authentification pour les routes API
+ * Vérifie le cookie de session signé HMAC-SHA256 (pas les headers client)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
 
+function decodeHex(hex: string): string {
+  return Buffer.from(hex, 'hex').toString('utf-8')
+}
+
+function verifyHmac(hexPayload: string, signatureHex: string, secret: string): boolean {
+  try {
+    const expected = createHmac('sha256', secret).update(hexPayload).digest('hex')
+    const sigBuf = Buffer.from(signatureHex, 'hex')
+    const expBuf = Buffer.from(expected, 'hex')
+    if (sigBuf.length !== expBuf.length) return false
+    return timingSafeEqual(sigBuf, expBuf)
+  } catch {
+    return false
+  }
+}
+
 /**
- * Vérifie l'authentification d'une requête
+ * Vérifie l'authentification d'une requête via le cookie de session signé
  * Retourne l'userId si authentifié, null sinon
  */
 export async function verifyAuth(request: NextRequest): Promise<string | null> {
   try {
-    // Récupérer l'userId depuis les headers
-    const userId = request.headers.get('x-user-id')
-    const userEmail = request.headers.get('x-user-email')
-    
-    if (!userId && !userEmail) {
-      return null
-    }
-    
-    // Vérifier que l'utilisateur existe et est actif
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          userId ? { id: userId } : {},
-          userEmail ? { email: userEmail } : {}
-        ].filter(condition => Object.keys(condition).length > 0),
-        active: true
-      }
-    })
-    
-    if (!user) {
-      // Fallback: certains comptes admin existent dans la table `admins`.
-      if (userEmail) {
-        const adminByEmail = await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT id::text AS id
-          FROM admins
-          WHERE email = ${userEmail}
-          LIMIT 1
-        `
+    const sessionCookie = request.cookies.get('fitevo_session')
+    if (!sessionCookie?.value) return null
 
-        if (adminByEmail.length > 0) {
-          return adminByEmail[0].id
-        }
-      }
+    const parts = sessionCookie.value.split(':')
+    if (parts.length !== 2) return null
 
-      if (userId) {
-        const adminById = await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT id::text AS id
-          FROM admins
-          WHERE id::text = ${userId}
-          LIMIT 1
-        `
+    const [hexPayload, hmac] = parts
+    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    if (!secret) return null
 
-        if (adminById.length > 0) {
-          return adminById[0].id
-        }
-      }
+    const isValid = verifyHmac(hexPayload, hmac, secret)
+    if (!isValid) return null
 
-      return null
-    }
-    
-    return user.id
-  } catch (error) {
-    logger.error('Erreur vérification auth', error)
+    const payload = JSON.parse(decodeHex(hexPayload))
+    return payload.id || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Vérifie l'authentification et retourne userId + role
+ */
+export async function verifyAuthWithRole(request: NextRequest): Promise<{ userId: string; role: string } | null> {
+  try {
+    const sessionCookie = request.cookies.get('fitevo_session')
+    if (!sessionCookie?.value) return null
+
+    const parts = sessionCookie.value.split(':')
+    if (parts.length !== 2) return null
+
+    const [hexPayload, hmac] = parts
+    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    if (!secret) return null
+
+    const isValid = verifyHmac(hexPayload, hmac, secret)
+    if (!isValid) return null
+
+    const payload = JSON.parse(decodeHex(hexPayload))
+    if (!payload.id) return null
+    return { userId: payload.id, role: payload.role }
+  } catch {
     return null
   }
 }

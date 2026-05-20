@@ -331,7 +331,7 @@ export default function EmployeePage() {
     localStorage.setItem("employeeBreakState", JSON.stringify(breakState))
   }, [isOnBreak, activeBreakType, accumulatedBreakTime, shortBreakProgress, shortBreaksCompleted, lunchBreakTaken, breakStartTime])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Bloquer la déconnexion si une période de travail est active et non terminée
     if (selectedPeriod && !sessionCompleted) {
       setShowLogoutBlockedDialog(true)
@@ -342,6 +342,7 @@ export default function EmployeePage() {
     localStorage.removeItem("employeeCurrentView")
     localStorage.removeItem("employeeSelectedPeriod")
     localStorage.removeItem("employeeBreakState")
+    await fetch('/api/auth/logout', { method: 'POST' })
     localStorage.clear()
     router.push("/")
   }

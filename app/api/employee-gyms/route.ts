@@ -1,9 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 // GET - Récupérer les salles d'un employé/utilisateur
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const sessionUserId = await verifyAuth(request)
+  if (!sessionUserId) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')
@@ -58,7 +64,12 @@ export async function GET(request: Request) {
 }
 
 // POST - Assigner des salles à un employé/utilisateur
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const sessionUserId = await verifyAuth(request)
+  if (!sessionUserId) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { employeeId, employeeEmail, gymIds } = body
@@ -111,7 +122,12 @@ export async function POST(request: Request) {
 }
 
 // DELETE - Retirer l'assignation d'une salle à un employé
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
+  const sessionUserId = await verifyAuth(request)
+  if (!sessionUserId) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')

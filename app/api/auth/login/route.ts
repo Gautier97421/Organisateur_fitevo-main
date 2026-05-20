@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
@@ -156,8 +157,32 @@ export async function POST(request: NextRequest) {
     
     logger.info('Connexion réussie pour:', user.email)
 
-    // Retourner les informations de l'utilisateur
-    return NextResponse.json({
+    // Auto-migration: si l'ancien hash SHA-256 est utilisé, le mettre à jour avec bcrypt
+    if (!user.password.startsWith('$2b$') && !user.password.startsWith('$2a$')) {
+      try {
+        const { hashPassword } = await import('@/lib/password-utils')
+        const newHash = await hashPassword(normalizedPassword)
+        await prisma.user.update({ where: { id: user.id }, data: { password: newHash } })
+      } catch (upgradeErr) {
+        logger.error('Erreur upgrade hash mot de passe', upgradeErr)
+      }
+    }
+
+    // Créer un cookie de session signé (HttpOnly, Secure)
+    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    if (!secret) {
+      logger.critical('SESSION_SECRET non configuré', new Error('Missing SESSION_SECRET env var'))
+      return NextResponse.json(
+        { error: 'Erreur de configuration serveur' },
+        { status: 500 }
+      )
+    }
+    const payloadStr = JSON.stringify({ id: user.id, role: user.role })
+    const hexPayload = Buffer.from(payloadStr).toString('hex')
+    const hmac = createHmac('sha256', secret).update(hexPayload).digest('hex')
+    const cookieValue = `${hexPayload}:${hmac}`
+
+    const response = NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
@@ -166,6 +191,14 @@ export async function POST(request: NextRequest) {
         isSuperAdmin: user.role === 'superadmin',
       },
     })
+    response.cookies.set('fitevo_session', cookieValue, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 8, // 8 heures
+      path: '/',
+    })
+    return response
   } catch (error) {
     logger.error('Erreur de connexion', error)
     return NextResponse.json(

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 // GET - Récupérer tous les rôles
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const roles = await (prisma as any).role.findMany({
       orderBy: { createdAt: 'asc' }
@@ -21,6 +27,11 @@ export async function GET() {
 
 // POST - Créer un nouveau rôle
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const { name, color } = await request.json()
     

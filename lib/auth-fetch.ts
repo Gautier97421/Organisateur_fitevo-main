@@ -1,75 +1,24 @@
 /**
  * Helper pour les requêtes fetch avec authentification automatique
+ * L'authentification repose sur le cookie de session HttpOnly (envoyé automatiquement same-origin)
  */
 
 /**
- * Fetch avec headers d'authentification automatiques
+ * Fetch authentifié — les cookies de session sont envoyés automatiquement pour les
+ * requêtes same-origin. Ne plus injecter x-user-id / x-user-email (headers client-contrôlables).
  */
 export async function authenticatedFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  // Récupérer les infos d'auth depuis localStorage
-  const userId = localStorage.getItem('userId')
-  const userEmail = localStorage.getItem('userEmail')
-  
-  // Ajouter les headers d'authentification
-  const headers = new Headers(options.headers || {})
-  
-  if (userId) {
-    headers.set('x-user-id', userId)
-  }
-  
-  if (userEmail) {
-    headers.set('x-user-email', userEmail)
-  }
-  
-  // Fusionner les options
-  const authenticatedOptions: RequestInit = {
-    ...options,
-    headers
-  }
-  
-  return fetch(url, authenticatedOptions)
+  return fetch(url, { credentials: 'same-origin', ...options })
 }
 
 /**
- * Wrapper global pour remplacer fetch par authenticatedFetch
- * À appeler au démarrage de l'application
+ * Installe l'intercepteur global fetch.
+ * Plus besoin d'injecter des headers d'identité : le cookie HttpOnly est transmis
+ * automatiquement par le navigateur pour toutes les requêtes same-origin.
  */
 export function setupAuthInterceptor() {
-  if (typeof window !== 'undefined') {
-    const originalFetch = window.fetch
-    
-    window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-      // Ne pas intercepter les requêtes externes
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      
-      // Seulement pour les requêtes vers nos APIs
-      if (url.startsWith('/api/')) {
-        const userId = localStorage.getItem('userId')
-        const userEmail = localStorage.getItem('userEmail')
-        
-        const headers = new Headers(init?.headers || {})
-        
-        if (userId) {
-          headers.set('x-user-id', userId)
-        }
-        
-        if (userEmail) {
-          headers.set('x-user-email', userEmail)
-        }
-        
-        const newInit: RequestInit = {
-          ...init,
-          headers
-        }
-        
-        return originalFetch(input, newInit)
-      }
-      
-      // Appeler le fetch original pour les autres requêtes
-      return originalFetch(input, init)
-    }
-  }
+  // No-op : l'authentification est portée par le cookie de session signé.
 }

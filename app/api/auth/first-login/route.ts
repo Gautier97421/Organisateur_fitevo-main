@@ -3,6 +3,33 @@ import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
 
+// Rate limiting pour la première connexion — évite le takeover de compte par brute-force
+const firstLoginAttempts = new Map<string, { count: number; lastAttempt: number }>()
+const MAX_ATTEMPTS = 5
+const LOCKOUT_TIME = 30 * 60 * 1000 // 30 minutes
+
+function checkFirstLoginRateLimit(email: string): { allowed: boolean; remainingTime?: number } {
+  const now = Date.now()
+  const entry = firstLoginAttempts.get(email)
+  if (entry) {
+    if (now - entry.lastAttempt > LOCKOUT_TIME) {
+      firstLoginAttempts.delete(email)
+      return { allowed: true }
+    }
+    if (entry.count >= MAX_ATTEMPTS) {
+      const remainingTime = Math.ceil((LOCKOUT_TIME - (now - entry.lastAttempt)) / 1000)
+      return { allowed: false, remainingTime }
+    }
+  }
+  return { allowed: true }
+}
+
+function recordFirstLoginAttempt(email: string, success: boolean) {
+  if (success) { firstLoginAttempts.delete(email); return }
+  const entry = firstLoginAttempts.get(email) || { count: 0, lastAttempt: 0 }
+  firstLoginAttempts.set(email, { count: entry.count + 1, lastAttempt: Date.now() })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, username, password } = await request.json()
@@ -22,10 +49,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return NextResponse.json(
-        { error: 'Le mot de passe doit contenir au moins 6 caractères' },
+        { error: 'Le mot de passe doit contenir au moins 8 caractères' },
         { status: 400 }
+      )
+    }
+
+    // Vérifier le rate limiting
+    const rateLimit = checkFirstLoginRateLimit(email)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Trop de tentatives. Réessayez dans ${rateLimit.remainingTime} secondes.` },
+        { status: 429 }
       )
     }
 
@@ -35,6 +71,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
+      recordFirstLoginAttempt(email, false)
       return NextResponse.json(
         { error: 'Utilisateur non trouvé' },
         { status: 404 }
@@ -43,6 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Vérifier que c'est bien la première connexion
     if (!user.isFirstLogin) {
+      recordFirstLoginAttempt(email, false)
       return NextResponse.json(
         { error: 'Ce compte a déjà été configuré' },
         { status: 400 }
@@ -78,6 +116,7 @@ export async function POST(request: NextRequest) {
     })
 
     logger.info('Première connexion configurée pour:', updatedUser.email)
+    recordFirstLoginAttempt(email, true)
 
     return NextResponse.json({
       success: true,

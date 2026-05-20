@@ -7,7 +7,7 @@ const nextConfig = {
   // Optimisation des images
   images: {
     formats: ['image/avif', 'image/webp'],
-    dangerouslyAllowSVG: true,
+    dangerouslyAllowSVG: false,
     contentDispositionType: 'attachment',
     remotePatterns: [],
   },

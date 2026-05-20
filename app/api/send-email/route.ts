@@ -1,7 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import logger from "@/lib/logger"
+import { verifyAuth } from "@/lib/auth-middleware"
 
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ success: false, message: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { type, data } = body

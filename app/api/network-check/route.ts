@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     // Récupérer l'adresse IP du client depuis plusieurs sources possibles
     const forwarded = request.headers.get('x-forwarded-for')
@@ -30,6 +36,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const { gymId } = await request.json()
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 /**
  * API pour nettoyer les périodes de travail temporaires (is_temporary = true)
@@ -13,6 +14,11 @@ import logger from '@/lib/logger'
  * Cette API peut être appelée manuellement ou via un cron job
  */
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     logger.info('Début du nettoyage des périodes temporaires')
     
@@ -55,7 +61,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     logger.error('Erreur lors du nettoyage des périodes temporaires', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Erreur lors du nettoyage' },
+      { success: false, error: 'Erreur lors du nettoyage' },
       { status: 500 }
     )
   }
@@ -65,6 +71,11 @@ export async function POST(request: NextRequest) {
  * GET - Vérifier combien de périodes temporaires peuvent être nettoyées
  */
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
 
@@ -96,7 +107,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     logger.error('Erreur lors de la vérification des périodes temporaires', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Erreur lors de la vérification' },
+      { success: false, error: 'Erreur lors de la vérification' },
       { status: 500 }
     )
   }

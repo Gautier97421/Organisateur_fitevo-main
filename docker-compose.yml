@@ -32,6 +32,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://admin:admin123@postgres:5432/fitevo
       - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - SESSION_SECRET=change-me-in-production-use-openssl-rand-base64-32
     depends_on:
       postgres:
         condition: service_healthy

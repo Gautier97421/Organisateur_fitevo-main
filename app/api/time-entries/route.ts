@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
+import { verifyAuth } from '@/lib/auth-middleware'
 
 // GET - Récupérer les pointages
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams
     const userEmail = searchParams.get('user_email')
@@ -43,7 +49,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     logger.error('Erreur GET time_entries', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la récupération' } },
+      { data: null, error: 'Erreur lors de la récupération' },
       { status: 500 }
     )
   }
@@ -51,12 +57,17 @@ export async function GET(request: NextRequest) {
 
 // POST - Créer un pointage
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: 'Authentification requise' }, { status: 401 })
+  }
+
   try {
     const { user_email, gym_id } = await request.json()
     
     if (!user_email || !gym_id) {
       return NextResponse.json(
-        { data: null, error: { message: 'Email utilisateur et ID salle requis' } },
+        { data: null, error: 'Email utilisateur et ID salle requis' },
         { status: 400 }
       )
     }
@@ -68,7 +79,7 @@ export async function POST(request: NextRequest) {
     
     if (!user) {
       return NextResponse.json(
-        { data: null, error: { message: 'Utilisateur non trouvé' } },
+        { data: null, error: 'Utilisateur non trouvé' },
         { status: 404 }
       )
     }
@@ -78,7 +89,7 @@ export async function POST(request: NextRequest) {
     // @ts-ignore - Le champ existe dans le schéma mais le client doit être régénéré
     if ((user as any).hasWorkScheduleAccess) {
       return NextResponse.json(
-        { data: null, error: { message: 'Utilisez le planning de travail pour cet employé' } },
+        { data: null, error: 'Utilisez le planning de travail pour cet employé' },
         { status: 403 }
       )
     }
@@ -102,7 +113,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     logger.error('Erreur POST time_entry', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors du pointage' } },
+      { data: null, error: 'Erreur lors du pointage' },
       { status: 500 }
     )
   }

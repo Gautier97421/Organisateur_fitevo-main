@@ -29,8 +29,8 @@ FROM public.ecr.aws/docker/library/node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm and netcat for DB health check
+RUN npm install -g pnpm && apk add --no-cache netcat-openbsd
 
 # Copy necessary files from builder
 COPY --from=builder /app/package.json ./
@@ -40,11 +40,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules ./node_modules
 
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
 # Expose the port
 EXPOSE 3000
 
 # Set environment to production
 ENV NODE_ENV=production
 
-# Start the application
-CMD ["pnpm", "start"]
+# Start via entrypoint (runs migrations + seed + server)
+CMD ["/app/docker-entrypoint.sh"]

@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -99,6 +100,14 @@ export function LoginForm() {
               </button>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Laissez vide si première connexion</p>
+            <div className="flex justify-end mt-1">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
           </div>
 
           {error && (

@@ -1,7 +1,14 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import logger from "@/lib/logger"
+import { verifyAuth } from "@/lib/auth-middleware"
 
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const pageId = searchParams.get("pageId")
@@ -20,20 +27,25 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: items, error: null })
   } catch (error) {
-    console.error("[API] Error fetching custom page items:", error)
+    logger.error("Erreur GET custom page items", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la récupération des éléments" },
+      { data: null, error: "Erreur lors de la rÃ©cupÃ©ration des Ã©lÃ©ments" },
       { status: 500 }
     )
   }
 }
 
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { pageId, title, description } = body
 
-    // Récupérer le dernier orderIndex pour cette page
+    // RÃ©cupÃ©rer le dernier orderIndex pour cette page
     const lastItem = await prisma.customPageItem.findFirst({
       where: { pageId },
       orderBy: { orderIndex: "desc" }
@@ -52,15 +64,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: item, error: null })
   } catch (error) {
-    console.error("[API] Error creating custom page item:", error)
+    logger.error("Erreur POST custom page item", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la création de l'élément" },
+      { data: null, error: "Erreur lors de la crÃ©ation de l'Ã©lÃ©ment" },
       { status: 500 }
     )
   }
 }
 
 export async function PATCH(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
@@ -80,15 +97,20 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data: item, error: null })
   } catch (error) {
-    console.error("[API] Error updating custom page item:", error)
+    logger.error("Erreur PATCH custom page item", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la mise à jour de l'élément" },
+      { data: null, error: "Erreur lors de la mise Ã  jour de l'Ã©lÃ©ment" },
       { status: 500 }
     )
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
@@ -106,9 +128,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ data: { success: true }, error: null })
   } catch (error) {
-    console.error("[API] Error deleting custom page item:", error)
+    logger.error("Erreur DELETE custom page item", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la suppression de l'élément" },
+      { data: null, error: "Erreur lors de la suppression de l'Ã©lÃ©ment" },
       { status: 500 }
     )
   }

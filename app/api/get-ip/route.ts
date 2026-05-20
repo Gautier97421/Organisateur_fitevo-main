@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import logger from "@/lib/logger"
+import { verifyAuth } from "@/lib/auth-middleware"
 
 // GET - Récupérer l'adresse IP publique du client
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ ip: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     // Récupérer l'IP depuis les headers (dans l'ordre de priorité)
     const forwardedFor = request.headers.get("x-forwarded-for")
@@ -32,7 +39,7 @@ export async function GET(request: NextRequest) {
         : "IP publique détectée avec succès."
     })
   } catch (error) {
-    console.error("[API] Error getting client IP:", error)
+    logger.error("Erreur GET client IP", error)
     return NextResponse.json(
       { ip: null, error: "Erreur lors de la récupération de l'adresse IP" },
       { status: 500 }

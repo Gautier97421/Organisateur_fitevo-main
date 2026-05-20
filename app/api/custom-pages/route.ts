@@ -1,14 +1,21 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import logger from "@/lib/logger"
+import { verifyAuth } from "@/lib/auth-middleware"
 
 export async function GET(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const includeInactive = searchParams.get("includeInactive") === "true"
     
     const where: any = {}
     
-    // Si on ne demande pas spécifiquement les inactives, on ne prend que les actives
+    // Si on ne demande pas spÃ©cifiquement les inactives, on ne prend que les actives
     if (!includeInactive) {
       where.isActive = true
     }
@@ -25,20 +32,25 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: pages, error: null })
   } catch (error) {
-    console.error("[API] Error fetching custom pages:", error)
+    logger.error("Erreur GET custom pages", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la récupération des pages" },
+      { data: null, error: "Erreur lors de la rÃ©cupÃ©ration des pages" },
       { status: 500 }
     )
   }
 }
 
 export async function POST(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { title, icon, description, roleIds, createdBy } = body
 
-    // Récupérer le dernier orderIndex
+    // RÃ©cupÃ©rer le dernier orderIndex
     const lastPage = await prisma.customPage.findFirst({
       orderBy: { orderIndex: "desc" }
     })
@@ -58,15 +70,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: page, error: null })
   } catch (error) {
-    console.error("[API] Error creating custom page:", error)
+    logger.error("Erreur POST custom page", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la création de la page" },
+      { data: null, error: "Erreur lors de la crÃ©ation de la page" },
       { status: 500 }
     )
   }
 }
 
 export async function PATCH(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
@@ -86,15 +103,20 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data: page, error: null })
   } catch (error) {
-    console.error("[API] Error updating custom page:", error)
+    logger.error("Erreur PATCH custom page", error)
     return NextResponse.json(
-      { data: null, error: "Erreur lors de la mise à jour de la page" },
+      { data: null, error: "Erreur lors de la mise Ã  jour de la page" },
       { status: 500 }
     )
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const userId = await verifyAuth(request)
+  if (!userId) {
+    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
@@ -112,7 +134,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ data: { success: true }, error: null })
   } catch (error) {
-    console.error("[API] Error deleting custom page:", error)
+    logger.error("Erreur DELETE custom page", error)
     return NextResponse.json(
       { data: null, error: "Erreur lors de la suppression de la page" },
       { status: 500 }

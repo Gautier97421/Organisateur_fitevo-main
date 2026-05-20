@@ -10,10 +10,7 @@ async function main() {
   // Super Admin
   const superadmin = await prisma.user.upsert({
     where: { email: 'superadmin@fitevo.com' },
-    update: {
-      password: null,
-      isFirstLogin: true,
-    },
+    update: {}, // Ne jamais écraser un mot de passe existant
     create: {
       email: 'superadmin@fitevo.com',
       password: null,
@@ -29,10 +26,7 @@ async function main() {
   // Admin
   const admin = await prisma.user.upsert({
     where: { email: 'admin@fitevo.com' },
-    update: {
-      password: null,
-      isFirstLogin: true,
-    },
+    update: {}, // Ne jamais écraser un mot de passe existant
     create: {
       email: 'admin@fitevo.com',
       password: null,
@@ -48,10 +42,7 @@ async function main() {
   // Employé
   const employee = await prisma.user.upsert({
     where: { email: 'employe@fitevo.com' },
-    update: {
-      password: null,
-      isFirstLogin: true,
-    },
+    update: {}, // Ne jamais écraser un mot de passe existant
     create: {
       email: 'employe@fitevo.com',
       password: null,

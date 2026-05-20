@@ -1,19 +1,23 @@
 // Utilitaires pour la gestion des mots de passe
-// Note: En production, utilisez bcrypt ou une bibliothèque similaire
+import bcrypt from 'bcryptjs'
+import { createHash } from 'node:crypto'
+
+const BCRYPT_ROUNDS = 12
 
 export async function hashPassword(password: string): Promise<string> {
-  // Pour la démo, utilisation de crypto simple
-  // En production, utilisez bcrypt avec un salt approprié
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password + "salt_demo_2024")
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+  return bcrypt.hash(password, BCRYPT_ROUNDS)
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const passwordHash = await hashPassword(password)
-  return passwordHash === hash
+  // Bcrypt hashes commencent par $2b$ ou $2a$
+  if (hash.startsWith('$2b$') || hash.startsWith('$2a$')) {
+    return bcrypt.compare(password, hash)
+  }
+  // Fallback: ancien hash SHA-256 avec sel statique (migration transparente)
+  const legacyHash = createHash('sha256')
+    .update(password + 'salt_demo_2024')
+    .digest('hex')
+  return legacyHash === hash
 }
 
 export function validatePassword(password: string): {
@@ -23,8 +27,8 @@ export function validatePassword(password: string): {
 } {
   const errors: string[] = []
 
-  if (password.length < 6) {
-    errors.push("Le mot de passe doit contenir au moins 6 caractères")
+  if (password.length < 8) {
+    errors.push("Le mot de passe doit contenir au moins 8 caractères")
   }
 
   if (!/[a-zA-Z]/.test(password)) {

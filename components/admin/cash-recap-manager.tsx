@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, CalendarDays, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -172,16 +172,21 @@ export function CashRecapManager() {
     loadData()
   }, [selectedMonth])
 
+  const displayEntries = useMemo(() => {
+    if (gymFilter === "all") return entries
+    return entries.filter((e) => (e.gym_id || "global") === gymFilter)
+  }, [entries, gymFilter])
+
   const currentTotals = useMemo(() => {
-    const totalRegister = entries.reduce((sum, item) => sum + Number(item.total_register || 0), 0)
-    const totalCash = entries.reduce((sum, item) => sum + Number(item.cash_amount || 0), 0)
+    const totalRegister = displayEntries.reduce((sum, item) => sum + Number(item.total_register || 0), 0)
+    const totalCash = displayEntries.reduce((sum, item) => sum + Number(item.cash_amount || 0), 0)
     return {
       totalRegister,
       totalCash,
-      count: entries.length,
-      avg: entries.length > 0 ? totalRegister / entries.length : 0,
+      count: displayEntries.length,
+      avg: displayEntries.length > 0 ? totalRegister / displayEntries.length : 0,
     }
-  }, [entries])
+  }, [displayEntries])
 
   const numericCustomFieldTotals = useMemo(() => {
     const totals = new Map<string, number>()
@@ -190,7 +195,7 @@ export function CashRecapManager() {
       totals.set(field.id, 0)
     }
 
-    for (const entry of entries) {
+    for (const entry of displayEntries) {
       const values = (entry.custom_values || {}) as Record<string, any>
       for (const field of fields) {
         const raw = values[field.id]
@@ -211,18 +216,22 @@ export function CashRecapManager() {
         value: Number((totals.get(field.id) || 0).toFixed(2)),
       }))
       .filter((item) => item.value > 0)
-  }, [entries, fields])
+  }, [displayEntries, fields])
 
   const customFieldsGrandTotal = useMemo(
-    () => numericCustomFieldsGrandTotal(entries, fields),
-    [entries, fields],
+    () => numericCustomFieldsGrandTotal(displayEntries, fields),
+    [displayEntries, fields],
   )
 
   const monthsToCompare = useMemo(() => recentMonths(selectedMonth, 6), [selectedMonth])
 
   const monthlyComparisonData = useMemo(() => {
     return monthsToCompare.map((month) => {
-      const monthEntries = entriesByMonth[month] || []
+      const allMonthEntries = entriesByMonth[month] || []
+      const monthEntries =
+        gymFilter === "all"
+          ? allMonthEntries
+          : allMonthEntries.filter((e) => (e.gym_id || "global") === gymFilter)
       const row: Record<string, any> = {
         month,
         monthLabel: monthLabel(month),
@@ -247,7 +256,7 @@ export function CashRecapManager() {
 
       return row
     })
-  }, [entriesByMonth, fields, monthsToCompare])
+  }, [entriesByMonth, fields, monthsToCompare, gymFilter])
 
   const fieldsWithData = useMemo(() => {
     return fields.filter((field) => {
@@ -261,43 +270,41 @@ export function CashRecapManager() {
     return map
   }, [gyms])
 
+  const perGymSummary = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; total: number; cash: number }>()
+    for (const entry of entries) {
+      const gymId = entry.gym_id || "global"
+      const gymName = gymById.get(gymId) || "Toutes salles"
+      if (!map.has(gymId)) {
+        map.set(gymId, { name: gymName, count: 0, total: 0, cash: 0 })
+      }
+      const rec = map.get(gymId)!
+      rec.count += 1
+      rec.total += Number(entry.total_register || 0)
+      rec.cash += Number(entry.cash_amount || 0)
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total)
+  }, [entries, gymById])
+
   const employeeOptions = useMemo(() => {
     const map = new Map<string, string>()
-    for (const entry of entries) {
+    for (const entry of displayEntries) {
       map.set(entry.user_email, entry.user_name || entry.user_email)
     }
     return Array.from(map.entries())
       .map(([email, name]) => ({ email, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "fr"))
-  }, [entries])
+  }, [displayEntries])
 
   const filteredEntries = useMemo(() => {
-    const filtered = entries.filter((entry) => {
-      if (periodFilter !== "all" && entry.period !== periodFilter) {
-        return false
-      }
-
-      if (gymFilter !== "all") {
-        const entryGymValue = entry.gym_id || "global"
-        if (entryGymValue !== gymFilter) {
-          return false
-        }
-      }
-
-      if (employeeFilter !== "all" && entry.user_email !== employeeFilter) {
-        return false
-      }
-
-      return true
-    })
-
-    // Trier du plus récent au plus ancien.
-    return filtered.sort((a, b) => {
-      const timeA = new Date(a.entry_date).getTime()
-      const timeB = new Date(b.entry_date).getTime()
-      return timeB - timeA
-    })
-  }, [entries, periodFilter, gymFilter, employeeFilter])
+    return displayEntries
+      .filter((entry) => {
+        if (periodFilter !== "all" && entry.period !== periodFilter) return false
+        if (employeeFilter !== "all" && entry.user_email !== employeeFilter) return false
+        return true
+      })
+      .sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+  }, [displayEntries, periodFilter, employeeFilter])
 
   return (
     <div className="space-y-6">
@@ -306,7 +313,17 @@ export function CashRecapManager() {
           <BarChart3 className="h-6 w-6 text-red-600" />
           Récap Mensuel
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={gymFilter}
+            onChange={(e) => setGymFilter(e.target.value)}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm h-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="all">Toutes les salles</option>
+            {gyms.map((gym) => (
+              <option key={gym.id} value={gym.id}>{gym.name}</option>
+            ))}
+          </select>
           <Input
             type="month"
             value={selectedMonth}
@@ -340,6 +357,72 @@ export function CashRecapManager() {
           </CardContent>
         </Card>
       </div>
+
+      {gyms.length > 0 && entries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="h-5 w-5 text-red-600" />
+              Répartition par salle — {monthLabel(selectedMonth)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left p-2 font-medium text-gray-600">Salle</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Saisies</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Total caisse</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Espèces</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Écart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perGymSummary.map((row) => {
+                    const diff = row.cash - row.total
+                    const isSelected = gymFilter !== "all" && gymById.get(gymFilter) === row.name
+                    return (
+                      <tr
+                        key={row.name}
+                        className={`border-b hover:bg-gray-50 ${isSelected ? "bg-red-50 dark:bg-red-900/10" : ""}`}
+                      >
+                        <td className="p-2 font-medium">{row.name}</td>
+                        <td className="p-2 text-right text-gray-600">{row.count}</td>
+                        <td className="p-2 text-right font-semibold">{row.total.toFixed(2)} EUR</td>
+                        <td className="p-2 text-right">{row.cash.toFixed(2)} EUR</td>
+                        <td className={`p-2 text-right font-medium ${diff >= 0 ? "text-green-700" : "text-red-700"}`}>
+                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)} EUR
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {perGymSummary.length > 1 && (
+                  <tfoot>
+                    <tr className="border-t-2 font-semibold bg-gray-50">
+                      <td className="p-2">Total</td>
+                      <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.count, 0)}</td>
+                      <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.total, 0).toFixed(2)} EUR</td>
+                      <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.cash, 0).toFixed(2)} EUR</td>
+                      <td className="p-2 text-right">
+                        {(() => {
+                          const d = perGymSummary.reduce((s, r) => s + (r.cash - r.total), 0)
+                          return (
+                            <span className={d >= 0 ? "text-green-700" : "text-red-700"}>
+                              {d >= 0 ? "+" : ""}{d.toFixed(2)} EUR
+                            </span>
+                          )
+                        })()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -454,7 +537,7 @@ export function CashRecapManager() {
             <p className="text-gray-600">Aucune saisie de caisse sur ce mois.</p>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Période</label>
                   <select
@@ -466,20 +549,6 @@ export function CashRecapManager() {
                     <option value="matin">Matin</option>
                     <option value="aprem">Après-midi</option>
                     <option value="journee">Journée</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-gray-600">Salle</label>
-                  <select
-                    value={gymFilter}
-                    onChange={(e) => setGymFilter(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="all">Toutes</option>
-                    {gyms.map((gym) => (
-                      <option key={gym.id} value={gym.id}>{gym.name}</option>
-                    ))}
                   </select>
                 </div>
 
