@@ -7,14 +7,15 @@ until nc -z "${DB_HOST:-postgres}" "${DB_PORT:-5432}" 2>/dev/null; do
 done
 echo "==> Database is ready"
 
-echo "==> Pushing Prisma schema..."
-npx prisma db push --accept-data-loss || {
-  echo "FATAL: Database schema push failed"
-  exit 1
-}
+echo "==> Running Prisma migrations..."
+pnpm exec prisma migrate deploy
 
-echo "==> Seeding database..."
-npx tsx prisma/seed.ts || echo "WARN: Seed failed (non-fatal, may already be seeded)"
+if [ "$RUN_SEED" = "true" ]; then
+  echo "==> Seeding database..."
+  pnpm exec tsx prisma/seed.ts || echo "WARN: Seed failed"
+else
+  echo "==> Skipping seed. Set RUN_SEED=true to enable."
+fi
 
 echo "==> Starting server..."
 exec pnpm start
