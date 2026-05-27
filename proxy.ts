@@ -35,7 +35,7 @@ function clearSessionAndRedirect(url: URL, request: NextRequest) {
   return res
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const isAdminRoute = pathname.startsWith('/admin')

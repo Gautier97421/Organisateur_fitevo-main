@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/auth-middleware"
+import logger from "@/lib/logger"
 
 type ScheduledEventWithValidations = {
   id: string
@@ -221,7 +222,7 @@ export async function GET(request: NextRequest) {
     const data = events.map((event) => mapToClient(event, userEmail))
     return NextResponse.json({ data }, { status: 200 })
   } catch (error) {
-    console.error("Erreur récupération événements planifiés:", error)
+    logger.error("Erreur récupération événements planifiés", error)
     return NextResponse.json({ error: "Impossible de récupérer les événements planifiés" }, { status: 500 })
   }
 }
@@ -358,7 +359,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error("Erreur création événement planifié:", error)
+    logger.error("Erreur création événement planifié", error)
     return NextResponse.json({ error: "Impossible de créer l'événement planifié" }, { status: 500 })
   }
 }
@@ -403,7 +404,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ deletedCount: deleted.count }, { status: 200 })
   } catch (error) {
-    console.error("Erreur suppression événements planifiés:", error)
+    logger.error("Erreur suppression événements planifiés", error)
     return NextResponse.json({ error: "Impossible de supprimer les événements planifiés" }, { status: 500 })
   }
 }

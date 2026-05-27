@@ -13,17 +13,35 @@ function getTransporter() {
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
-    tls: { rejectUnauthorized: false },
   })
+}
+
+async function dispatch(to: string | string[], subject: string, html: string): Promise<void> {
+  const transporter = getTransporter()
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@fitevo.app"
+  const recipients = Array.isArray(to) ? to.join(", ") : to
+
+  if (!transporter) {
+    logger.info(`=== EMAIL (SMTP non configuré) — ${subject} ===`)
+    logger.info(`To: ${recipients}`)
+    logger.info("================================================")
+    return
+  }
+
+  try {
+    await transporter.sendMail({ from, to: recipients, subject, html })
+  } catch (smtpError) {
+    logger.error("Échec envoi email SMTP", smtpError)
+    logger.info(`=== EMAIL (fallback SMTP) — ${subject} ===`)
+    logger.info(`To: ${recipients}`)
+    logger.info("===========================================")
+  }
 }
 
 export async function sendPasswordResetEmail(
   toEmail: string,
   resetUrl: string,
 ): Promise<void> {
-  const transporter = getTransporter()
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@fitevo.app"
-
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 16px">
       <h2 style="color:#dc2626;margin-bottom:8px">Réinitialisation de mot de passe</h2>
@@ -41,29 +59,97 @@ export async function sendPasswordResetEmail(
       </p>
     </div>
   `
-
-  if (!transporter) {
-    // Pas de SMTP configuré — afficher le lien dans les logs (dev / démo)
-    logger.info("=== RESET PASSWORD LINK (SMTP non configuré) ===")
-    logger.info(`To: ${toEmail}`)
-    logger.info(`URL: ${resetUrl}`)
-    logger.info("================================================")
-    return
-  }
-
-  try {
-    await transporter.sendMail({
-      from,
-      to: toEmail,
-      subject: "Réinitialisation de mot de passe – FitEvo",
-      html,
-    })
-  } catch (smtpError) {
-    logger.error("Échec envoi email SMTP", smtpError)
-    // Fallback : afficher le lien dans les logs pour ne pas bloquer l'utilisateur
-    logger.info("=== RESET PASSWORD LINK (fallback SMTP) ===")
-    logger.info(`To: ${toEmail}`)
-    logger.info(`URL: ${resetUrl}`)
-    logger.info("===========================================")
-  }
+  await dispatch(toEmail, "Réinitialisation de mot de passe – FitEvo", html)
 }
+
+export async function sendWorkRecapEmail(data: {
+  employeeName: string
+  employeeEmail: string
+  gymName: string
+  period: string
+  startTime: string
+  endTime: string
+  breakDuration: number
+  tasksCompleted: number
+  totalTasks: number
+  cashTotal?: number
+  adminEmails: string[]
+}): Promise<void> {
+  if (data.adminEmails.length === 0) return
+
+  const periodLabel: Record<string, string> = {
+    matin: "Matin",
+    aprem: "Après-midi",
+    journee: "Journée",
+  }
+  const periodDisplay = periodLabel[data.period] ?? data.period
+  const today = new Date().toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+  const cashLine = data.cashTotal !== undefined
+    ? `<tr><td style="padding:6px 0;color:#6b7280">Caisse totale</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.cashTotal.toFixed(2)} €</td></tr>`
+    : ""
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
+      <h2 style="color:#dc2626;margin-bottom:4px">Fin de période – FitEvo</h2>
+      <p style="color:#6b7280;margin-top:0;margin-bottom:24px">${today}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+        <tr><td style="padding:6px 0;color:#6b7280">Employé</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.employeeName} (${data.employeeEmail})</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Salle</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.gymName}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Période</td><td style="padding:6px 0;font-weight:600;color:#111827">${periodDisplay}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Début</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.startTime}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Fin</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.endTime}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Pause</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.breakDuration} min</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Tâches</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.tasksCompleted} / ${data.totalTasks} complétées</td></tr>
+        ${cashLine}
+      </table>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">Email automatique FitEvo — ne pas répondre.</p>
+    </div>
+  `
+  await dispatch(data.adminEmails, `Fin de période – ${data.employeeName} (${periodDisplay})`, html)
+}
+
+export async function sendEventReminderEmail(data: {
+  eventTitle: string
+  eventDate: string
+  eventTime?: string
+  eventLocation?: string
+  customMessage?: string
+  recipientEmails: string[]
+}): Promise<void> {
+  if (data.recipientEmails.length === 0) return
+
+  const dateDisplay = new Date(data.eventDate).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+  const timeLine = data.eventTime
+    ? `<p style="color:#374151;margin:4px 0"><strong>Heure :</strong> ${data.eventTime}</p>`
+    : ""
+  const locationLine = data.eventLocation
+    ? `<p style="color:#374151;margin:4px 0"><strong>Lieu :</strong> ${data.eventLocation}</p>`
+    : ""
+  const customLine = data.customMessage
+    ? `<p style="color:#374151;margin-top:16px;padding:12px;background:#f9fafb;border-left:4px solid #dc2626;border-radius:4px">${data.customMessage}</p>`
+    : ""
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
+      <h2 style="color:#dc2626;margin-bottom:8px">Rappel d'événement – FitEvo</h2>
+      <h3 style="color:#111827;margin-top:0;margin-bottom:16px">${data.eventTitle}</h3>
+      <p style="color:#374151;margin:4px 0"><strong>Date :</strong> ${dateDisplay}</p>
+      ${timeLine}
+      ${locationLine}
+      ${customLine}
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">Email automatique FitEvo — ne pas répondre.</p>
+    </div>
+  `
+  await dispatch(data.recipientEmails, `Rappel : ${data.eventTitle}`, html)
+}
+

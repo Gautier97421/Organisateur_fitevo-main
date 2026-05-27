@@ -99,7 +99,7 @@ export function WorkScheduleManager() {
         setGyms(result.data || [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des salles:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -136,7 +136,6 @@ export function WorkScheduleManager() {
       }
       return schedules
     } catch (error) {
-      console.error("Erreur lors du filtrage des plannings:", error)
       return schedules
     }
   }
@@ -161,12 +160,6 @@ export function WorkScheduleManager() {
       if (response.ok) {
         const result = await response.json()
         let data = result.data || []
-        console.log(`[WorkScheduleManager] Chargé ${data.length} schedules pour ${startDate} à ${endDate}`)
-        if (data.length > 0) {
-          console.log('[WorkScheduleManager] Premier schedule (JSON):', JSON.stringify(data[0], null, 2))
-          console.log('[WorkScheduleManager] employee_name:', data[0].employee_name)
-          console.log('[WorkScheduleManager] employeeName:', data[0].employeeName)
-        }
         
         // Exclure les périodes de travail temporaires (celles créées par les employés en temps réel)
         // On ne garde que les plannings prévus (is_temporary = false ou undefined)
@@ -183,11 +176,9 @@ export function WorkScheduleManager() {
         setSchedules(data)
         detectConflicts(data)
       } else {
-        console.error('[WorkScheduleManager] Erreur réponse API:', response.status)
         setSchedules([])
       }
     } catch (error) {
-      console.error("[WorkScheduleManager] Erreur lors du chargement des horaires:", error)
       setSchedules([])
     }
   }
@@ -230,7 +221,6 @@ export function WorkScheduleManager() {
         setEmployees([])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des utilisateurs:", error)
       setEmployees([])
     }
   }
@@ -290,7 +280,6 @@ export function WorkScheduleManager() {
 
       if (!response.ok) {
         const error = await response.json()
-        console.error('Erreur API:', error)
         setErrorMessage(`Erreur lors de la mise à jour: ${error.error || "Erreur inconnue"}`)
         throw new Error(error.error || "Erreur lors de la mise à jour")
       }
@@ -311,7 +300,6 @@ export function WorkScheduleManager() {
         setErrorMessage('')
       }, 1000)
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
       setErrorMessage(`Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
     }
   }
@@ -337,7 +325,6 @@ export function WorkScheduleManager() {
       setShowDeleteConfirmDialog(false)
       setScheduleToDelete(null)
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
       setShowDeleteConfirmDialog(false)
       setScheduleToDelete(null)
     }
@@ -360,64 +347,46 @@ export function WorkScheduleManager() {
 
   const loadEmployeeGyms = async (employeeEmail: string) => {
     try {
-      console.log('[loadEmployeeGyms] Chargement pour email:', employeeEmail)
-      console.log('[loadEmployeeGyms] Salles disponibles:', gyms.length)
-      
       // Trouver l'userId de l'employé
       const response = await fetch(`/api/db/users?email=${encodeURIComponent(employeeEmail)}`)
       if (!response.ok) {
-        console.log('[loadEmployeeGyms] Erreur réponse users:', response.status)
         return
       }
       
       const result = await response.json()
       const userData = Array.isArray(result.data) ? result.data[0] : result.data
-      console.log('[loadEmployeeGyms] Données utilisateur:', userData)
       
       if (!userData) {
-        console.log('[loadEmployeeGyms] Aucun utilisateur trouvé')
         return
       }
 
       // Si c'est un admin ou superadmin, il a accès à TOUTES les salles
       if (userData.role === 'admin' || userData.role === 'superadmin') {
-        console.log('[loadEmployeeGyms] User est admin/superadmin, accès à toutes les salles')
         const allActiveGyms = gyms.filter((gym: any) => gym.is_active)
-        console.log('[loadEmployeeGyms] Salles actives pour admin:', allActiveGyms.length)
         setEmployeeGyms(allActiveGyms)
         return
       }
 
       // Pour les employés, charger les salles accessibles via user_gyms
-      console.log('[loadEmployeeGyms] User est employé, chargement user_gyms pour userId:', userData.id)
       const userGymsResponse = await fetch(`/api/db/user_gyms?user_id=${userData.id}`)
       if (!userGymsResponse.ok) {
-        console.log('[loadEmployeeGyms] Erreur réponse user_gyms:', userGymsResponse.status)
         setEmployeeGyms([])
         return
       }
 
       const userGymsResult = await userGymsResponse.json()
       const userGymData = Array.isArray(userGymsResult.data) ? userGymsResult.data : (userGymsResult.data ? [userGymsResult.data] : [])
-      console.log('[loadEmployeeGyms] user_gyms trouvés:', userGymData.length, userGymData)
 
-      // Charger les informations complètes des salles
-      // Gérer à la fois gym_id (snake_case) et gymId (camelCase)
       const gymIds = userGymData.map((ug: any) => ug.gym_id || ug.gymId)
-      console.log('[loadEmployeeGyms] IDs des salles accessibles:', gymIds)
       
       if (gymIds.length === 0) {
-        console.log('[loadEmployeeGyms] Aucune salle accessible pour cet employé')
         setEmployeeGyms([])
         return
       }
 
-      // Filtrer pour ne garder que les salles accessibles et actives
       const accessibleGyms = gyms.filter((gym: any) => gymIds.includes(gym.id) && gym.is_active)
-      console.log('[loadEmployeeGyms] Salles accessibles et actives:', accessibleGyms.length, accessibleGyms)
       setEmployeeGyms(accessibleGyms)
     } catch (error) {
-      console.error("[loadEmployeeGyms] Erreur lors du chargement des salles de l'employé:", error)
       setEmployeeGyms([])
     }
   }
@@ -441,7 +410,6 @@ export function WorkScheduleManager() {
       // Trouver le nom de l'employé sélectionné
       const selectedEmployee = employees.find(emp => emp.email === selectedEmployeeEmail)
       if (!selectedEmployee) {
-        console.error("Employé introuvable")
         return
       }
 
@@ -455,21 +423,14 @@ export function WorkScheduleManager() {
         const checkResult = await checkResponse.json()
         let existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
         
-        console.log(`[Admin] Total schedules trouvés: ${existingSchedules.length}`)
-        console.log(`[Admin] Vérification pour employé: ${selectedEmployeeEmail} le ${selectedDateStr}`)
-        
         // Filtrer pour ne garder que les horaires du même employé ET du même jour (exclure les périodes temporaires)
         existingSchedules = existingSchedules.filter((s: any) => {
           const isSameEmployee = s.employee_email === selectedEmployeeEmail
-          // Normaliser les dates pour comparer (extraire juste YYYY-MM-DD)
           const scheduleDate = s.work_date?.split('T')[0] || s.work_date
           const isSameDate = scheduleDate === selectedDateStr
           const isNotTemporary = !s.is_temporary
-          console.log(`  - Schedule: ${scheduleDate} ${s.employee_email} ${s.start_time}-${s.end_time}, sameEmp=${isSameEmployee}, sameDate=${isSameDate}, notTemp=${isNotTemporary}`)
           return isSameEmployee && isSameDate && isNotTemporary
         })
-        
-        console.log(`[Admin] Schedules du même employé: ${existingSchedules.length}`)
         
         if (existingSchedules.length > 0) {
           // Vérifier les chevauchements d'horaires
@@ -487,7 +448,6 @@ export function WorkScheduleManager() {
               (newStart <= existingStart && newEnd >= existingEnd)      // L'horaire englobe un horaire existant
             )
             
-            console.log(`  - Conflit avec ${existingStart}-${existingEnd}? ${conflict}`)
             return conflict
           })
 
@@ -518,7 +478,6 @@ export function WorkScheduleManager() {
 
       if (!response.ok) {
         const error = await response.json()
-        console.error("Erreur API:", error)
         throw new Error(error.error || "Erreur lors de la création")
       }
 
@@ -537,7 +496,7 @@ export function WorkScheduleManager() {
         break_start_time: ""
       })
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -580,7 +539,6 @@ export function WorkScheduleManager() {
     const filtered = schedules.filter((schedule) => {
       // Vérifier que work_date existe
       if (!schedule.work_date) {
-        console.warn('[WorkScheduleManager] work_date manquant pour le schedule:', schedule.id)
         return false
       }
       
@@ -595,7 +553,6 @@ export function WorkScheduleManager() {
         // Si c'est un objet Date
         scheduleDate = workDate.toISOString().split("T")[0]
       } else {
-        console.warn('[WorkScheduleManager] Format work_date inconnu:', workDate, 'pour schedule:', schedule.id)
         return false
       }
       

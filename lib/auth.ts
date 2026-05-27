@@ -30,11 +30,6 @@ export function isAuthenticated(): boolean {
   return localStorage.getItem('userEmail') !== null
 }
 
-export function login(email: string, password: string): boolean {
-  // Cette fonction est maintenant gérée par l'API route
-  return true
-}
-
 export function logout(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('userEmail')

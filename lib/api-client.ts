@@ -130,7 +130,6 @@ const createQueryBuilder = (table: string) => {
         
         resolve(result);
       } catch (error: any) {
-        console.error(`Erreur API sur ${table}:`, error);
         resolve({ data: null, error: { message: error.message } });
       }
     },
@@ -160,7 +159,6 @@ export const apiClient = {
         const result = await response.json();
         return result;
       } catch (error: any) {
-        console.error(`Erreur insert API sur ${table}:`, error);
         return { data: null, error: { message: error.message } };
       }
     },
@@ -177,7 +175,6 @@ export const apiClient = {
           const result = await response.json();
           return result;
         } catch (error: any) {
-          console.error(`Erreur update API sur ${table}:`, error);
           return { data: null, error: { message: error.message } };
         }
       },
@@ -193,7 +190,6 @@ export const apiClient = {
           const result = await response.json();
           return result;
         } catch (error: any) {
-          console.error(`Erreur delete API sur ${table}:`, error);
           return { data: null, error: { message: error.message } };
         }
       },

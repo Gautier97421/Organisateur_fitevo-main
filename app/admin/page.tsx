@@ -54,18 +54,8 @@ export default function AdminPage() {
     setUserName(name)
     setUserRole(role)
     
-    // Lancer le nettoyage des périodes temporaires en arrière-plan
-    // Cela supprime les work_schedules temporaires des jours précédents
-    fetch('/api/cleanup-temp-periods', { method: 'POST' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.count > 0) {
-          console.log(`🧹 Nettoyage automatique: ${data.count} périodes temporaires supprimées`)
-        }
-      })
-      .catch(err => {
-        console.error('Erreur lors du nettoyage automatique:', err)
-      })
+    // Nettoyage des périodes temporaires en arrière-plan
+    fetch('/api/cleanup-temp-periods', { method: 'POST' }).catch(() => {})
 
   }, [])
 
@@ -84,7 +74,7 @@ export default function AdminPage() {
           setCustomPages(result.data || [])
         }
       } catch (error) {
-        console.error("Error loading custom pages:", error)
+        // Erreur silencieuse
       } finally {
         setIsLoadingPages(false)
       }
@@ -94,6 +84,19 @@ export default function AdminPage() {
       loadCustomPages()
     }
   }, [userRole])
+
+  // Traitement automatique des rappels programmés toutes les 60 secondes
+  useEffect(() => {
+    if (!userEmail) return
+
+    const processReminders = () => {
+      fetch('/api/reminders/process', { method: 'POST' }).catch(() => {})
+    }
+
+    processReminders()
+    const interval = setInterval(processReminders, 60_000)
+    return () => clearInterval(interval)
+  }, [userEmail])
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })

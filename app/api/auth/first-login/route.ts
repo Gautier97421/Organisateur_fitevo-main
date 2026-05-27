@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       recordFirstLoginAttempt(email, false)
       return NextResponse.json(
-        { error: 'Utilisateur non trouvé' },
-        { status: 404 }
+        { error: 'Identifiants incorrects' },
+        { status: 401 }
       )
     }
 

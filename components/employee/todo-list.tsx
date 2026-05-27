@@ -567,6 +567,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         
         if (activeSchedule) {
           // Mettre à jour avec l'heure de fin et le temps de pause
+          const endTime = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
           const cashMarker = markCashRegisterDone
             ? ` | [CASH_REGISTER_DONE:${gymKey}:${today}]`
             : ""
@@ -578,9 +579,38 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              end_time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              end_time: endTime,
               notes: updatedNotes
             })
+          })
+
+          // Envoyer l'email récapitulatif à l'admin (non bloquant)
+          const userName = localStorage.getItem("userName") || ""
+          const userEmailLocal = localStorage.getItem("userEmail") || ""
+          fetch("/api/send-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-id": userId,
+              "x-user-email": userEmailLocal,
+            },
+            body: JSON.stringify({
+              type: "work-recap",
+              data: {
+                employeeName: userName,
+                employeeEmail: userEmailLocal,
+                gymId: gymId || null,
+                period,
+                startTime: activeSchedule.start_time || "",
+                endTime,
+                breakDuration: totalBreakTime,
+                tasksCompleted: tasks.filter((t) => t.completed).length,
+                totalTasks: tasks.length,
+                cashTotal: cashData ? Number(cashData.total_register ?? 0) : undefined,
+              },
+            }),
+          }).catch(() => {
+            // Non bloquant : l'email est un bonus, pas critique pour la fin de session
           })
         }
       }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyAuth } from '@/lib/auth-middleware'
+import logger from '@/lib/logger'
 
 export async function GET(request: NextRequest) {
   const userId = await verifyAuth(request)
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       })
     }
   } catch (error) {
-    console.error('Erreur vérification réseau:', error)
+    logger.error('Erreur vérification réseau', error)
     return NextResponse.json(
       { success: false, error: 'Erreur lors de la vérification du réseau' },
       { status: 500 }

@@ -136,13 +136,14 @@ model CalendarEvent {
 }
 
 model EventReminder {
-  id             String   @id @default(cuid())
-  eventId        String   @map("event_id")
-  reminderDate   DateTime @map("reminder_date")
-  recipientType  String   @map("recipient_type") // all, admins, employees
-  customMessage  String?  @map("custom_message")
-  createdBy      String   @map("created_by")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  eventId        String    @map("event_id")
+  reminderDate   DateTime  @map("reminder_date")
+  recipientType  String    @map("recipient_type") // all, admins, employees
+  customMessage  String?   @map("custom_message")
+  createdBy      String    @map("created_by")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
   
   event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   

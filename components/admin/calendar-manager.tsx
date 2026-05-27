@@ -102,7 +102,8 @@ export function CalendarManager() {
     requires_validation: false,
   })
   const [reminderSettings, setReminderSettings] = useState({
-    days_before: 1,
+    reminder_date: "",
+    reminder_time: "09:00",
     recipient_type: "all" as "all" | "admins" | "employees",
     custom_message: "",
   })
@@ -729,24 +730,18 @@ export function CalendarManager() {
 
   const addReminder = async (eventId: string) => {
     try {
-      const event = events.find((e) => e.id === eventId)
-      if (!event) return
+      if (!reminderSettings.reminder_date) return
 
-      const reminderDate = new Date(event.event_date)
-      
-      // Valider que la date est valide
-      if (isNaN(reminderDate.getTime())) {
-        return
-      }
-      
-      reminderDate.setDate(reminderDate.getDate() - reminderSettings.days_before)
+      // Combiner la date et l'heure choisies par l'admin
+      const reminderDatetime = new Date(`${reminderSettings.reminder_date}T${reminderSettings.reminder_time}:00`)
+      if (isNaN(reminderDatetime.getTime())) return
 
       const { error } = await supabase.from("event_reminders").insert([
         {
           event_id: eventId,
-          reminder_date: reminderDate.toISOString().split("T")[0],
+          reminder_date: reminderDatetime.toISOString(),
           recipient_type: reminderSettings.recipient_type,
-          custom_message: reminderSettings.custom_message,
+          custom_message: reminderSettings.custom_message || null,
           created_by: localStorage.getItem("userEmail"),
         },
       ])
@@ -755,12 +750,13 @@ export function CalendarManager() {
 
       setShowReminderDialog(false)
       setReminderSettings({
-        days_before: 1,
+        reminder_date: "",
+        reminder_time: "09:00",
         recipient_type: "all",
         custom_message: "",
       })
     } catch (error) {
-      console.error("Erreur lors de l'ajout du rappel:", error)
+      // Erreur silencieuse
     }
   }
 
@@ -1667,30 +1663,29 @@ export function CalendarManager() {
               <span>Programmer un rappel</span>
             </DialogTitle>
             <DialogDescription id="reminder-description" className="text-lg text-gray-600">
-              Configurez les paramètres du rappel par email
+              Configurez la date et l'heure exacte d'envoi du rappel par email
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Envoyer le rappel
-              </label>
-              <Select
-                value={reminderSettings.days_before.toString()}
-                onValueChange={(value) =>
-                  setReminderSettings({ ...reminderSettings, days_before: Number.parseInt(value) })
-                }
-              >
-                <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1 jour avant</SelectItem>
-                  <SelectItem value="2">2 jours avant</SelectItem>
-                  <SelectItem value="3">3 jours avant</SelectItem>
-                  <SelectItem value="7">1 semaine avant</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Date d'envoi</label>
+                <input
+                  type="date"
+                  value={reminderSettings.reminder_date}
+                  onChange={(e) => setReminderSettings({ ...reminderSettings, reminder_date: e.target.value })}
+                  className="w-full border-2 rounded-xl px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Heure d'envoi</label>
+                <input
+                  type="time"
+                  value={reminderSettings.reminder_time}
+                  onChange={(e) => setReminderSettings({ ...reminderSettings, reminder_time: e.target.value })}
+                  className="w-full border-2 rounded-xl px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">Destinataires</label>
@@ -1732,7 +1727,8 @@ export function CalendarManager() {
               onClick={() => {
                 setShowReminderDialog(false)
                 setReminderSettings({
-                  days_before: 1,
+                  reminder_date: "",
+                  reminder_time: "09:00",
                   recipient_type: "all",
                   custom_message: "",
                 })
@@ -1744,6 +1740,7 @@ export function CalendarManager() {
             </Button>
             <Button
               onClick={() => selectedEventId && addReminder(selectedEventId)}
+              disabled={!reminderSettings.reminder_date}
               className="bg-red-600 hover:bg-red-700 text-lg px-6"
             >
               <Bell className="mr-2 h-4 w-4" />
