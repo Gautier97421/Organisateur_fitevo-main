@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+export CI=true
+export PNPM_CONFIRM_MODULES_PURGE=false
+
+echo "==> Node version:"
+node --version
+
+echo "==> pnpm version:"
+pnpm --version
+
 echo "==> Waiting for database..."
 until nc -z "${DB_HOST:-postgres}" "${DB_PORT:-5432}" 2>/dev/null; do
   sleep 1
@@ -8,14 +17,14 @@ done
 echo "==> Database is ready"
 
 echo "==> Running Prisma migrations..."
-pnpm exec prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 if [ "$RUN_SEED" = "true" ]; then
   echo "==> Seeding database..."
-  pnpm exec tsx prisma/seed.ts || echo "WARN: Seed failed"
+  ./node_modules/.bin/tsx prisma/seed.ts || echo "WARN: Seed failed"
 else
   echo "==> Skipping seed. Set RUN_SEED=true to enable."
 fi
 
 echo "==> Starting server..."
-exec pnpm start
+exec ./node_modules/.bin/next start
