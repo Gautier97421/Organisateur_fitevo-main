@@ -13,6 +13,7 @@ function getTransporter() {
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    tls: { rejectUnauthorized: false },
   })
 }
 
@@ -50,10 +51,19 @@ export async function sendPasswordResetEmail(
     return
   }
 
-  await transporter.sendMail({
-    from,
-    to: toEmail,
-    subject: "Réinitialisation de mot de passe – FitEvo",
-    html,
-  })
+  try {
+    await transporter.sendMail({
+      from,
+      to: toEmail,
+      subject: "Réinitialisation de mot de passe – FitEvo",
+      html,
+    })
+  } catch (smtpError) {
+    logger.error("Échec envoi email SMTP", smtpError)
+    // Fallback : afficher le lien dans les logs pour ne pas bloquer l'utilisateur
+    logger.info("=== RESET PASSWORD LINK (fallback SMTP) ===")
+    logger.info(`To: ${toEmail}`)
+    logger.info(`URL: ${resetUrl}`)
+    logger.info("===========================================")
+  }
 }

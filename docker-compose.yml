@@ -27,8 +27,13 @@ services:
       dockerfile: Dockerfile
     container_name: fitevo-web
     restart: always
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "3001:3000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://admin:admin123@postgres:5432/fitevo
       - NODE_ENV=production

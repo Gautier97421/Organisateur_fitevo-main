@@ -12,9 +12,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token manquant" }, { status: 400 })
     }
 
-    const passwordError = validatePassword(password)
-    if (passwordError) {
-      return NextResponse.json({ error: passwordError }, { status: 400 })
+    const passwordValidation = validatePassword(password)
+    if (!passwordValidation.isValid) {
+      return NextResponse.json({ error: passwordValidation.errors[0] ?? "Mot de passe invalide" }, { status: 400 })
     }
 
     const resetToken = await prisma.passwordResetToken.findUnique({

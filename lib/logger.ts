@@ -35,13 +35,8 @@ export const logger = {
   
   // Erreur - toujours loggée mais sans exposer de détails sensibles
   error: (message: string, error?: any) => {
-    if (isDevelopment) {
-      console.error('[ERROR]', message, error)
-    } else {
-      // En production, logger le message sans stack trace détaillé
-      console.error('[ERROR]', message)
-      // Ici on pourrait envoyer à Sentry, LogRocket, etc.
-    }
+    const errorDetail = error instanceof Error ? error.message : (error ? String(error) : '')
+    console.error('[ERROR]', message, errorDetail ? `- ${errorDetail}` : '')
   },
   
   // Erreur critique - toujours loggée
