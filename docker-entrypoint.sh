@@ -16,8 +16,13 @@ until nc -z "${DB_HOST:-postgres}" "${DB_PORT:-5432}" 2>/dev/null; do
 done
 echo "==> Database is ready"
 
-echo "==> Running Prisma migrations..."
-./node_modules/.bin/prisma migrate deploy
+if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+  echo "==> Running Prisma migrations..."
+  ./node_modules/.bin/prisma migrate deploy
+else
+  echo "==> No Prisma migrations found, syncing schema with db push..."
+  ./node_modules/.bin/prisma db push
+fi
 
 if [ "$RUN_SEED" = "true" ]; then
   echo "==> Seeding database..."
