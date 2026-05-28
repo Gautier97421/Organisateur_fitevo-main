@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSessionSecret } from '@/lib/session-secret'
 
 // Vérifie la signature HMAC-SHA256 (Edge runtime compatible)
 async function verifyHmac(data: string, signatureHex: string, secret: string): Promise<boolean> {
@@ -56,7 +57,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const [hexPayload, hmac] = parts
-  const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+  const secret = getSessionSecret()
 
   if (!secret) {
     return clearSessionAndRedirect(new URL('/', request.url), request)

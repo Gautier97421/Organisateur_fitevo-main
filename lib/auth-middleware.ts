@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { getSessionSecret } from '@/lib/session-secret'
 import logger from '@/lib/logger'
 
 function decodeHex(hex: string): string {
@@ -37,7 +38,7 @@ export async function verifyAuth(request: NextRequest): Promise<string | null> {
     if (parts.length !== 2) return null
 
     const [hexPayload, hmac] = parts
-    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    const secret = getSessionSecret()
     if (!secret) return null
 
     const isValid = verifyHmac(hexPayload, hmac, secret)
@@ -62,7 +63,7 @@ export async function verifyAuthWithRole(request: NextRequest): Promise<{ userId
     if (parts.length !== 2) return null
 
     const [hexPayload, hmac] = parts
-    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    const secret = getSessionSecret()
     if (!secret) return null
 
     const isValid = verifyHmac(hexPayload, hmac, secret)

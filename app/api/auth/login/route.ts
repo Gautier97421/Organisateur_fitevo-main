@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/password-utils'
+import { getSessionSecret } from '@/lib/session-secret'
 import logger from '@/lib/logger'
 import { isValidEmail, isValidString } from '@/lib/validation'
 
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Créer un cookie de session signé (HttpOnly, Secure)
-    const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET
+    const secret = getSessionSecret()
     if (!secret) {
       logger.critical('SESSION_SECRET non configuré', new Error('Missing SESSION_SECRET env var'))
       return NextResponse.json(
