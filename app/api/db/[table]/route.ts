@@ -367,7 +367,7 @@ export async function GET(
     if (table === 'employees') {
       where.role = 'employee'
     } else if (table === 'admins') {
-      where.role = 'admin' // Exclure superadmin
+      where.role = { in: ['admin', 'superadmin'] }
     }
     
     // Construire l'orderBy
@@ -650,6 +650,12 @@ export async function POST(
         results.push(result)
       } catch (createError: any) {
         logger.error(`Échec de la création dans ${table}`, createError)
+        if (createError.code === 'P2002') {
+          return NextResponse.json(
+            { data: null, error: { message: 'Un utilisateur avec cet email existe déjà.' } },
+            { status: 409 }
+          )
+        }
         throw new Error(`Échec de la création: ${createError.message || 'Erreur inconnue'}`)
       }
     }

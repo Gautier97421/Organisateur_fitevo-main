@@ -9,10 +9,10 @@ async function main() {
 
   // Super Admin
   const superadmin = await prisma.user.upsert({
-    where: { email: 'superadmin@fitevo.com' },
+    where: { email: 'gautier.hoarau97421@gmail.com' },
     update: {}, // Ne jamais écraser un mot de passe existant
     create: {
-      email: 'superadmin@fitevo.com',
+      email: 'gautier.hoarau97421@gmail.com',
       password: null,
       name: 'Super Administrateur',
       role: 'superadmin',
@@ -39,27 +39,11 @@ async function main() {
   })
   console.log('✅ Admin créé:', admin.email)
 
-  // Employé
-  const employee = await prisma.user.upsert({
-    where: { email: 'employe@fitevo.com' },
-    update: {}, // Ne jamais écraser un mot de passe existant
-    create: {
-      email: 'employe@fitevo.com',
-      password: null,
-      name: 'Employé Test',
-      role: 'employee',
-      active: true,
-      remoteWorkEnabled: false,
-      isFirstLogin: true,
-    },
-  })
-  console.log('✅ Employé créé:', employee.email)
 
   console.log('\n📝 Comptes créés (première connexion requise):')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('Super Admin:  superadmin@fitevo.com')
+  console.log('Super Admin:  gautier.hoarau97421@gmail.com')
   console.log('Admin:        admin@fitevo.com')
-  console.log('Employé:      employe@fitevo.com')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('\n⚠️  Chaque utilisateur devra définir son mot de passe')
   console.log('   lors de sa première connexion.')

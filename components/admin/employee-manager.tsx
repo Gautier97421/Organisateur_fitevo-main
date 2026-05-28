@@ -17,6 +17,7 @@ import {
 import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
@@ -60,7 +61,7 @@ export function EmployeeManager() {
     hasWorkScheduleAccess: true,
     hasWorkPeriodAccess: true
   })
-  const [newAdmin, setNewAdmin] = useState({ name: "", email: "" })
+  const [newAdmin, setNewAdmin] = useState({ name: "", email: "", isSuperAdmin: false })
   const [isAddingAdmin, setIsAddingAdmin] = useState(false)
   const [adminValidationErrors, setAdminValidationErrors] = useState<{[key: string]: boolean}>({})
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
@@ -98,6 +99,7 @@ export function EmployeeManager() {
   const [siteUrl, setSiteUrl] = useState("")
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false)
   const [isSavingSiteUrl, setIsSavingSiteUrl] = useState(false)
+  const { toast } = useToast()
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -436,7 +438,14 @@ export function EmployeeManager() {
         method: 'DELETE'
       })
 
-      if (!response.ok) throw new Error('Erreur lors de la suppression')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const msg = errorData?.error || "Erreur lors de la suppression"
+        toast({ title: "Erreur", description: typeof msg === 'string' ? msg : "Impossible de supprimer cet utilisateur.", variant: "destructive" })
+        setShowDeleteDialog(false)
+        setSelectedUser(null)
+        return
+      }
 
       if (selectedUser.type === "employee") {
         setEmployees(employees.filter((emp) => emp.id !== selectedUser.id))
@@ -446,16 +455,20 @@ export function EmployeeManager() {
 
       setShowDeleteDialog(false)
       setSelectedUser(null)
+      toast({ title: "Compte supprimé", description: `${selectedUser.name} a été supprimé.` })
     } catch (error) {
       console.error("Erreur lors de la suppression:", error)
+      toast({ title: "Erreur", description: "Une erreur inattendue s'est produite.", variant: "destructive" })
+      setShowDeleteDialog(false)
+      setSelectedUser(null)
     }
   }
 
-  const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isSuperAdmin = false) => {
-    if (type === "admin" && isSuperAdmin) {
-      return
-    }
-    setSelectedUser({ id, name, type, isSuperAdmin })
+  const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isTargetSuperAdmin = false) => {
+    // Un superadmin peut désactiver n'importe quel compte sauf le sien
+    const currentUserId = localStorage.getItem("userId")
+    if (id === currentUserId) return
+    setSelectedUser({ id, name, type, isSuperAdmin: isTargetSuperAdmin })
     setShowStatusDialog(true)
   }
 
@@ -1284,6 +1297,17 @@ export function EmployeeManager() {
                     />
                   </div>
                 </div>
+                <div className="flex items-center space-x-2 pt-1">
+                  <Checkbox
+                    id="admin-is-superadmin"
+                    checked={newAdmin.isSuperAdmin}
+                    onCheckedChange={(checked) => setNewAdmin({ ...newAdmin, isSuperAdmin: !!checked })}
+                  />
+                  <Label htmlFor="admin-is-superadmin" className="cursor-pointer select-none">
+                    Super Administrateur
+                    <span className="ml-1 text-xs text-gray-500">(accès complet à la gestion des admins)</span>
+                  </Label>
+                </div>
                 <div className="flex space-x-2">
                   <Button
                     onClick={async () => {
@@ -1305,20 +1329,27 @@ export function EmployeeManager() {
                               name: newAdmin.name,
                               email: newAdmin.email,
                               password: 'temppass123',
-                              role: 'admin',
+                              role: newAdmin.isSuperAdmin ? 'superadmin' : 'admin',
                               active: true
                             }
                           })
                         })
                         
-                        if (!response.ok) throw new Error('Erreur lors de l\'ajout')
+                        if (!response.ok) {
+                          const errorData = await response.json().catch(() => ({}))
+                          const msg = errorData?.error?.message || "Erreur lors de l'ajout"
+                          toast({ title: "Erreur", description: msg, variant: "destructive" })
+                          return
+                        }
                         
                         await loadData()
-                        setNewAdmin({ name: "", email: "" })
+                        setNewAdmin({ name: "", email: "", isSuperAdmin: false })
                         setIsAddingAdmin(false)
                         setAdminValidationErrors({})
+                        toast({ title: "Administrateur ajouté", description: `${newAdmin.name} a été créé avec succès.` })
                       } catch (error) {
                         console.error("Erreur lors de l'ajout de l'admin:", error)
+                        toast({ title: "Erreur", description: "Une erreur inattendue s'est produite.", variant: "destructive" })
                       }
                     }}
                     className="bg-red-600 hover:bg-red-700"
@@ -1329,7 +1360,7 @@ export function EmployeeManager() {
                   <Button
                     onClick={() => {
                       setIsAddingAdmin(false)
-                      setNewAdmin({ name: "", email: "" })
+                      setNewAdmin({ name: "", email: "", isSuperAdmin: false })
                       setAdminValidationErrors({})
                     }}
                     variant="outline"
@@ -1388,7 +1419,7 @@ export function EmployeeManager() {
                           variant="ghost"
                           size="sm"
                           onClick={() => confirmStatusChange(admin.id, admin.name, "admin", admin.is_super_admin)}
-                          disabled={admin.is_super_admin && admin.is_active}
+                          disabled={admin.id === localStorage.getItem("userId")}
                         >
                           {admin.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                         </Button>

@@ -450,7 +450,52 @@ export async function DELETE(
   const { table, id } = await params
   try {
     const prismaModel = tableMapping[table] || table
-    
+
+    // Pour les utilisateurs, supprimer les enregistrements liés en cascade
+    // (les relations sans onDelete: Cascade bloquent sinon la suppression)
+    if (table === 'users' || table === 'admins' || table === 'employees') {
+      await prisma.$transaction(async (tx) => {
+        // Supprimer les plannings
+        await tx.workSchedule.deleteMany({ where: { userId: id } })
+
+        // Supprimer les tâches créées par cet utilisateur
+        await tx.task.deleteMany({ where: { userId: id } })
+
+        // Supprimer les rappels des événements calendrier de l'utilisateur
+        const userCalendarEvents = await tx.calendarEvent.findMany({
+          where: { userId: id },
+          select: { id: true }
+        })
+        if (userCalendarEvents.length > 0) {
+          await tx.eventReminder.deleteMany({
+            where: { eventId: { in: userCalendarEvents.map(e => e.id) } }
+          })
+        }
+        // Supprimer les événements calendrier
+        await tx.calendarEvent.deleteMany({ where: { userId: id } })
+
+        // Supprimer les inscriptions de l'utilisateur
+        await tx.registration.deleteMany({ where: { userId: id } })
+
+        // Supprimer les sessions et inscriptions liées aux événements créés
+        const userEvents = await tx.event.findMany({
+          where: { userId: id },
+          select: { id: true }
+        })
+        if (userEvents.length > 0) {
+          const eventIds = userEvents.map(e => e.id)
+          await tx.session.deleteMany({ where: { eventId: { in: eventIds } } })
+          await tx.registration.deleteMany({ where: { eventId: { in: eventIds } } })
+        }
+        await tx.event.deleteMany({ where: { userId: id } })
+
+        // Supprimer l'utilisateur (UserGym, TimeEntry, PasswordResetToken ont onDelete: Cascade)
+        await tx.user.delete({ where: { id } })
+      })
+
+      return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
+    }
+
     // @ts-ignore - Accès dynamique au modèle Prisma
     await prisma[prismaModel].delete({
       where: { id },
