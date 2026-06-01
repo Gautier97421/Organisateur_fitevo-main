@@ -604,7 +604,7 @@ export function EmployeeManager() {
           <Shield className="w-4 h-4" />
           <span>Administrateurs</span>
           <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-            {admins.length}
+            {isSuperAdmin ? admins.length : admins.filter(a => !a.is_super_admin).length}
           </span>
         </button>
       </div>
