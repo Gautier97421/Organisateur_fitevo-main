@@ -1373,7 +1373,9 @@ export function EmployeeManager() {
           )}
 
           <div className="grid gap-4">
-            {admins.length === 0 ? (
+            {(() => {
+              const visibleAdmins = isSuperAdmin ? admins : admins.filter(a => !a.is_super_admin)
+              return visibleAdmins.length === 0 ? (
               <Card className="border border-dashed border-gray-300 bg-white">
                 <CardContent className="p-12 text-center">
                   <Shield className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -1381,7 +1383,7 @@ export function EmployeeManager() {
                 </CardContent>
               </Card>
             ) : (
-              admins.map((admin) => (
+              visibleAdmins.map((admin) => (
                 <Card key={admin.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -1436,7 +1438,7 @@ export function EmployeeManager() {
                   </CardContent>
                 </Card>
               ))
-            )}
+            )})()}
           </div>
         </div>
       )}
