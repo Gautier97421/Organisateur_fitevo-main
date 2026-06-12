@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plus, MapPin, Building, Trash2, Pencil, QrCode, ExternalLink, Download, XCircle, Wifi, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { supabase, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { QRCodeDisplay } from "./qr-code-display"
@@ -64,15 +65,14 @@ export function GymManager() {
             setNewGym(prev => ({ ...prev, ip_address: result.ip }))
           }
           if (result.isLocal) {
-            alert("⚠️ Vous êtes en réseau local. En production, l'IP publique de la salle sera détectée automatiquement.")
+            toast.info("Vous êtes en réseau local. En production, l'IP publique de la salle sera détectée automatiquement.")
           }
         } else {
-          alert("Impossible de détecter l'adresse IP. Vérifiez votre connexion.")
+          toast.error("Impossible de détecter l'adresse IP. Vérifiez votre connexion.")
         }
       }
     } catch (error) {
-      console.error("Error fetching IP:", error)
-      alert("Erreur lors de la récupération de l'adresse IP")
+      toast.error("Erreur lors de la récupération de l'adresse IP")
     } finally {
       setIsLoadingIp(false)
     }
@@ -158,7 +158,6 @@ export function GymManager() {
       })
       setIsAddingGym(false)
     } catch (error) {
-      console.error("Erreur lors de l'ajout de la salle:", error)
     }
   }
 
@@ -216,7 +215,6 @@ export function GymManager() {
       setIsEditingGym(false)
       setEditGym(null)
     } catch (error) {
-      console.error("Erreur lors de la modification:", error)
     }
   }
 
@@ -237,7 +235,6 @@ export function GymManager() {
       setShowDeleteDialog(false)
       setSelectedGym(null)
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
     }
   }
 
@@ -259,7 +256,6 @@ export function GymManager() {
 
       setGyms(gyms.map((g) => (g.id === id ? { ...g, is_active: !g.is_active } : g)))
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
     }
   }
 
@@ -438,7 +434,8 @@ export function GymManager() {
         {gyms.map((gym) => (
           <Card key={gym.id} className="border-0 shadow-xl bg-white dark:bg-gray-800">
             <CardContent className="p-4 md:p-6">
-              <div className="flex flex-col lg:flex-row items-start gap-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col lg:flex-row items-start gap-4">
                 <div className="flex items-start space-x-3 md:space-x-4 flex-1 w-full">
                   <div className="w-12 h-12 md:w-16 md:h-16 bg-red-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0">
                     <Building className="h-6 w-6 md:h-8 md:w-8" />
@@ -483,13 +480,6 @@ export function GymManager() {
                   </div>
                 </div>
                 
-                {/* Affichage du QR Code si activé */}
-                {gym.qr_code_enabled && (
-                  <div className="mt-4">
-                    <QRCodeDisplay gymId={gym.id} gymName={gym.name} siteUrl={siteUrl} />
-                  </div>
-                )}
-                
                 <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                   <Button
                     variant="outline"
@@ -517,6 +507,14 @@ export function GymManager() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+                </div>
+
+                {/* Affichage du QR Code si activé — centré sous la carte */}
+                {gym.qr_code_enabled && (
+                  <div className="flex justify-center pt-4 border-t border-gray-100">
+                    <QRCodeDisplay gymId={gym.id} gymName={gym.name} siteUrl={siteUrl} />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

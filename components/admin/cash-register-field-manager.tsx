@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Edit2, Trash2, GripVertical, Banknote } from "lucide-react"
+import { Plus, Edit2, Trash2, GripVertical, Banknote, AlertTriangle, X } from "lucide-react"
+import { toast } from "sonner"
 import { getUserEmail } from "@/lib/current-user"
 
 interface CashRegisterField {
@@ -46,6 +47,8 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
   const [showDialog, setShowDialog] = useState(false)
   const [selectedField, setSelectedField] = useState<CashRegisterField | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [fieldToDelete, setFieldToDelete] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     label: "",
@@ -67,7 +70,6 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         setFields(Array.isArray(data.data) ? data.data : [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des champs:", error)
     } finally {
       setIsLoading(false)
     }
@@ -98,7 +100,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
   const handleSave = async () => {
     if (!formData.label.trim()) {
-      alert("Le label est obligatoire")
+      toast.error("Le label est obligatoire")
       return
     }
 
@@ -130,23 +132,27 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
       loadFields()
       onFieldsUpdated?.()
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
-      alert("Erreur lors de la sauvegarde du champ")
+      toast.error("Erreur lors de la sauvegarde du champ")
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce champ ?")) return
+  const requestDelete = (id: string) => {
+    setFieldToDelete(id)
+    setShowDeleteConfirm(true)
+  }
 
+  const handleDelete = async () => {
+    if (!fieldToDelete) return
     try {
-      await fetch(`/api/db/cash-register-fields?id=${id}`, {
+      await fetch(`/api/db/cash-register-fields?id=${fieldToDelete}`, {
         method: "DELETE"
       })
       loadFields()
       onFieldsUpdated?.()
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
-      alert("Erreur lors de la suppression du champ")
+    } finally {
+      setShowDeleteConfirm(false)
+      setFieldToDelete(null)
     }
   }
 
@@ -237,7 +243,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
                     <Edit2 className="h-4 w-4" />
                   </Button>
                   <Button
-                    onClick={() => handleDelete(field.id)}
+                    onClick={() => requestDelete(field.id)}
                     variant="outline"
                     size="sm"
                     className="text-red-600 hover:bg-red-50"
@@ -250,6 +256,31 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
           ))}
         </div>
       )}
+
+      {/* Dialog de confirmation de suppression */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-md bg-white rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-gray-900">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Confirmer la suppression
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Êtes-vous sûr de vouloir supprimer ce champ ?
+              <br />
+              <span className="text-red-600 font-medium">Cette action est irréversible.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setFieldToDelete(null) }} className="border border-gray-300">
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog d'ajout/modification */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

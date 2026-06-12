@@ -224,7 +224,6 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         }),
       )
     } catch (error) {
-      console.error("Erreur lors du chargement des événements à valider:", error)
     }
   }
 
@@ -243,7 +242,6 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       setEvents(data || [])
       await loadScheduledEventsForRange(startOfYear, endOfYear)
     } catch (error) {
-      console.error("Erreur lors du chargement des événements:", error)
     }
   }
 
@@ -293,7 +291,6 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         await loadMonthEvents()
       }
     } catch (error) {
-      console.error("Erreur validation événement planifié:", error)
     } finally {
       setIsValidatingEventId(null)
     }
@@ -342,7 +339,6 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       const userName = getUserName() || ""
       const userId = getUserId() || ""
 
-      console.log("Débug création événement:", { userEmail, userName, userId }) // Debug
 
       const { error } = await supabase
         .from("calendar_events")
@@ -766,16 +762,16 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
               </CardHeader>
               <CardContent className="px-2 sm:px-6">
                 {/* En-têtes des jours */}
-                <div className="grid grid-cols-7 gap-2 mb-4">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 sm:mb-4">
                   {dayNames.map((day) => (
-                    <div key={day} className="text-center font-semibold text-gray-600 py-2">
+                    <div key={day} className="text-center font-semibold text-gray-600 py-1 sm:py-2 text-xs sm:text-base">
                       {day}
                     </div>
                   ))}
                 </div>
 
                 {/* Grille du calendrier mensuel */}
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2">
                   {getDaysInMonth().map((dayInfo, index) => {
                     const dayEvents = getEventsForDate(dayInfo.date)
                     const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
@@ -791,7 +787,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                           }
                         }}
                         className={`
-                          relative min-h-[100px] p-2 border rounded-xl cursor-pointer transition-all duration-200
+                          relative min-h-[64px] sm:min-h-[100px] p-1 sm:p-2 border rounded-lg sm:rounded-xl cursor-pointer transition-all duration-200
                           ${
                             dayInfo.isCurrentMonth
                               ? "bg-white hover:bg-red-50"
@@ -850,17 +846,17 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           {/* Légende */}
           <Card className="border border-gray-200 shadow-xl bg-white">
             <CardContent className="p-4">
-              <div className="flex items-center justify-center space-x-6 text-sm">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:gap-x-6 text-sm">
                 <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <div className="w-4 h-4 bg-green-500 rounded flex-shrink-0"></div>
                   <span className="text-gray-700">Approuvé</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                  <div className="w-4 h-4 bg-orange-500 rounded flex-shrink-0"></div>
                   <span className="text-gray-700">En attente</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <div className="w-4 h-4 bg-red-500 rounded flex-shrink-0"></div>
                   <span className="text-gray-700">Refusé</span>
                 </div>
               </div>
@@ -1033,9 +1029,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           <Dialog open={showDayEventsDialog} onOpenChange={setShowDayEventsDialog}>
             <DialogContent className="sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
-                  <CalendarDays className="h-6 w-6 text-red-600" />
-                  <span>
+                <DialogTitle className="text-lg sm:text-2xl flex items-center gap-2 text-gray-900">
+                  <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 flex-shrink-0" />
+                  <span className="break-words">
                     Événements du {selectedDayForDetails && new Date(selectedDayForDetails).toLocaleDateString("fr-FR", {
                       weekday: "long",
                       day: "numeric",

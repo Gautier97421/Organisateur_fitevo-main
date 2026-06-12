@@ -7,7 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { Save, UserPlus, Loader2, Plus, Trash2, Check, X, GripVertical } from "lucide-react"
+import { Save, UserPlus, Loader2, Plus, Trash2, Check, X, GripVertical, AlertTriangle } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DndContext,
   closestCenter,
@@ -43,6 +51,8 @@ export function NewMemberManager() {
   const [newTitle, setNewTitle] = useState("")
   const [newDescription, setNewDescription] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [instructionToDelete, setInstructionToDelete] = useState<number | null>(null)
 
   const loadInstructions = async () => {
     try {
@@ -129,15 +139,18 @@ export function NewMemberManager() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette instruction ?")) return
+  const handleDelete = (id: number) => {
+    setInstructionToDelete(id)
+    setShowDeleteConfirm(true)
+  }
 
+  const executeDelete = async () => {
+    if (instructionToDelete === null) return
     setIsSaving(true)
     try {
-      const response = await fetch(`/api/db/new_member_instruction_items?id=${id}`, {
+      const response = await fetch(`/api/db/new_member_instruction_items?id=${instructionToDelete}`, {
         method: "DELETE"
       })
-
       if (response.ok) {
         await loadInstructions()
       }
@@ -145,6 +158,8 @@ export function NewMemberManager() {
       // Erreur silencieuse
     } finally {
       setIsSaving(false)
+      setShowDeleteConfirm(false)
+      setInstructionToDelete(null)
     }
   }
 
@@ -339,6 +354,30 @@ export function NewMemberManager() {
           </div>
         </DndContext>
       </CardContent>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-md bg-white rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-gray-900">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Confirmer la suppression
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Êtes-vous sûr de vouloir supprimer cette instruction ?
+              <br />
+              <span className="text-red-600 font-medium">Cette action est irréversible.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setInstructionToDelete(null) }} className="border border-gray-300">
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={executeDelete} disabled={isSaving} className="bg-red-600 hover:bg-red-700 text-white">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

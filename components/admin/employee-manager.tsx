@@ -175,7 +175,6 @@ export function EmployeeManager() {
         setRoles(data || [])
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des rôles:", error)
     }
   }
 
@@ -296,7 +295,6 @@ export function EmployeeManager() {
       })
       setIsAddingEmployee(false)
     } catch (error) {
-      console.error("Erreur lors de l'ajout de l'employé:", error)
     }
   }
 
@@ -421,7 +419,6 @@ export function EmployeeManager() {
       setIsEditingEmployee(false)
       setEditEmployee(null)
     } catch (error) {
-      console.error("Erreur lors de la modification de l'employé:", error)
     }
   }
 
@@ -457,7 +454,6 @@ export function EmployeeManager() {
       setSelectedUser(null)
       toast({ title: "Compte supprimé", description: `${selectedUser.name} a été supprimé.` })
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
       toast({ title: "Erreur", description: "Une erreur inattendue s'est produite.", variant: "destructive" })
       setShowDeleteDialog(false)
       setSelectedUser(null)
@@ -500,7 +496,6 @@ export function EmployeeManager() {
       setShowStatusDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
     }
   }
 
@@ -517,7 +512,6 @@ export function EmployeeManager() {
         })
         .eq("key", "whatsapp_link")
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
     } finally {
       setIsSavingWhatsapp(false)
     }
@@ -553,7 +547,6 @@ export function EmployeeManager() {
           })
       }
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error)
     } finally {
       setIsSavingSiteUrl(false)
     }
@@ -1176,8 +1169,8 @@ export function EmployeeManager() {
                 <Card key={employee.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <label className="relative cursor-pointer group/avatar" title="Changer la photo">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        <label className="relative cursor-pointer group/avatar flex-shrink-0" title="Changer la photo">
                           <input
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
@@ -1192,7 +1185,7 @@ export function EmployeeManager() {
                               if (res.ok) {
                                 setEmployees((prev) => prev.map((emp) => emp.id === employee.id ? { ...emp, profile_photo: employee.id } : emp))
                               } else {
-                                alert("Erreur lors de l'upload")
+                                toast({ title: "Erreur", description: "Erreur lors de l'upload", variant: "destructive" })
                               }
                             }}
                           />
@@ -1201,26 +1194,26 @@ export function EmployeeManager() {
                             <Camera className="w-4 h-4 text-white" />
                           </div>
                         </label>
-                        <div>
-                          <h3 className="font-medium text-sm text-gray-900">{employee.name}</h3>
-                          <p className="text-xs text-gray-500">{employee.email}</p>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-sm text-gray-900 truncate">{employee.name}</h3>
+                          <p className="text-xs text-gray-500 truncate">{employee.email}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                             <User className="w-3 h-3 flex-shrink-0" />
                             {employee.username ? (
-                              <span>Pseudo : <span className="font-medium text-gray-700">{employee.username}</span></span>
+                              <span className="truncate">Pseudo : <span className="font-medium text-gray-700">{employee.username}</span></span>
                             ) : (
                               <span className="italic text-gray-400">Pseudo non défini</span>
                             )}
                           </p>
-                          <div className="flex items-center space-x-2 mt-1">
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
                             <Badge variant={employee.is_active ? "default" : "secondary"} className="text-xs px-2 py-0">
                               {employee.is_active ? "Actif" : "Inactif"}
                             </Badge>
                             {employee.employee_role && (
-                              <Badge 
-                                className="text-xs px-2 py-0" 
-                                style={{ 
-                                  backgroundColor: employee.employee_role.color, 
+                              <Badge
+                                className="text-xs px-2 py-0"
+                                style={{
+                                  backgroundColor: employee.employee_role.color,
                                   color: '#fff'
                                 }}
                               >
@@ -1375,7 +1368,6 @@ export function EmployeeManager() {
                         setAdminValidationErrors({})
                         toast({ title: "Administrateur ajouté", description: `${newAdmin.name} a été créé avec succès.` })
                       } catch (error) {
-                        console.error("Erreur lors de l'ajout de l'admin:", error)
                         toast({ title: "Erreur", description: "Une erreur inattendue s'est produite.", variant: "destructive" })
                       }
                     }}
@@ -1413,9 +1405,9 @@ export function EmployeeManager() {
               visibleAdmins.map((admin) => (
                 <Card key={admin.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <label className="relative cursor-pointer group/avatar" title="Changer la photo">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        <label className="relative cursor-pointer group/avatar flex-shrink-0" title="Changer la photo">
                           <input
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
@@ -1430,7 +1422,7 @@ export function EmployeeManager() {
                               if (res.ok) {
                                 setAdmins((prev) => prev.map((a) => a.id === admin.id ? { ...a, profile_photo: admin.id } : a))
                               } else {
-                                alert("Erreur lors de l'upload")
+                                toast({ title: "Erreur", description: "Erreur lors de l'upload", variant: "destructive" })
                               }
                             }}
                           />

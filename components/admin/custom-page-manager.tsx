@@ -78,7 +78,6 @@ export function CustomPageManager() {
         setPages(result.data || [])
       }
     } catch (error) {
-      console.error("Error loading pages:", error)
     } finally {
       setIsLoading(false)
     }
@@ -93,7 +92,6 @@ export function CustomPageManager() {
         setRoles(rolesData)
       }
     } catch (error) {
-      console.error("Error loading roles:", error)
     }
   }
 
@@ -137,7 +135,6 @@ export function CustomPageManager() {
         await loadPages()
       }
     } catch (error) {
-      console.error("Error adding page:", error)
     } finally {
       setIsSaving(false)
     }
@@ -173,7 +170,6 @@ export function CustomPageManager() {
         await loadPages()
       }
     } catch (error) {
-      console.error("Error updating page:", error)
     } finally {
       setIsSaving(false)
     }
@@ -196,7 +192,6 @@ export function CustomPageManager() {
         setShowRolesDialog(null)
       }
     } catch (error) {
-      console.error("Error updating roles:", error)
     } finally {
       setIsSaving(false)
     }
@@ -249,7 +244,6 @@ export function CustomPageManager() {
         await loadPages()
       }
     } catch (error) {
-      console.error("Error deleting page:", error)
     } finally {
       setIsSaving(false)
       setDeleteConfirmId(null)
@@ -269,7 +263,6 @@ export function CustomPageManager() {
         await loadPages()
       }
     } catch (error) {
-      console.error("Error toggling page:", error)
     } finally {
       setIsSaving(false)
     }

@@ -8,7 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react"
+import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil, AlertTriangle, X } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId } from "@/lib/current-user"
@@ -183,6 +191,8 @@ export function TaskManager() {
   const [showEditConflict, setShowEditConflict] = useState(false)
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [showDeleteTaskConfirm, setShowDeleteTaskConfirm] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null)
   const [newTask, setNewTask] = useState<{
     title: string
     description: string
@@ -449,7 +459,6 @@ export function TaskManager() {
       })
       setShowForm(false)
     } catch (error: any) {
-      console.error("Erreur lors de l'ajout de la tâche:", error)
     }
   }
 
@@ -573,23 +582,26 @@ export function TaskManager() {
       })
       setEditOptionInput("")
     } catch (error: any) {
-      console.error("Erreur lors de la modification de la tâche:", error)
     }
   }
 
-  const deleteTask = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return
-    
+  const deleteTask = (id: string) => {
+    setTaskToDelete(id)
+    setShowDeleteTaskConfirm(true)
+  }
+
+  const executeDeleteTask = async () => {
+    if (!taskToDelete) return
     try {
-      const response = await fetch(`/api/db/tasks/${id}`, {
+      const response = await fetch(`/api/db/tasks/${taskToDelete}`, {
         method: 'DELETE'
       })
-      
       if (!response.ok) throw new Error('Erreur suppression')
-
-      setTasks(tasks.filter((task) => task.id !== id))
+      setTasks(tasks.filter((task) => task.id !== taskToDelete))
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error)
+    } finally {
+      setShowDeleteTaskConfirm(false)
+      setTaskToDelete(null)
     }
   }
 
@@ -626,7 +638,6 @@ export function TaskManager() {
       }
       loadTasks()
     } catch (error) {
-      console.error("Erreur lors du déplacement de la tâche:", error)
       loadTasks() // Recharger en cas d'erreur
     }
   }
@@ -1273,6 +1284,30 @@ export function TaskManager() {
           </div>
         </>
       )}
+
+      <Dialog open={showDeleteTaskConfirm} onOpenChange={setShowDeleteTaskConfirm}>
+        <DialogContent className="sm:max-w-md bg-white rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-gray-900">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Confirmer la suppression
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Êtes-vous sûr de vouloir supprimer cette tâche ?
+              <br />
+              <span className="text-red-600 font-medium">Cette action est irréversible.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => { setShowDeleteTaskConfirm(false); setTaskToDelete(null) }} className="border border-gray-300">
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={executeDeleteTask} className="bg-red-600 hover:bg-red-700 text-white">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

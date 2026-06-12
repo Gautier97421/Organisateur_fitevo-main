@@ -25,7 +25,6 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
           setWhatsappLink(data.data[0].value)
         }
       } catch (error) {
-        console.error('Erreur lors du chargement du lien WhatsApp:', error)
       }
     }
     loadWhatsappLink()

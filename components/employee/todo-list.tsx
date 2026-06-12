@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress"
 import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign, AlertTriangle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
+import { toast } from "sonner"
 import { CashRegisterForm } from "./cash-register-form"
 import {
   Dialog,
@@ -264,8 +265,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
             const userData = await userResponse.json()
             const userTasks = Array.isArray(userData.data) ? userData.data : (userData.data ? [userData.data] : [])
             
-            console.log('Tâches templates:', dbTasks.length)
-            console.log('Tâches complétées:', userTasks.length)
             
             // Mettre à jour le statut des tâches selon les données utilisateur
             const mergedTasks = dbTasks.map(task => {
@@ -277,7 +276,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               })
               
               if (userTask && userTask.status === 'completed') {
-                console.log(`Tâche "${task.title}" trouvée comme complétée`)
                 const restoredValue = parseStoredResponseValue(userTask.options, task)
                 return {
                   ...task,
@@ -290,7 +288,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               return task
             })
             
-            console.log('Tâches fusionnées:', mergedTasks.filter(t => t.completed).length, 'complétées sur', mergedTasks.length)
             setTasks(mergedTasks)
           } else {
             setTasks(dbTasks)
@@ -300,7 +297,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           setTasks([])
         }
       } catch (error) {
-        console.error('Erreur chargement tâches:', error)
         // En cas d'erreur, afficher également "Aucune tâche"
         setTasks([])
       } finally {
@@ -503,10 +499,8 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       setShowValidationDialog(false)
       setTaskToValidate(null)
       
-      console.log('Tâche validée et sauvegardée en BDD:', taskToValidate.title)
     } catch (error) {
-      console.error("Erreur lors de la validation:", error)
-      alert("Impossible de valider la tâche. Veuillez réessayer.")
+      toast.error("Impossible de valider la tâche. Veuillez réessayer.")
     }
   }
 
@@ -628,7 +622,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         onSessionEnd()
       }
     } catch (error) {
-      console.error("Erreur lors de l'envoi:", error)
     }
   }
 
@@ -641,7 +634,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
     if (!userEmail || !userId) {
       setCashSaveError("Session utilisateur invalide: impossible d'enregistrer la caisse.")
-      alert("Session utilisateur invalide: impossible d'enregistrer la caisse.")
+      toast.error("Session utilisateur invalide: impossible d'enregistrer la caisse.")
       return false
     }
 
@@ -684,7 +677,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
       const message = apiMessage || `Erreur API (${response.status}) lors de l'enregistrement de la caisse.`
       setCashSaveError(message)
-      alert(message)
+      toast.error(message)
       return false
     }
 
@@ -862,15 +855,15 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3">
-                  <span className="text-2xl font-bold text-gray-400">#{index + 1}</span>
-                  <div className="flex-1">
-                    <CardTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                      <span>{task.title}</span>
-                      {task.completed && <CheckCircle className="h-5 w-5 text-green-600" />}
-                      {task.validated && <Lock className="h-5 w-5 text-red-600" />}
+                <div className="flex items-start gap-2 md:space-x-3 min-w-0">
+                  <span className="text-xl md:text-2xl font-bold text-gray-400 flex-shrink-0">#{index + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-base md:text-xl flex items-start gap-2 text-gray-900">
+                      <span className="break-words">{task.title}</span>
+                      {task.completed && <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />}
+                      {task.validated && <Lock className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />}
                     </CardTitle>
-                    <div className="flex items-center space-x-2 mt-2">
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
                       {task.required && (
                         <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
                           Obligatoire
@@ -893,7 +886,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-600 mt-1 text-lg">{task.description}</p>
+                    <p className="text-gray-600 mt-1 text-sm md:text-lg break-words">{task.description}</p>
                   </div>
                 </div>
               </div>
@@ -1040,10 +1033,10 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
               <Button
                 onClick={submitTodoList}
                 disabled={isCheckingCashStatus}
-                className="bg-green-600 hover:bg-green-700 text-white text-xl px-8 py-4 h-auto flex items-center gap-2"
+                className="bg-green-600 hover:bg-green-700 text-white text-base md:text-xl px-5 md:px-8 py-3 md:py-4 h-auto flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
               >
                 <>
-                  <DollarSign className="h-6 w-6" /> Remplir la fiche de caisse
+                  <DollarSign className="h-5 w-5 md:h-6 md:w-6 flex-shrink-0" /> Remplir la fiche de caisse
                 </>
               </Button>
             </div>

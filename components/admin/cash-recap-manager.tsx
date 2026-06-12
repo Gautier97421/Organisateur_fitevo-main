@@ -163,7 +163,6 @@ export function CashRecapManager() {
       }
       setEntriesByMonth(monthlyData)
     } catch (error) {
-      console.error("Erreur chargement récap caisse:", error)
     } finally {
       setIsLoading(false)
     }

@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthInterceptor } from "@/components/auth/auth-interceptor"
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
   title: "Gestionnaire Salle de Sport",
@@ -35,6 +36,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange nonce={nonce}>
           {children}
           <Toaster />
+          <SonnerToaster richColors position="top-center" />
         </ThemeProvider>
       </body>
     </html>

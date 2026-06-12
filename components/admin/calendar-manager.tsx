@@ -352,7 +352,6 @@ export function CalendarManager() {
       )
 
       if (!response.ok) {
-        console.warn("Impossible de charger les statuts des événements planifiés:", response.status)
         return []
       }
 
@@ -404,7 +403,6 @@ export function CalendarManager() {
       })
 
       if (!scheduledDeleteResponse.ok) {
-        console.warn("Suppression scheduled-events echouee:", scheduledDeleteResponse.status)
       }
 
       if (calendarView === "year") {
@@ -421,7 +419,6 @@ export function CalendarManager() {
       setShowDeleteConfirmDialog(false)
       setEventToDelete(null)
     } catch (error) {
-      console.error("Erreur suppression evenement:", error)
     }
   }
 
@@ -442,15 +439,12 @@ export function CalendarManager() {
       if (error) throw error
       
       // Debug pour voir les données
-      console.log("Events chargés:", data)
       if (data && data.length > 0) {
-        console.log("Premier event - created_by_name:", data[0].created_by_name, "created_by_email:", data[0].created_by_email)
       }
       
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
       setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
     } catch (error) {
-      console.error("Erreur chargement events:", error)
     } finally {
       setIsLoading(false)
     }
@@ -471,7 +465,6 @@ export function CalendarManager() {
         setRoles(Array.isArray(rolesResult.data) ? rolesResult.data : [])
       }
     } catch (error) {
-      console.error("Erreur chargement options d'assignation:", error)
     }
   }
 
@@ -577,7 +570,6 @@ export function CalendarManager() {
       })
 
       if (!scheduledResponse.ok) {
-        console.error("Creation scheduled-events echouee:", scheduledResponse.status)
         throw new Error("Impossible d'enregistrer l'assignation planifiee")
       }
 
@@ -602,7 +594,6 @@ export function CalendarManager() {
       setSelectedDate(null)
       setAttemptedSubmit(false)
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error)
     }
   }
 
@@ -648,7 +639,6 @@ export function CalendarManager() {
       })
       setAttemptedSubmit(false)
     } catch (error) {
-      console.error("Erreur lors de la modification:", error)
     }
   }
 
@@ -671,7 +661,6 @@ export function CalendarManager() {
       setEvents(events.map((event) => (event.id === eventId ? { ...event, status: "approved" as const } : event)))
       return true
     } catch (error) {
-      console.error("Erreur lors de l'approbation:", error)
       return false
     }
   }
@@ -725,7 +714,6 @@ export function CalendarManager() {
       setSelectedEventId(null)
       setShowRejectionDialog(false)
     } catch (error) {
-      console.error("Erreur lors du refus:", error)
     }
   }
 

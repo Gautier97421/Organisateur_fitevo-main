@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TodoList } from "@/components/employee/todo-list"
 import { BreakManager } from "@/components/employee/break-manager"
 import { EmergencyButton } from "@/components/employee/emergency-button"
@@ -13,7 +12,8 @@ import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calend
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, HardHat, AlertTriangle, Home, Lock, Sunrise, Sunset, Sun, Calendar, ChevronDown } from "lucide-react"
+import { toast } from "sonner"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -61,6 +61,7 @@ export default function EmployeePage() {
   const [shortBreakProgress, setShortBreakProgress] = useState(0) // en minutes pour la pause courte en cours
   const [shortBreaksCompleted, setShortBreaksCompleted] = useState(0)
   const [lunchBreakTaken, setLunchBreakTaken] = useState(false)
+  const [breakScheduleId, setBreakScheduleId] = useState<string | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingPeriod, setPendingPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [pendingSubPeriod, setPendingSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
@@ -80,6 +81,8 @@ export default function EmployeePage() {
   const [customPages, setCustomPages] = useState<any[]>([])
   const [selectedCustomPage, setSelectedCustomPage] = useState<any | null>(null)
   const [showCustomPageDialog, setShowCustomPageDialog] = useState(false)
+  const [desktopOpen, setDesktopOpen] = useState(true)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -267,7 +270,6 @@ export default function EmployeePage() {
       if (response.ok) {
         const result = await response.json()
         const pages = result.data || []
-        console.log('Custom pages loaded:', pages)
         
         // Filtrer les pages selon le rôle de l'utilisateur
         const filteredPages = pages.filter((page: any) => {
@@ -283,7 +285,6 @@ export default function EmployeePage() {
           return false
         })
         
-        console.log('Filtered pages by role:', filteredPages)
         
         // Charger les items pour chaque page filtrée
         const pagesWithItems = await Promise.all(
@@ -291,22 +292,18 @@ export default function EmployeePage() {
             const itemsResponse = await fetch(`/api/db/custom_page_items?page_id=${page.id}&is_active=true&orderBy=order_index&orderDir=asc`)
             if (itemsResponse.ok) {
               const itemsResult = await itemsResponse.json()
-              console.log(`Items for page ${page.id}:`, itemsResult.data)
               return { ...page, items: itemsResult.data || [] }
             }
             return { ...page, items: [] }
           })
         )
         
-        console.log('Pages with items:', pagesWithItems)
         
         // Ne garder que les pages avec au moins un item actif
         const pagesWithActiveItems = pagesWithItems.filter(page => page.items.length > 0)
-        console.log('Pages with active items:', pagesWithActiveItems)
         setCustomPages(pagesWithActiveItems)
       }
     } catch (error) {
-      console.error('Error loading custom pages:', error)
     }
   }
 
@@ -364,13 +361,41 @@ export default function EmployeePage() {
     router.push("/")
   }
 
-  const handleBreakStart = (type: "short" | "lunch") => {
+  const handleBreakStart = async (type: "short" | "lunch") => {
     setIsOnBreak(true)
     setActiveBreakType(type)
     setBreakStartTime(new Date())
+
+    try {
+      const userId = getUserId()
+      const today = new Date().toISOString().split('T')[0]
+      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      const response = await fetch('/api/db/work_schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{
+            user_id: userId,
+            work_date: today,
+            start_time: now,
+            end_time: '',
+            type: 'break',
+            is_temporary: true,
+            notes: `Pause: ${type}`
+          }]
+        })
+      })
+      if (response.ok) {
+        const result = await response.json()
+        const created = Array.isArray(result.data) ? result.data[0] : result.data
+        if (created?.id) setBreakScheduleId(created.id)
+      }
+    } catch {
+      // Erreur silencieuse — la pause continue côté employé
+    }
   }
 
-  const handleBreakEnd = () => {
+  const handleBreakEnd = async () => {
     if (breakStartTime) {
       const now = new Date()
       const sessionDuration = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000 / 60)
@@ -389,16 +414,58 @@ export default function EmployeePage() {
       if (activeBreakType === "lunch") {
         setLunchBreakTaken(true)
       }
+
+      if (breakScheduleId) {
+        try {
+          const endTime = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+          await fetch(`/api/db/work_schedules/${breakScheduleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ end_time: endTime })
+          })
+        } catch {
+          // Erreur silencieuse
+        }
+        setBreakScheduleId(null)
+      }
     }
     setIsOnBreak(false)
     setBreakStartTime(null)
     setActiveBreakType(null)
   }
 
-  const handleBreakResume = (type: "short") => {
+  const handleBreakResume = async (type: "short") => {
     setIsOnBreak(true)
     setActiveBreakType(type)
     setBreakStartTime(new Date())
+
+    try {
+      const userId = getUserId()
+      const today = new Date().toISOString().split('T')[0]
+      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      const response = await fetch('/api/db/work_schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{
+            user_id: userId,
+            work_date: today,
+            start_time: now,
+            end_time: '',
+            type: 'break',
+            is_temporary: true,
+            notes: `Pause: ${type} (reprise)`
+          }]
+        })
+      })
+      if (response.ok) {
+        const result = await response.json()
+        const created = Array.isArray(result.data) ? result.data[0] : result.data
+        if (created?.id) setBreakScheduleId(created.id)
+      }
+    } catch {
+      // Erreur silencieuse
+    }
   }
 
   const requestPeriodSelection = (period: "matin" | "aprem" | "journee") => {
@@ -534,7 +601,7 @@ export default function EmployeePage() {
           }
         }
       } catch (error) {
-        alert('Erreur lors de la vérification des tâches. Veuillez réessayer.')
+        toast.error('Erreur lors de la vérification des tâches. Veuillez réessayer.')
         setPendingPeriod(null)
         setSelectedGym(null)
         return
@@ -565,7 +632,6 @@ export default function EmployeePage() {
           notes: `Période: ${pendingPeriod}${(pendingPeriod === "matin" || pendingPeriod === "aprem") && pendingSubPeriod ? ` | Sous-créneau: ${pendingSubPeriod}` : ''}${selectedGym?.id ? ` | GymId: ${selectedGym.id}` : ''}`
         }
         
-        console.log('📝 Création de la période de travail:', workScheduleData)
         
         // Créer ou mettre à jour le work_schedule avec isTemporary = true
         const response = await fetch('/api/db/work_schedules', {
@@ -578,10 +644,8 @@ export default function EmployeePage() {
         
         if (response.ok) {
           const result = await response.json()
-          console.log('✅ Période de travail créée avec succès:', result.data)
         } else {
           const error = await response.json()
-          console.error('❌ Erreur création période:', error)
         }
         
         // Stocker aussi en localStorage comme backup
@@ -688,238 +752,384 @@ export default function EmployeePage() {
   // Rendu de la vue courante (le widget de messagerie est monté séparément,
   // de façon persistante, pour conserver la connexion temps réel).
   const renderView = () => {
-  if (currentView === "menu") {
+    const dateStr = new Date().toLocaleDateString("fr-FR", {
+      weekday: "long", day: "numeric", month: "long",
+    })
+
+    const navItems = [
+      {
+        id: "planning" as const,
+        label: "Planning",
+        icon: ClipboardList,
+        active: currentView === "menu" || currentView === "tasks",
+        onClick: () => {
+          setMobileOpen(false)
+          if (selectedPeriod) setCurrentView("tasks")
+          else setCurrentView("menu")
+        },
+      },
+      {
+        id: "calendar" as const,
+        label: "Calendrier",
+        icon: CalendarDays,
+        active: currentView === "calendar",
+        onClick: () => { setCurrentView("calendar"); setMobileOpen(false) },
+      },
+    ]
+
+    const activeLabel = navItems.find((n) => n.active)?.label ?? "Planning"
+
     return (
-      <div className="min-h-screen bg-white">
-        {/* Header */}
-        <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
-            <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Espace Employé
-                </h1>
-                <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
-                  {userName} • {userEmail}
-                </p>
-              </div>
+      <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
+
+        {/* ── Header ──────────────────────────────────────────── */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center gap-3 px-4 z-40 flex-shrink-0">
+          {/* Hamburger mobile */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="lg:hidden text-gray-500 hover:text-gray-800 p-1 rounded-md"
+            aria-label="Ouvrir menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Toggle sidebar desktop */}
+          <button
+            onClick={() => setDesktopOpen((v) => !v)}
+            className="hidden lg:flex text-gray-400 hover:text-gray-700 p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+            aria-label={desktopOpen ? "Réduire sidebar" : "Ouvrir sidebar"}
+          >
+            {desktopOpen
+              ? <PanelLeftClose className="w-5 h-5" />
+              : <PanelLeftOpen  className="w-5 h-5" />
+            }
+          </button>
+
+          <div className="hidden lg:block w-px h-6 bg-gray-200" />
+
+          {/* Logo + nom */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-red-50">
+              <Image
+                src="/Logo-removebg-preview.png"
+                alt="FitEvo"
+                width={32}
+                height={32}
+                className="object-contain w-full h-full"
+                priority
+              />
             </div>
-            <div className="flex items-center space-x-2 md:space-x-3 w-full sm:w-auto">
-              <Button
-                onClick={handleLogout}
-                variant="outline"
-                size="sm"
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white text-sm md:text-base flex-1 sm:flex-none"
-              >
-                Déconnexion
-              </Button>
-            </div>
+            <span className="text-base font-extrabold text-gray-900 tracking-tight">FitEvo</span>
           </div>
-        </div>
 
-        {/* Menu de choix */}
-        <div className="max-w-4xl mx-auto p-3 md:p-8">
-          <Card className="shadow-2xl border border-gray-200 bg-white">
-            <CardHeader className="text-center pb-4 md:pb-8">
-              <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-white/10 backdrop-blur rounded-2xl flex items-center justify-center mb-3 md:mb-4 shadow-lg">
-                <Home className="h-7 w-7 md:h-9 md:w-9 text-gray-900" />
-              </div>
-              <CardTitle className="text-2xl md:text-3xl text-gray-900">
-                Que souhaitez-vous faire ?
-              </CardTitle>
-              <p className="text-gray-600 text-base md:text-lg mt-2">Choisissez votre action pour aujourd'hui</p>
-            </CardHeader>
-            <CardContent className="space-y-4 md:space-y-6 pb-6 md:pb-8">
-              <div className="grid gap-4 md:gap-6">
-                {/* Bouton Calendrier */}
-                <Button
-                  onClick={() => setCurrentView("calendar")}
-                  className="h-20 md:h-24 text-lg md:text-xl bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                >
-                  <Calendar className="w-8 h-8 md:w-10 md:h-10" />
-                  <div className="text-left">
-                    <div className="font-bold text-base md:text-xl">
-                      Calendrier & Planning
-                    </div>
-                    <div className="text-xs md:text-sm opacity-90">
-                      Événements et horaires de travail
-                    </div>
-                  </div>
-                </Button>
+          {/* Section active (mobile) */}
+          <span className="lg:hidden ml-auto text-xs font-medium text-gray-500 truncate max-w-[130px]">
+            {activeLabel}
+          </span>
 
-                {/* Bouton WhatsApp */}
-                {whatsappLink && (
-                  <Button
-                    onClick={() => window.open(whatsappLink, "_blank")}
-                    className="h-16 md:h-20 text-base md:text-lg bg-green-600 hover:bg-green-700 flex items-center justify-center space-x-2 md:space-x-3 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                  >
-                    <MessageCircle className="w-6 h-6 md:w-8 md:h-8" />
-                    <div className="text-left">
-                      <div className="font-bold text-base md:text-lg">WhatsApp</div>
-                      <div className="text-xs opacity-90">Groupe équipe</div>
-                    </div>
-                  </Button>
-                )}
+          {/* Profil (desktop droite) */}
+          <div className="hidden lg:flex items-center gap-2 ml-auto">
+            <span className="text-sm font-medium text-gray-700 truncate max-w-[160px]">{userName}</span>
+          </div>
+        </header>
 
-                {/* Section Période de Travail */}
-                {hasWorkPeriodAccess && (
-                  <div className="bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200">
-                    <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
-                      Commencer ma période de travail
-                    </h3>
-                  <div className="grid gap-3 md:gap-4">
-                    <Button
-                      onClick={() => requestPeriodSelection("matin")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sunrise className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Matin</div>
-                        <div className="text-xs md:text-sm opacity-90">Ouverture et contrôles</div>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => requestPeriodSelection("aprem")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sunset className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Après-midi</div>
-                        <div className="text-xs md:text-sm opacity-90">Maintenance et nettoyage</div>
-                      </div>
-                    </Button>
-                    <Button
-                      onClick={() => requestPeriodSelection("journee")}
-                      className="h-16 md:h-20 text-base md:text-lg bg-red-600 hover:bg-red-700 flex items-center justify-center space-x-3 md:space-x-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      <Sun className="w-7 h-7 md:w-9 md:h-9" />
-                      <div className="text-left">
-                        <div className="font-bold text-base md:text-lg">Journée entière</div>
-                        <div className="text-xs md:text-sm opacity-90">Ouverture à fermeture</div>
-                      </div>
-                    </Button>
-                  </div>
-                </div>
-              )}
+        {/* ── Corps (sidebar + contenu) ──────────────────────── */}
+        <div className="flex flex-1 overflow-hidden">
 
-              {/* Section Pointage Simple (pour les employés sans accès aux périodes de travail) */}
-              {!hasWorkPeriodAccess && (
-                <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-200">
-                  <h3 className="text-lg md:text-xl font-bold text-center mb-3 md:mb-4 text-gray-900">
-                    Pointage
-                  </h3>
-                  <SimpleTimeTracker />
-                </div>
-              )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          {/* Overlay mobile */}
+          {mobileOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+              onClick={() => setMobileOpen(false)}
+            />
+          )}
 
-        {/* Dialog de sélection de salle */}
-        <Dialog open={showGymSelectionDialog} onOpenChange={setShowGymSelectionDialog}>
-          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
-            <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl text-gray-900">
-                Choisissez votre salle de travail
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 py-4">
-              <p className="text-sm md:text-base text-gray-600">
-                Vous devez sélectionner dans quelle salle vous allez travailler pour cette session :
-              </p>
-              <div className="grid gap-3">
-                {assignedGyms.map((gym) => (
-                  <Button
-                    key={gym.id}
-                    onClick={() => selectGymAndContinue(gym)}
-                    variant="outline"
-                    className="h-auto p-4 justify-start text-left border-2 hover:border-red-600 hover:bg-red-50"
-                  >
-                    <div>
-                      <div className="font-bold text-base">{gym.name}</div>
-                      {gym.address && <div className="text-sm text-gray-600">{gym.address}</div>}
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Dialog de confirmation pour le travail */}
-        <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
-            <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <AlertTriangle className="h-6 w-6 text-orange-500" />
-                <span>Confirmer votre période de travail</span>
-              </DialogTitle>
-            </DialogHeader>
-            <div className="text-base md:text-lg space-y-2 text-gray-600 px-3 md:px-6 py-3 md:py-4">
-              <div>
-                <strong>Période :</strong>{" "}
-                {pendingPeriod && getPeriodEmoji(pendingPeriod)} {pendingPeriod && getPeriodText(pendingPeriod)}
-              </div>
-              {selectedGym && (
-                <div>
-                  <strong>Salle :</strong> {selectedGym.name}
-                  {selectedGym.address && <span className="text-sm"> - {selectedGym.address}</span>}
-                </div>
-              )}
-              {(pendingPeriod === "matin" || pendingPeriod === "aprem") && (
-                <div className="space-y-2">
-                  <strong>Sous-créneau :</strong>
-                  <Select
-                    value={pendingSubPeriod || ""}
-                    onValueChange={(value) => setPendingSubPeriod(value as "debut" | "milieu" | "fin")}
-                  >
-                    <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
-                      <SelectValue placeholder="Choisir Ouverture, Milieu ou Fin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debut">Ouverture</SelectItem>
-                      <SelectItem value="milieu">Milieu</SelectItem>
-                      <SelectItem value="fin">
-                        {pendingPeriod === "matin" ? "Fin de matinée" : "Fin d'après-midi"}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {selectedSubPeriod && selectedPeriod && selectedPeriod !== "journee" && (
-                <div>
-                  <strong>Sous-créneau actif :</strong> {getSubPeriodText(selectedSubPeriod, selectedPeriod)}
-                </div>
-              )}
-              <div className="text-sm md:text-base text-red-700 bg-red-50 p-2 md:p-3 rounded-lg border border-red-200">
-                <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de période jusqu'à la fin
-                de votre session de travail.
-              </div>
-            </div>
-            <DialogFooter className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-              <Button variant="outline" onClick={cancelPeriodSelection} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white w-full sm:w-auto flex items-center justify-center gap-2">
-                <XCircle className="h-5 w-5" /> Annuler
-              </Button>
-              <Button
-                onClick={confirmPeriodSelection}
-                className="text-base md:text-lg px-4 md:px-6 bg-red-600 hover:bg-red-700 w-full sm:w-auto flex items-center justify-center gap-2"
+          {/* ── Sidebar ──────────────────────────────────────── */}
+          <aside
+            className={[
+              "bg-white border-r border-gray-200 flex flex-col z-40 flex-shrink-0",
+              "transition-all duration-300 ease-in-out overflow-hidden",
+              "fixed top-0 left-0 h-full w-64",
+              mobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+              desktopOpen
+                ? "lg:static lg:translate-x-0 lg:w-60 lg:shadow-none"
+                : "lg:static lg:translate-x-0 lg:w-0 lg:border-r-0",
+            ].join(" ")}
+          >
+            {/* Bouton fermer (mobile) */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 lg:hidden">
+              <span className="text-sm font-bold text-gray-600">Menu</span>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded"
               >
-                <CheckCircle className="h-5 w-5" /> Commencer
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-        {/* Dialog de sélection de salle */}
+            {/* Profil (dans sidebar mobile) */}
+            <div className="px-4 py-3 border-b border-gray-100 lg:hidden">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-red-50">
+                  <Image
+                    src="/Logo-removebg-preview.png"
+                    alt="FitEvo"
+                    width={32}
+                    height={32}
+                    className="object-contain w-full h-full"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{userName}</p>
+                  <p className="text-xs text-gray-400 truncate">{userEmail}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5 min-w-[236px]">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 whitespace-nowrap">
+                Espace Employé
+              </p>
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={item.onClick}
+                  className={[
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
+                    "transition-all duration-150 group whitespace-nowrap",
+                    item.active
+                      ? "bg-red-50 text-red-600"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                  ].join(" ")}
+                >
+                  <item.icon className={[
+                    "w-4 h-4 flex-shrink-0",
+                    item.active ? "text-red-500" : "text-gray-400 group-hover:text-gray-600",
+                  ].join(" ")} />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.active && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+                </button>
+              ))}
+            </nav>
+
+            {/* Déconnexion */}
+            <div className="px-2.5 py-3 border-t border-gray-100 min-w-[236px]">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all group whitespace-nowrap"
+              >
+                <LogOut className="w-4 h-4 group-hover:text-red-500" />
+                Déconnexion
+              </button>
+            </div>
+          </aside>
+
+          {/* ── Contenu principal ─────────────────────────────── */}
+          <main className="flex-1 overflow-y-auto">
+
+            {/* ── VUE PLANNING (menu + tâches) ────────────────── */}
+            {(currentView === "menu" || currentView === "tasks") && (
+              <>
+                {/* Hero */}
+                <div className="px-4 pt-5 sm:px-6 sm:pt-6">
+                  <div className="relative rounded-2xl overflow-hidden h-36 sm:h-44 shadow-lg">
+                    <Image
+                      src="/fitevo-salle.jpg"
+                      alt="Salle FitEvo"
+                      fill
+                      className="object-cover"
+                      priority
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-black/10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                    <div className="absolute inset-0 flex flex-col justify-end px-5 pb-5 sm:px-7 sm:pb-6">
+                      <p className="text-[10px] sm:text-xs font-bold text-white/60 uppercase tracking-widest mb-1">
+                        Espace Employé
+                      </p>
+                      <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight">
+                        Bonjour, {userName?.split(" ")[0] || "Employé"} 👋
+                      </h1>
+                      <p className="text-xs sm:text-sm text-white/75 mt-1 capitalize">{dateStr}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5 space-y-4">
+
+                  {/* ── Sélection de période (pas de période active) ── */}
+                  {currentView === "menu" && (
+                    <>
+                      {hasWorkPeriodAccess && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Commencer ma période</p>
+                          <nav className="space-y-0.5">
+                            {[
+                              { period: "matin" as const, label: "Matin", sub: "Ouverture et contrôles", Icon: Sunrise },
+                              { period: "aprem" as const, label: "Après-midi", sub: "Maintenance et nettoyage", Icon: Sunset },
+                              { period: "journee" as const, label: "Journée entière", sub: "Ouverture à fermeture", Icon: Sun },
+                            ].map(({ period, label, sub, Icon }) => (
+                              <button
+                                key={period}
+                                onClick={() => requestPeriodSelection(period)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group text-gray-600 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Icon className="w-4 h-4 flex-shrink-0 text-gray-400 group-hover:text-red-500" />
+                                <div className="flex-1 text-left">
+                                  <span className="block">{label}</span>
+                                  <span className="text-xs text-gray-400 font-normal">{sub}</span>
+                                </div>
+                                <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-red-400" />
+                              </button>
+                            ))}
+                          </nav>
+                        </div>
+                      )}
+
+                      {!hasWorkPeriodAccess && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-3">Pointage</p>
+                          <SimpleTimeTracker />
+                        </div>
+                      )}
+
+                      {whatsappLink && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Liens</p>
+                          <button
+                            onClick={() => window.open(whatsappLink, "_blank")}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <MessageCircle className="w-4 h-4 flex-shrink-0 text-green-500" />
+                            <div className="flex-1 text-left">
+                              <span className="block">WhatsApp</span>
+                              <span className="text-xs text-gray-400 font-normal">Groupe équipe</span>
+                            </div>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Vue tâches (période active) ──────────────── */}
+                  {currentView === "tasks" && (
+                    <>
+                      {/* Carte session */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-red-50 overflow-hidden flex items-center justify-center flex-shrink-0 p-1.5">
+                              <Image src="/Logo-removebg-preview.png" alt="FitEvo" width={40} height={40} className="object-contain" />
+                            </div>
+                            <div>
+                              <h2 className="font-bold text-gray-900 text-base">
+                                To-Do List — {selectedPeriod && getPeriodText(selectedPeriod)}
+                              </h2>
+                              {selectedGym && (
+                                <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
+                                  <MapPin className="h-3 w-3" /> {selectedGym.name}
+                                </p>
+                              )}
+                              <p className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
+                                <Lock className="h-3 w-3" /> Session verrouillée
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 sm:flex-shrink-0">
+                            {customPages.length === 1 ? (
+                              <Button
+                                onClick={() => handleOpenCustomPage(customPages[0])}
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700 text-white h-8 text-xs"
+                              >
+                                {(() => {
+                                  const IconComponent = (Icons as any)[customPages[0].icon] || Icons.FileText
+                                  return <IconComponent className="w-3.5 h-3.5 mr-1.5" />
+                                })()}
+                                {customPages[0].title}
+                              </Button>
+                            ) : customPages.length > 1 ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white h-8 text-xs">
+                                    <Icons.FileText className="w-3.5 h-3.5 mr-1.5" />
+                                    Pages d'aide
+                                    <ChevronDown className="w-3.5 h-3.5 ml-1" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  {customPages.map((page) => {
+                                    const IconComponent = (Icons as any)[page.icon] || Icons.FileText
+                                    return (
+                                      <DropdownMenuItem key={page.id} onClick={() => handleOpenCustomPage(page)} className="cursor-pointer">
+                                        <IconComponent className="w-4 h-4 mr-2" />
+                                        {page.title}
+                                      </DropdownMenuItem>
+                                    )
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : null}
+                            <BreakManager
+                              period={selectedPeriod || "matin"}
+                              isOnBreak={isOnBreak}
+                              breakType={activeBreakType}
+                              breakStartTime={breakStartTime}
+                              accumulatedBreakTime={accumulatedBreakTime}
+                              shortBreaksCompleted={shortBreaksCompleted}
+                              shortBreakProgress={shortBreakProgress}
+                              lunchBreakTaken={lunchBreakTaken}
+                              onBreakStart={handleBreakStart}
+                              onBreakEnd={handleBreakEnd}
+                              onBreakResume={handleBreakResume}
+                            />
+                            <EmergencyButton />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* To-do list */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                        {selectedPeriod && (
+                          <TodoList
+                            period={selectedPeriod}
+                            subPeriod={selectedSubPeriod}
+                            isBlocked={isOnBreak}
+                            gymId={selectedGym?.id}
+                            roleId={userRoleId}
+                            onSessionEnd={handleSessionEnd}
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── VUE CALENDRIER ─────────────────────────────── */}
+            {currentView === "calendar" && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <CalendarView
+                    hasWorkScheduleAccess={hasWorkScheduleAccess}
+                    hasCalendarAccess={hasCalendarAccess}
+                  />
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* ── Dialogs (communs à toutes les vues) ─────────────── */}
+
+        {/* Sélection de salle */}
         <Dialog open={showGymSelectionDialog} onOpenChange={setShowGymSelectionDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <Building className="h-6 w-6 text-red-600" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <Building className="h-5 w-5 text-red-600" />
                 <span>Choisissez votre salle</span>
               </DialogTitle>
             </DialogHeader>
@@ -929,20 +1139,15 @@ export default function EmployeePage() {
               </p>
               <div className="space-y-2">
                 {assignedGyms.map((gym) => (
-                  <Button
-                    key={gym.id}
-                    onClick={() => selectGymAndContinue(gym)}
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-3 px-4 hover:bg-red-50 hover:border-red-600"
-                  >
+                  <Button key={gym.id} onClick={() => selectGymAndContinue(gym)} variant="outline"
+                    className="w-full justify-start text-left h-auto py-3 px-4 hover:bg-red-50 hover:border-red-600">
                     <div className="flex items-start gap-3 w-full">
                       <Building className="h-5 w-5 mt-0.5 text-red-600" />
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900">{gym.name}</div>
                         {gym.address && (
                           <div className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                            <MapPin className="h-3 w-3" />
-                            {gym.address}
+                            <MapPin className="h-3 w-3" />{gym.address}
                           </div>
                         )}
                       </div>
@@ -954,446 +1159,172 @@ export default function EmployeePage() {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog "Aucune tâche assignée" */}
+        {/* Confirmation période */}
+        <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                <span>Confirmer votre période de travail</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 text-sm text-gray-600 py-3">
+              <div>
+                <strong>Période :</strong>{" "}
+                {pendingPeriod && getPeriodEmoji(pendingPeriod)} {pendingPeriod && getPeriodText(pendingPeriod)}
+              </div>
+              {selectedGym && (
+                <div>
+                  <strong>Salle :</strong> {selectedGym.name}
+                  {selectedGym.address && <span className="text-xs"> - {selectedGym.address}</span>}
+                </div>
+              )}
+              {(pendingPeriod === "matin" || pendingPeriod === "aprem") && (
+                <div className="space-y-2">
+                  <strong>Sous-créneau :</strong>
+                  <Select value={pendingSubPeriod || ""} onValueChange={(value) => setPendingSubPeriod(value as "debut" | "milieu" | "fin")}>
+                    <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                      <SelectValue placeholder="Choisir Ouverture, Milieu ou Fin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debut">Ouverture</SelectItem>
+                      <SelectItem value="milieu">Milieu</SelectItem>
+                      <SelectItem value="fin">{pendingPeriod === "matin" ? "Fin de matinée" : "Fin d'après-midi"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {selectedSubPeriod && selectedPeriod && selectedPeriod !== "journee" && (
+                <div><strong>Sous-créneau actif :</strong> {getSubPeriodText(selectedSubPeriod, selectedPeriod)}</div>
+              )}
+              <div className="text-xs text-red-700 bg-red-50 p-3 rounded-lg border border-red-200">
+                <strong>Important :</strong> Une fois confirmé, vous ne pourrez plus changer de période jusqu'à la fin de votre session.
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={cancelPeriodSelection} className="w-full sm:w-auto flex items-center justify-center gap-2 border-gray-300">
+                <XCircle className="h-4 w-4" /> Annuler
+              </Button>
+              <Button onClick={confirmPeriodSelection} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2">
+                <CheckCircle className="h-4 w-4" /> Commencer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Aucune tâche */}
         <Dialog open={showNoTasksDialog} onOpenChange={setShowNoTasksDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <AlertTriangle className="h-6 w-6 text-orange-500" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
                 <span>Aucune tâche assignée</span>
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p className="text-sm md:text-base text-gray-600">
-                Aucune tâche n'a été assignée pour le créneau <strong>{noTasksPeriodName}</strong> dans la salle <strong>{selectedGym?.name || "sélectionnée"}</strong>.
-              </p>
-              <p className="text-sm text-gray-500 mt-3">
-                Contactez un administrateur pour qu'il attribue des tâches à votre rôle pour cette période.
-              </p>
+              <p className="text-sm text-gray-600">Aucune tâche n'a été assignée pour le créneau <strong>{noTasksPeriodName}</strong> dans la salle <strong>{selectedGym?.name || "sélectionnée"}</strong>.</p>
+              <p className="text-sm text-gray-500 mt-3">Contactez un administrateur pour qu'il attribue des tâches à votre rôle pour cette période.</p>
             </div>
             <DialogFooter>
-              <Button
-                onClick={() => setShowNoTasksDialog(false)}
-                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-              >
-                OK
-              </Button>
+              <Button onClick={() => setShowNoTasksDialog(false)} className="bg-red-600 hover:bg-red-700 w-full sm:w-auto">OK</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Sous-créneau requis */}
         <Dialog open={showSubPeriodRequiredDialog} onOpenChange={setShowSubPeriodRequiredDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <AlertTriangle className="h-6 w-6 text-orange-500" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
                 <span>Sous-créneau requis</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="py-2 text-sm md:text-base text-gray-700">
-              Veuillez sélectionner un sous-créneau avant de commencer votre période: Ouverture, Milieu ou Fin.
-            </div>
+            <div className="py-2 text-sm text-gray-700">Veuillez sélectionner un sous-créneau avant de commencer votre période : Ouverture, Milieu ou Fin.</div>
             <DialogFooter>
-              <Button
-                onClick={() => setShowSubPeriodRequiredDialog(false)}
-                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-              >
-                Compris
-              </Button>
+              <Button onClick={() => setShowSubPeriodRequiredDialog(false)} className="bg-red-600 hover:bg-red-700 w-full sm:w-auto">Compris</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Dialog "Restriction WiFi" */}
+        {/* Restriction WiFi */}
         <Dialog open={showWifiRestrictionDialog} onOpenChange={setShowWifiRestrictionDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <Lock className="h-6 w-6 text-red-600" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <Lock className="h-5 w-5 text-red-600" />
                 <span>Accès réseau requis</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm md:text-base text-gray-600 mb-3">
-                Cette salle nécessite que vous soyez connecté au réseau WiFi de l'établissement.
-              </p>
-              <p className="text-sm text-gray-500">
-                Veuillez vous connecter au WiFi de la salle et réessayer. Si vous pensez être déjà connecté au bon réseau, contactez un administrateur.
-              </p>
+            <div className="py-4 space-y-2 text-sm text-gray-600">
+              <p>Cette salle nécessite que vous soyez connecté au réseau WiFi de l'établissement.</p>
+              <p className="text-gray-500">Veuillez vous connecter au WiFi de la salle et réessayer.</p>
             </div>
-            <DialogFooter className="flex gap-2">
-              <Button
-                onClick={() => setShowWifiRestrictionDialog(false)}
-                className="bg-red-600 hover:bg-red-700 flex-1"
-              >
-                Compris
-              </Button>
+            <DialogFooter>
+              <Button onClick={() => setShowWifiRestrictionDialog(false)} className="bg-red-600 hover:bg-red-700 flex-1">Compris</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Dialog "Déconnexion bloquée" */}
+        {/* Déconnexion bloquée */}
         <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <AlertTriangle className="h-6 w-6 text-orange-500" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
                 <span>Déconnexion impossible</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm md:text-base text-gray-600 mb-3">
-                Vous avez une période de travail en cours qui n'est pas terminée.
-              </p>
-              <p className="text-sm text-gray-500">
-                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
-              </p>
+            <div className="py-4 space-y-2 text-sm text-gray-600">
+              <p>Vous avez une période de travail en cours qui n'est pas terminée.</p>
+              <p className="text-gray-500">Terminez toutes les tâches obligatoires et validez la caisse avant de vous déconnecter.</p>
             </div>
-            <DialogFooter className="flex gap-2">
-              <Button
-                onClick={() => setShowLogoutBlockedDialog(false)}
-                className="bg-red-600 hover:bg-red-700 flex-1"
-              >
-                Retour aux tâches
-              </Button>
+            <DialogFooter>
+              <Button onClick={() => setShowLogoutBlockedDialog(false)} className="bg-red-600 hover:bg-red-700 flex-1">Retour aux tâches</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Dialog "Aucune salle assignée" */}
+        {/* Aucune salle */}
         <Dialog open={showNoGymDialog} onOpenChange={setShowNoGymDialog}>
           <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <Building className="h-6 w-6 text-red-600" />
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <Building className="h-5 w-5 text-red-600" />
                 <span>Aucune salle assignée</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm md:text-base text-gray-600 mb-3">
-                Aucune salle de sport ne vous est actuellement assignée.
-              </p>
-              <p className="text-sm text-gray-500">
-                Pour démarrer une période de travail, vous devez d'abord être assigné à une salle. Veuillez contacter un administrateur pour plus d'informations.
-              </p>
+            <div className="py-4 space-y-2 text-sm text-gray-600">
+              <p>Aucune salle de sport ne vous est actuellement assignée.</p>
+              <p className="text-gray-500">Veuillez contacter un administrateur pour plus d'informations.</p>
             </div>
             <DialogFooter className="flex gap-2">
               {whatsappLink && (
-                <Button
-                  onClick={() => window.open(whatsappLink, '_blank')}
-                  variant="outline"
-                  className="border-2 border-green-500 text-green-600 hover:bg-green-50"
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  WhatsApp
+                <Button onClick={() => window.open(whatsappLink, '_blank')} variant="outline" className="border-green-500 text-green-600 hover:bg-green-50">
+                  <MessageCircle className="h-4 w-4 mr-2" />WhatsApp
                 </Button>
               )}
-              <Button
-                onClick={() => setShowNoGymDialog(false)}
-                className="bg-red-600 hover:bg-red-700 flex-1"
-              >
-                OK
-              </Button>
+              <Button onClick={() => setShowNoGymDialog(false)} className="bg-red-600 hover:bg-red-700 flex-1">OK</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    )
-  }
 
-  // Vue Calendrier
-  if (currentView === "calendar") {
-    return (
-      <div className="min-h-screen bg-white">
-        {/* Header */}
-                {/* Header */}
-        <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-4">
-            <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
-                <HardHat className="h-6 w-6 md:h-7 md:w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Espace Employé
-                </h1>
-                <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
-                  {userName} • {userEmail}
-                </p>
-              </div>
-            </div>
-            <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto">
-              {/* Si période en cours, bouton retour aux tâches, sinon menu */}
-              {selectedPeriod ? (
-                <Button
-                  onClick={() => setCurrentView("tasks")}
-                  variant="outline"
-                  size="sm"
-                  className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
-                >
-                  ← Tâches
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => setCurrentView("menu")}
-                  variant="outline"
-                  size="sm"
-                  className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-                >
-                  🏠 Menu
-                </Button>
-              )}
-              <Button
-                onClick={handleLogout}
-                variant="outline"
-                size="sm"
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-              >
-                Déconnexion
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Instructions */}
+        <NewMemberInstructionsDialog instructions={instructions} open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog} />
 
-        <div className="max-w-4xl mx-auto p-6">
-          <CalendarView 
-            hasWorkScheduleAccess={hasWorkScheduleAccess} 
-            hasCalendarAccess={hasCalendarAccess} 
+        {/* Page personnalisée */}
+        {selectedCustomPage && (
+          <CustomPageDialog
+            pageTitle={selectedCustomPage.title}
+            pageIcon={selectedCustomPage.icon}
+            pageDescription={selectedCustomPage.description}
+            items={selectedCustomPage.items}
+            open={showCustomPageDialog}
+            onOpenChange={setShowCustomPageDialog}
           />
-        </div>
-
-        {/* Dialog "Déconnexion bloquée" (vue calendrier) */}
-        <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
-          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
-            <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-                <AlertTriangle className="h-6 w-6 text-orange-500" />
-                <span>Déconnexion impossible</span>
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm md:text-base text-gray-600 mb-3">
-                Vous avez une période de travail en cours qui n'est pas terminée.
-              </p>
-              <p className="text-sm text-gray-500">
-                Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter.
-              </p>
-            </div>
-            <DialogFooter className="flex gap-2">
-              <Button
-                onClick={() => setShowLogoutBlockedDialog(false)}
-                className="bg-red-600 hover:bg-red-700 flex-1"
-              >
-                OK
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        )}
       </div>
     )
-  }
-
-  // Vue Tâches (avec période sélectionnée) - SANS bouton Menu
-  return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-white shadow-lg border-b border-gray-200 p-4 md:p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-4xl mx-auto gap-3">
-          <div className="flex items-center space-x-3 md:space-x-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-black/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg overflow-hidden p-1.5">
-              <Image
-                src="/Logo-removebg-preview.png"
-                alt="FitEvo Logo"
-                width={48}
-                height={48}
-                className="object-contain"
-                priority
-              />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                {selectedPeriod ? getPeriodText(selectedPeriod) : "Mes Tâches"}
-              </h1>
-              <p className="text-sm md:text-base text-gray-600 truncate max-w-[200px] sm:max-w-none">
-                {userName} • {userEmail}
-              </p>
-            </div>
-          </div>
-          <div className="flex space-x-2 md:space-x-3 w-full sm:w-auto flex-wrap gap-2">
-            {/* Bouton Calendrier */}
-            <Button
-              onClick={() => setCurrentView("calendar")}
-              variant="outline"
-              size="sm"
-              className="border-2 border-red-300 hover:bg-red-50 bg-white flex-1 sm:flex-none text-sm md:text-base text-red-600"
-            >
-              <Calendar className="w-4 h-4 mr-1" />
-              Calendrier
-            </Button>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              size="sm"
-              className="border-2 border-gray-300 hover:bg-gray-50 bg-white flex-1 sm:flex-none text-sm md:text-base"
-            >
-              Déconnexion
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto p-3 md:p-6">
-        {/* En-tête de la période */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-6 lg:p-8 mb-6 md:mb-8 border border-gray-200">
-          <div className="flex flex-col gap-4">
-            {/* Titre et salle */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 md:w-16 md:h-16 bg-black/10 backdrop-blur rounded-2xl flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 p-2">
-                <Image
-                  src="/Logo-removebg-preview.png"
-                  alt="FitEvo Logo"
-                  width={64}
-                  height={64}
-                  className="object-contain"
-                />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">
-                  To-Do List {selectedPeriod && getPeriodText(selectedPeriod)}
-                </h2>
-                {selectedGym && (
-                  <p className="text-gray-700 mt-1 text-sm md:text-base font-medium flex items-center gap-1">
-                    <MapPin className="h-4 w-4" /> {selectedGym.name}
-                  </p>
-                )}
-              </div>
-            </div>
-            
-            {/* Instructions et boutons */}
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-              <div className="flex-1">
-                <p className="text-gray-600 text-sm md:text-base">
-                  Complétez et validez chaque tâche individuellement
-                </p>
-                <p className="text-red-600 mt-1 text-xs md:text-sm flex items-center gap-1">
-                  <Lock className="h-3 w-3 md:h-4 md:w-4" /> Session verrouillée
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto lg:flex-shrink-0">
-                {/* Affichage dynamique des pages personnalisées */}
-                {customPages.length === 1 ? (
-                  // Une seule page : afficher un bouton direct
-                  <Button
-                    onClick={() => handleOpenCustomPage(customPages[0])}
-                    size="sm"
-                    className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
-                  >
-                    {(() => {
-                      const IconComponent = (Icons as any)[customPages[0].icon] || Icons.FileText
-                      return <IconComponent className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                    })()}
-                    {customPages[0].title}
-                  </Button>
-                ) : customPages.length > 1 ? (
-                  // Plusieurs pages : afficher un dropdown
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto"
-                      >
-                        <Icons.FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                        Pages d'aide
-                        <ChevronDown className="w-3 h-3 md:w-4 md:h-4 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      {customPages.map((page) => {
-                        const IconComponent = (Icons as any)[page.icon] || Icons.FileText
-                        return (
-                          <DropdownMenuItem
-                            key={page.id}
-                            onClick={() => handleOpenCustomPage(page)}
-                            className="cursor-pointer"
-                          >
-                            <IconComponent className="w-4 h-4 mr-2" />
-                            {page.title}
-                          </DropdownMenuItem>
-                        )
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null}
-                <BreakManager
-                  period={selectedPeriod || "matin"}
-                  isOnBreak={isOnBreak}
-                  breakType={activeBreakType}
-                  breakStartTime={breakStartTime}
-                  accumulatedBreakTime={accumulatedBreakTime}
-                  shortBreaksCompleted={shortBreaksCompleted}
-                  shortBreakProgress={shortBreakProgress}
-                  lunchBreakTaken={lunchBreakTaken}
-                  onBreakStart={handleBreakStart}
-                  onBreakEnd={handleBreakEnd}
-                  onBreakResume={handleBreakResume}
-                />
-                <EmergencyButton />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {selectedPeriod && <TodoList period={selectedPeriod} subPeriod={selectedSubPeriod} isBlocked={isOnBreak} gymId={selectedGym?.id} roleId={userRoleId} onSessionEnd={handleSessionEnd} />}
-      </div>
-
-      {/* Dialog pour afficher les instructions */}
-      <NewMemberInstructionsDialog
-        instructions={instructions}
-        open={showInstructionsDialog}
-        onOpenChange={setShowInstructionsDialog}
-      />
-
-      {/* Dialog pour afficher une page personnalisée */}
-      {selectedCustomPage && (
-        <CustomPageDialog
-          pageTitle={selectedCustomPage.title}
-          pageIcon={selectedCustomPage.icon}
-          pageDescription={selectedCustomPage.description}
-          items={selectedCustomPage.items}
-          open={showCustomPageDialog}
-          onOpenChange={setShowCustomPageDialog}
-        />
-      )}
-
-      {/* Dialog "Déconnexion bloquée" (vue tâches) */}
-      <Dialog open={showLogoutBlockedDialog} onOpenChange={setShowLogoutBlockedDialog}>
-        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
-          <DialogHeader>
-            <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
-              <AlertTriangle className="h-6 w-6 text-orange-500" />
-              <span>Déconnexion impossible</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm md:text-base text-gray-600 mb-3">
-              Vous avez une période de travail en cours qui n'est pas terminée.
-            </p>
-            <p className="text-sm text-gray-500">
-              Vous devez terminer toutes les tâches obligatoires et valider la caisse avant de pouvoir vous déconnecter. Retournez à vos tâches pour terminer votre période.
-            </p>
-          </div>
-          <DialogFooter className="flex gap-2">
-            <Button
-              onClick={() => setShowLogoutBlockedDialog(false)}
-              className="bg-red-600 hover:bg-red-700 flex-1"
-            >
-              Retour aux tâches
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
   }
 
   // Tant que l'identité n'est pas chargée (via /api/me), on n'affiche pas le

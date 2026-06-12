@@ -727,10 +727,10 @@ export function WorkScheduleManager() {
                           e.stopPropagation()
                           handleAddClick(dayInfo.date)
                         }}
-                        className="absolute bottom-1 right-1 p-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded-full shadow-lg transition-all hover:scale-110"
+                        className="absolute bottom-1 right-1 p-0 sm:p-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded-full shadow-lg transition-all hover:scale-110"
                         title="Ajouter un planning"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                       </button>
                     )}
                   </div>

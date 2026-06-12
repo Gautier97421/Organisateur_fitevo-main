@@ -94,7 +94,6 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
           setCustomFieldValues(initialValues)
         }
       } catch (error) {
-        console.error("Erreur lors du chargement des champs personnalisés:", error)
       } finally {
         setIsLoadingFields(false)
       }
@@ -185,11 +184,11 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-4xl bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
-            <span className="text-3xl">💰</span>
-            <span>{isStartMode ? "Comptage de caisse d'ouverture" : "Fiche de Caisse - " + getPeriodText()}</span>
+          <DialogTitle className="text-lg md:text-2xl flex items-center gap-2 text-gray-900">
+            <span className="text-2xl md:text-3xl flex-shrink-0">💰</span>
+            <span className="break-words">{isStartMode ? "Comptage de caisse d'ouverture" : "Fiche de Caisse - " + getPeriodText()}</span>
           </DialogTitle>
-          <DialogDescription className="text-lg text-gray-600">
+          <DialogDescription className="text-sm md:text-lg text-gray-600">
             {isStartMode
               ? "Première connexion du jour: veuillez compter la caisse d'ouverture avant de commencer."
               : "Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list."}
@@ -310,14 +309,14 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
           )}
         </div>
 
-        <DialogFooter className="flex space-x-3">
-          <Button variant="outline" onClick={onClose} className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2">
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <Button variant="outline" onClick={onClose} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2 w-full sm:w-auto">
             <XCircle className="h-5 w-5" /> Annuler
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={total <= 0}
-            className="bg-green-600 hover:bg-green-700 text-lg px-6 flex items-center gap-2"
+            className="bg-green-600 hover:bg-green-700 text-base md:text-lg px-4 md:px-6 flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <CheckCircle className="h-5 w-5" /> {isStartMode ? "Valider l'ouverture" : "Valider et Envoyer"}
           </Button>

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import logger from "@/lib/logger"
 import { verifyAuth } from "@/lib/auth-middleware"
-import { sendWorkRecapEmail } from "@/lib/email"
+import { sendWorkRecapEmail, sendEmergencyEmail } from "@/lib/email"
 import { prisma } from "@/lib/prisma"
 
 export async function POST(request: NextRequest) {
@@ -17,6 +17,24 @@ export async function POST(request: NextRequest) {
     logger.info("Email envoyé:", { type, timestamp: new Date().toISOString() })
 
     if (type === "emergency") {
+      const admins = await prisma.user.findMany({
+        where: { role: { in: ["admin", "superadmin"] }, active: true },
+        select: { email: true },
+      })
+      const adminEmails = admins.map((a) => a.email)
+
+      const sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      })
+
+      await sendEmergencyEmail({
+        employeeName: sender?.name ?? data?.employeeName ?? "Employé",
+        employeeEmail: sender?.email ?? data?.employeeEmail ?? "",
+        message: data?.message ?? "",
+        adminEmails,
+      })
+
       return NextResponse.json({ success: true, message: "Alerte d'urgence envoyée" })
 
     } else if (type === "work-recap") {

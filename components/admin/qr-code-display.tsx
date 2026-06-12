@@ -33,7 +33,6 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
           }
         })
       } catch (error) {
-        console.error("Erreur génération QR Code:", error)
       }
     }
 
@@ -52,17 +51,19 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-3 p-4 bg-white rounded-xl border-2 border-blue-200">
-      <div className="flex items-center gap-2 text-blue-700 font-semibold">
+    <div className="flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-gray-200 shadow-md w-full max-w-xs">
+      <div className="flex items-center gap-2 text-red-600 font-semibold">
         <QrCodeIcon className="h-5 w-5" />
-        <span>QR Code - {gymName}</span>
+        <span className="truncate">QR Code — {gymName}</span>
       </div>
-      <canvas ref={canvasRef} className="border-2 border-gray-200 rounded-lg" />
+      <div className="p-2 bg-white rounded-xl border border-gray-100 shadow-sm">
+        <canvas ref={canvasRef} className="rounded-lg block" />
+      </div>
       <Button
         onClick={downloadQRCode}
         variant="outline"
         size="sm"
-        className="w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-50"
+        className="w-full border-2 border-red-600 text-red-600 hover:bg-red-50 rounded-xl"
       >
         <Download className="h-4 w-4 mr-2" />
         Télécharger

@@ -46,7 +46,6 @@ export function SimpleTimeTracker() {
         }
       }
     } catch (error) {
-      console.error("Erreur lors du chargement:", error)
     } finally {
       setIsLoading(false)
     }
@@ -76,7 +75,6 @@ export function SimpleTimeTracker() {
         setRecentEntries([result.data, ...recentEntries.slice(0, 4)])
       }
     } catch (error: any) {
-      console.error("Erreur pointage:", error)
     } finally {
       setIsPunching(false)
     }

@@ -113,6 +113,49 @@ export async function sendWorkRecapEmail(data: {
   await dispatch(data.adminEmails, `Fin de période – ${data.employeeName} (${periodDisplay})`, html)
 }
 
+export async function sendEmergencyEmail(data: {
+  employeeName: string
+  employeeEmail: string
+  message: string
+  adminEmails: string[]
+}): Promise<void> {
+  if (data.adminEmails.length === 0) return
+
+  const now = new Date().toLocaleString("fr-FR", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  })
+
+  const msgBlock = data.message.trim()
+    ? `<div style="background:#fff1f1;border-left:4px solid #dc2626;padding:12px 16px;border-radius:4px;margin-bottom:16px">
+        <p style="margin:0;color:#374151;font-size:15px"><strong>Message :</strong><br/>${data.message.replace(/\n/g, "<br/>")}</p>
+      </div>`
+    : `<p style="color:#6b7280;font-style:italic">Aucun message fourni.</p>`
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
+      <div style="background:#dc2626;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:12px">
+        <span style="font-size:28px">⚠️</span>
+        <div>
+          <h2 style="margin:0;font-size:20px">Alerte d'urgence — FitEvo</h2>
+          <p style="margin:4px 0 0;font-size:13px;opacity:0.85">${now}</p>
+        </div>
+      </div>
+      <div style="border:1px solid #fca5a5;border-top:none;border-radius:0 0 8px 8px;padding:20px">
+        <p style="color:#374151;margin-bottom:16px">
+          L'employé <strong>${data.employeeName}</strong> (<a href="mailto:${data.employeeEmail}" style="color:#dc2626">${data.employeeEmail}</a>)
+          a déclenché une alerte d'urgence.
+        </p>
+        ${msgBlock}
+        <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:12px">
+          Email automatique FitEvo — ne pas répondre directement à cet email.
+        </p>
+      </div>
+    </div>
+  `
+  await dispatch(data.adminEmails, `🚨 URGENCE – ${data.employeeName}`, html)
+}
+
 export async function sendEventReminderEmail(data: {
   eventTitle: string
   eventDate: string

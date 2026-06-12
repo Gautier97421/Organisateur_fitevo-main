@@ -9,6 +9,7 @@ import {
   Loader2, Pin, PinOff, Images,
 } from "lucide-react"
 import { GroupSettingsDialog } from "./group-settings-dialog"
+import { toast } from "sonner"
 import type { ChatMessage, Conversation, AttachmentInfo } from "./types"
 
 interface Props {
@@ -219,7 +220,7 @@ export function ChatView({
         const up = await fetch("/api/communication/upload", { method: "POST", body: fd })
         if (!up.ok) {
           const err = await up.json().catch(() => ({}))
-          alert(err.error || "Échec de l'envoi du fichier")
+          toast.error(err.error || "Échec de l'envoi du fichier")
           setSending(false)
           return
         }
@@ -241,7 +242,7 @@ export function ChatView({
         scrollToBottom("smooth")
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(err.error || "Échec de l'envoi")
+        toast.error(err.error || "Échec de l'envoi")
       }
     } finally {
       setSending(false)
@@ -262,7 +263,7 @@ export function ChatView({
   const onFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      if (f.size > 25 * 1024 * 1024) { alert("Fichier trop volumineux (max 25 Mo)"); return }
+      if (f.size > 25 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 25 Mo)"); return }
       setPendingFile(f)
     }
     e.target.value = ""

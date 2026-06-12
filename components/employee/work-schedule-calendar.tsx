@@ -128,7 +128,6 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       setUserGyms(accessibleGyms)
       return accessibleGyms
     } catch (error) {
-      console.error("Erreur lors du chargement des salles:", error)
       setUserGyms([])
       return []
     }
@@ -352,8 +351,6 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         const checkResult = await checkResponse.json()
         let existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
         
-        console.log(`[Employee] Total schedules trouvés: ${existingSchedules.length}`)
-        console.log(`[Employee] Vérification pour employé: ${selectedEmployee.email} le ${selectedDateStr}`)
         
         // Filtrer côté client pour garantir qu'on vérifie uniquement les horaires du même employé ET du même jour (exclure les périodes temporaires)
         existingSchedules = existingSchedules.filter((s: any) => {
@@ -362,11 +359,9 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
           const scheduleDate = s.work_date?.split('T')[0] || s.work_date
           const isSameDate = scheduleDate === selectedDateStr
           const isNotTemporary = !s.is_temporary
-          console.log(`  - Schedule: ${scheduleDate} ${s.employee_email} ${s.start_time}-${s.end_time}, sameEmp=${isSameEmployee}, sameDate=${isSameDate}, notTemp=${isNotTemporary}`)
           return isSameEmployee && isSameDate && isNotTemporary
         })
         
-        console.log(`[Employee] Schedules du même employé: ${existingSchedules.length}`)
         
         if (existingSchedules.length > 0) {
           // Vérifier les chevauchements d'horaires pour le même employé uniquement
@@ -905,9 +900,9 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       <Dialog open={showDayDetailsDialog} onOpenChange={setShowDayDetailsDialog}>
         <DialogContent className="max-w-[90vw] sm:max-w-2xl bg-white max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900">
-              <CalendarDays className="h-6 w-6 text-red-600" />
-              <span>
+            <DialogTitle className="text-lg sm:text-2xl flex items-center gap-2 text-gray-900">
+              <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 flex-shrink-0" />
+              <span className="break-words">
                 Horaires du {selectedDayForDetails && new Date(selectedDayForDetails).toLocaleDateString("fr-FR", {
                   weekday: "long",
                   day: "numeric",

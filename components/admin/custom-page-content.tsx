@@ -246,7 +246,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         setItems(result.data || [])
       }
     } catch (error) {
-      console.error("Error loading items:", error)
     } finally {
       setIsLoading(false)
     }
@@ -260,7 +259,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         setRoles(Array.isArray(result.data) ? result.data : [])
       }
     } catch (error) {
-      console.error("Error loading roles:", error)
     }
   }
 
@@ -273,7 +271,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         setPageRoleIds(parseRoleIds(page?.roleIds))
       }
     } catch (error) {
-      console.error("Error loading page roles:", error)
     }
   }
 
@@ -307,7 +304,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadItems()
       }
     } catch (error) {
-      console.error("Error adding item:", error)
     } finally {
       setIsSaving(false)
     }
@@ -336,7 +332,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadItems()
       }
     } catch (error) {
-      console.error("Error updating item:", error)
     } finally {
       setIsSaving(false)
     }
@@ -355,7 +350,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadItems()
       }
     } catch (error) {
-      console.error("Error deleting item:", error)
     } finally {
       setIsSaving(false)
       setDeleteConfirmId(null)
@@ -375,7 +369,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadItems()
       }
     } catch (error) {
-      console.error("Error toggling item:", error)
     } finally {
       setIsSaving(false)
     }
@@ -405,7 +398,6 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
         await loadPageRoles()
       }
     } catch (error) {
-      console.error("Error updating page roles:", error)
     } finally {
       setIsSaving(false)
     }
@@ -474,15 +466,15 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
   return (
     <Card className="border border-gray-200 bg-white">
       <CardHeader className="border-b border-gray-200 bg-gray-50 p-4 md:p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-lg md:text-xl font-semibold text-gray-900">
-            {IconComponent && <IconComponent className="w-5 h-5 md:w-6 md:h-6 text-red-600" />}
-            {pageTitle}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+          <CardTitle className="flex items-center gap-2 text-lg md:text-xl font-semibold text-gray-900 min-w-0">
+            {IconComponent && <IconComponent className="w-5 h-5 md:w-6 md:h-6 text-red-600 flex-shrink-0" />}
+            <span className="truncate">{pageTitle}</span>
           </CardTitle>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex flex-col gap-2 w-full sm:flex-row sm:w-auto">
             <Button
               onClick={() => setShowRolesDialog(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-initial"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
               size="sm"
             >
               <Users className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
@@ -490,7 +482,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
             </Button>
             <Button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-initial"
+              className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
               size="sm"
             >
               <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />

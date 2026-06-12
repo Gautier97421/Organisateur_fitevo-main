@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { CheckCircle, XCircle, Coffee, Clock, Play, AlertTriangle } from "lucide-react"
 import {
   Dialog,
@@ -97,184 +96,129 @@ export function BreakManager({
     onBreakResume("short")
   }
 
+  // ── En pause (courte ou midi) : bouton compact ────────────────────────────
   if (isOnBreak) {
-    if (breakType === "lunch") {
-      return (
-        <Card className="border-2 border-red-300 bg-red-50">
-          <CardContent className="p-4">
-            <div className="text-center">
-              <Coffee className="h-8 w-8 text-red-600 mx-auto mb-2" />
-              <p className="font-bold text-red-800 text-lg">Pause midi en cours</p>
-              <p className="text-red-700">Session actuelle : {currentBreakDuration} min</p>
-              <p className="text-red-700">Cette pause est libre (sans limite de temps)</p>
-              <div className="mt-3">
-                <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2">
-                      <Play className="h-4 w-4" /> Reprendre le travail
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md bg-white">
-                    <DialogHeader>
-                      <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                        <span><Coffee className="h-6 w-6" /></span>
-                        <span>Terminer la pause midi</span>
-                      </DialogTitle>
-                      <DialogDescription className="text-sm md:text-base text-gray-600 leading-relaxed">
-                        Vous avez pris {currentBreakDuration} minute(s) de pause midi.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="w-full sm:w-auto text-sm md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2">
-                          <XCircle className="h-5 w-5" /> Continuer la pause midi
-                        </Button>
-                      </DialogTrigger>
-                      <Button onClick={handleResumeWork} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2">
-                        <Play className="h-5 w-5" /> Reprendre le travail
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )
-    }
-
     return (
-      <Card className="border-2 border-red-300 bg-red-50">
-        <CardContent className="p-4">
-          <div className="text-center">
-            <Coffee className="h-8 w-8 text-red-600 mx-auto mb-2" />
-            <p className="font-bold text-red-800 text-lg">
-              Pause {isJournee ? `${currentShortBreakIndex}/${maxShortBreaks}` : "en cours"}
-            </p>
-            <p className="text-red-700">Session actuelle : {currentBreakDuration} min</p>
-            <p className="text-red-700">
-              Pause actuelle : {shortBreakTotal} / {REQUIRED_BREAK_MINUTES} minutes
-            </p>
-            <div className="mt-3 space-y-2">
-              <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
-                <DialogTrigger asChild>
-                  <Button className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2">
-                    <Play className="h-4 w-4" /> Reprendre le travail
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-white">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                      <span><Coffee className="h-6 w-6" /></span>
-                      <span>Reprendre le travail</span>
-                    </DialogTitle>
-                    <DialogDescription className="text-sm md:text-base text-gray-600 leading-relaxed">
-                      {isCurrentShortBreakComplete ? (
-                        <span className="text-green-600 flex items-start gap-2">
-                          <CheckCircle className="h-5 w-5" /> Votre pause de {REQUIRED_BREAK_MINUTES} minutes est terminée !
-                        </span>
-                      ) : (
-                        <>
-                          Vous avez pris {shortBreakTotal} minutes sur les {REQUIRED_BREAK_MINUTES} requises pour cette pause.
-                          <br />
-                          <span className="text-red-600 font-medium">
-                            Il vous reste {remainingBreakTime} minutes à prendre plus tard.
-                          </span>
-                        </>
-                      )}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full sm:w-auto text-sm md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2">
-                        <XCircle className="h-5 w-5" /> Continuer la pause
-                      </Button>
-                    </DialogTrigger>
-                    <Button onClick={handleResumeWork} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2">
-                      <Play className="h-5 w-5" /> Reprendre le travail
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
+        <DialogTrigger asChild>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 flex items-center gap-1.5"
+          >
+            <Coffee className="h-3.5 w-3.5 animate-pulse" />
+            {breakType === "lunch"
+              ? `Pause midi — ${currentBreakDuration}min`
+              : `En pause — ${currentBreakDuration}min`}
+            <Play className="h-3 w-3" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+              <Coffee className="h-6 w-6" />
+              <span>{breakType === "lunch" ? "Terminer la pause midi" : "Reprendre le travail"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600 leading-relaxed">
+              {breakType === "lunch" ? (
+                <>Vous avez pris {currentBreakDuration} minute(s) de pause midi.</>
+              ) : isCurrentShortBreakComplete ? (
+                <span className="text-green-600 flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  Votre pause de {REQUIRED_BREAK_MINUTES} minutes est terminée !
+                </span>
+              ) : (
+                <>
+                  Vous avez pris {shortBreakTotal} min sur les {REQUIRED_BREAK_MINUTES} requises.{" "}
+                  <span className="text-red-600 font-medium">
+                    Il vous reste {remainingBreakTime} minutes à prendre plus tard.
+                  </span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto border-gray-300 flex items-center justify-center gap-2">
+                <XCircle className="h-4 w-4" />
+                {breakType === "lunch" ? "Continuer la pause midi" : "Continuer la pause"}
+              </Button>
+            </DialogTrigger>
+            <Button onClick={handleResumeWork} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2">
+              <Play className="h-4 w-4" /> Reprendre le travail
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     )
   }
 
+  // ── Pas en pause ──────────────────────────────────────────────────────────
   return (
-    <div className="w-full">
+    <div className="flex flex-wrap gap-1.5 items-center">
       {hasShortBreakInProgress ? (
-        // Reprendre une pause en cours
-        <div className="space-y-2 w-full">
-          <Button onClick={handleResumeBreak} size="sm" className="bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
-            <Coffee className="h-4 w-4" /> Reprendre la pause {isJournee ? `${currentShortBreakIndex}/${maxShortBreaks}` : ""}
+        // Pause courte interrompue — reprendre
+        <>
+          <Button
+            onClick={handleResumeBreak}
+            size="sm"
+            className="h-8 text-xs bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5"
+          >
+            <Coffee className="h-3.5 w-3.5" />
+            Reprendre pause {isJournee ? `${currentShortBreakIndex}/${maxShortBreaks}` : ""}
           </Button>
-          <p className="text-xs text-red-600 text-center flex items-center justify-center gap-1">
-            <Clock className="h-3 w-3" /> {remainingBreakTime} min restantes ({shortBreakProgress} prises)
-          </p>
-          {isJournee && !lunchBreakTaken && (
-            <Button onClick={handleStartLunchBreak} variant="outline" size="sm" className="border-2 border-red-300 hover:bg-red-50 bg-white text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
-              <Coffee className="h-4 w-4" /> Démarrer la pause midi
-            </Button>
-          )}
-        </div>
+          <span className="text-xs text-red-600 flex items-center gap-1">
+            <Clock className="h-3 w-3" /> {remainingBreakTime}min restantes
+          </span>
+        </>
       ) : shortBreaksCompleted >= maxShortBreaks && (!isJournee || lunchBreakTaken) ? (
-        // Pause terminée
-        <div className="space-y-2 w-full">
-          <Button disabled size="sm" className="bg-green-600 text-white shadow-lg text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2">
-            <CheckCircle className="h-5 w-5" /> Toutes les pauses sont effectuées
-          </Button>
-          <p className="text-xs text-green-600 dark:text-green-400 text-center">
-            {isJournee
-              ? `${maxShortBreaks} pauses de ${REQUIRED_BREAK_MINUTES} min + pause midi terminées`
-              : `Pause de ${REQUIRED_BREAK_MINUTES} min terminée`}
-          </p>
-        </div>
+        // Toutes les pauses effectuées
+        <Button disabled size="sm" className="h-8 text-xs bg-green-100 text-green-700 border border-green-300 flex items-center gap-1.5 cursor-default">
+          <CheckCircle className="h-3.5 w-3.5" /> Pauses effectuées
+        </Button>
       ) : (
-        // Commencer une nouvelle pause
-        <div className="space-y-2 w-full">
+        // Commencer une pause
+        <>
           <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
             <DialogTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
                 disabled={!canStartNewShortBreak}
-                className="border-2 border-gray-300 hover:bg-gray-50 bg-white text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2"
+                className="h-8 text-xs border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-1.5"
               >
-                <Coffee className="h-4 w-4" />
+                <Coffee className="h-3.5 w-3.5" />
                 {isJournee
                   ? shortBreaksCompleted < maxShortBreaks
-                    ? `Prendre pause ${shortBreaksCompleted + 1}/${maxShortBreaks}`
-                    : "Pauses 20 min terminées"
+                    ? `Pause ${shortBreaksCompleted + 1}/${maxShortBreaks}`
+                    : "Pauses 20 min ok"
                   : "Prendre une pause"}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md bg-white">
               <DialogHeader>
                 <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                  <span><Coffee className="h-6 w-6" /></span>
+                  <Coffee className="h-6 w-6" />
                   <span>Confirmer la pause</span>
                 </DialogTitle>
-                <DialogDescription className="text-sm md:text-base text-gray-600 leading-relaxed">
-                  Vous allez commencer votre pause obligatoire de {REQUIRED_BREAK_MINUTES} minutes.
-                  <br />
+                <DialogDescription className="text-sm text-gray-600 leading-relaxed">
+                  Vous allez commencer votre pause obligatoire de {REQUIRED_BREAK_MINUTES} minutes.{" "}
                   <strong>Vous pourrez reprendre le travail à tout moment et continuer votre pause plus tard.</strong>
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full sm:w-auto text-sm md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2">
-                    <XCircle className="h-5 w-5" /> Annuler
+                  <Button variant="outline" className="w-full sm:w-auto border-gray-300 flex items-center justify-center gap-2">
+                    <XCircle className="h-4 w-4" /> Annuler
                   </Button>
                 </DialogTrigger>
-                <Button onClick={handleStartShortBreak} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2">
-                  <Coffee className="h-5 w-5" /> Commencer la pause
+                <Button onClick={handleStartShortBreak} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2">
+                  <Coffee className="h-4 w-4" /> Commencer la pause
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
           {isJournee && (
             <Dialog open={showLunchDialog} onOpenChange={setShowLunchDialog}>
               <DialogTrigger asChild>
@@ -282,43 +226,44 @@ export function BreakManager({
                   variant="outline"
                   size="sm"
                   disabled={lunchBreakTaken}
-                  className="border-2 border-gray-300 hover:bg-gray-50 bg-white text-sm md:text-base w-full sm:w-auto flex items-center justify-center gap-2"
+                  className="h-8 text-xs border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-1.5"
                 >
-                  <Coffee className="h-4 w-4" /> {lunchBreakTaken ? "Pause midi déjà prise" : "Prendre la pause midi"}
+                  <Coffee className="h-3.5 w-3.5" />
+                  {lunchBreakTaken ? "Pause midi prise" : "Pause midi"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md bg-white">
                 <DialogHeader>
                   <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
-                    <span><Coffee className="h-6 w-6" /></span>
+                    <Coffee className="h-6 w-6" />
                     <span>Confirmer la pause midi</span>
                   </DialogTitle>
-                  <DialogDescription className="text-sm md:text-base text-gray-600 leading-relaxed">
+                  <DialogDescription className="text-sm text-gray-600 leading-relaxed">
                     Cette pause midi est libre, mais elle ne peut être prise qu'une seule fois pendant la journée.
                   </DialogDescription>
                 </DialogHeader>
-                <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <DialogFooter className="flex flex-col sm:flex-row gap-2">
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-auto text-sm md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2">
-                      <XCircle className="h-5 w-5" /> Annuler
+                    <Button variant="outline" className="w-full sm:w-auto border-gray-300 flex items-center justify-center gap-2">
+                      <XCircle className="h-4 w-4" /> Annuler
                     </Button>
                   </DialogTrigger>
-                  <Button onClick={handleStartLunchBreak} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-sm md:text-lg px-4 md:px-6 flex items-center justify-center gap-2">
-                    <Coffee className="h-5 w-5" /> Commencer la pause midi
+                  <Button onClick={handleStartLunchBreak} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2">
+                    <Coffee className="h-4 w-4" /> Commencer la pause midi
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           )}
-          <p className="text-xs text-red-600 mt-1 flex items-center justify-center gap-1">
+
+          <span className="text-xs text-gray-400 flex items-center gap-1 hidden sm:flex">
             <AlertTriangle className="h-3 w-3" />
             {isJournee
-              ? `${maxShortBreaks} pauses de ${REQUIRED_BREAK_MINUTES} min + 1 pause midi`
-              : `Pause de ${REQUIRED_BREAK_MINUTES} min obligatoire`}
-          </p>
-        </div>
+              ? `${maxShortBreaks}×${REQUIRED_BREAK_MINUTES}min + midi`
+              : `${REQUIRED_BREAK_MINUTES}min obligatoire`}
+          </span>
+        </>
       )}
     </div>
   )
 }
-  

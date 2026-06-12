@@ -59,7 +59,7 @@ export function ConversationList({ conversations, currentUserId, activeId, loadi
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" viewportClassName="pr-3">
         {loading ? (
           <div className="p-4 text-sm text-gray-400">Chargement...</div>
         ) : filtered.length === 0 ? (

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, Check, UserPlus, LogOut, Trash2, Loader2, Pencil, Shield, ShieldOff } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Search, Check, UserPlus, LogOut, Trash2, Loader2, Pencil, Shield, ShieldOff, AlertTriangle, X } from "lucide-react"
+import { toast } from "sonner"
 import type { Conversation, DirectoryUser } from "./types"
 
 interface Props {
@@ -25,6 +26,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
   const [candidates, setCandidates] = useState<DirectoryUser[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
 
   const memberIds = new Set(conversation.members.map((m) => m.userId))
 
@@ -52,7 +54,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     })
     setBusy(false)
     if (res.ok) { setEditingName(false); onChanged() }
-    else alert("Erreur lors du renommage")
+    else toast.error("Erreur lors du renommage")
   }
 
   const addMembers = async () => {
@@ -65,7 +67,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     })
     setBusy(false)
     if (res.ok) { setSelected(new Set()); setAdding(false); setSearch(""); onChanged() }
-    else alert("Erreur lors de l'ajout")
+    else toast.error("Erreur lors de l'ajout")
   }
 
   const setRole = async (userId: string, role: "admin" | "member") => {
@@ -79,7 +81,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     if (res.ok) onChanged()
     else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Erreur lors du changement de rôle")
+      toast.error(err.error || "Erreur lors du changement de rôle")
     }
   }
 
@@ -90,17 +92,17 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     })
     setBusy(false)
     if (res.ok) onChanged()
-    else alert("Erreur lors du retrait")
+    else toast.error("Erreur lors du retrait")
   }
 
   const leave = async () => {
-    if (!confirm("Quitter ce groupe ?")) return
     setBusy(true)
     const res = await fetch(`/api/communication/conversations/${conversation.id}/members?userId=${currentUser.id}`, {
       method: "DELETE",
     })
     setBusy(false)
-    if (res.ok) { onOpenChange(false); onChanged() }
+    if (res.ok) { setShowLeaveConfirm(false); onOpenChange(false); onChanged() }
+    else toast.error("Erreur lors de la sortie du groupe")
   }
 
   return (
@@ -228,10 +230,33 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
           </ScrollArea>
         </div>
 
-        <Button variant="outline" onClick={leave} disabled={busy} className="text-red-600 border-red-200 hover:bg-red-50">
+        <Button variant="outline" onClick={() => setShowLeaveConfirm(true)} disabled={busy} className="text-red-600 border-red-200 hover:bg-red-50">
           <LogOut className="w-4 h-4 mr-2" /> Quitter le groupe
         </Button>
       </DialogContent>
+
+      <Dialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <DialogContent className="max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Quitter le groupe
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Êtes-vous sûr de vouloir quitter ce groupe ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowLeaveConfirm(false)}>
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={leave} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white">
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+              Quitter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

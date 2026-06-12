@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, Check, Users, MessageSquare, Loader2 } from "lucide-react"
 import type { DirectoryUser } from "./types"
+import { toast } from "sonner"
 
 interface Props {
   open: boolean
@@ -61,13 +62,13 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: Props) 
       onCreated(json.data.id)
     } else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Erreur")
+      toast.error(err.error || "Erreur")
     }
   }
 
   const createGroup = async () => {
-    if (groupName.trim().length < 1) { alert("Nom de groupe requis"); return }
-    if (selected.size < 1) { alert("Sélectionnez au moins un membre"); return }
+    if (groupName.trim().length < 1) { toast.error("Nom de groupe requis"); return }
+    if (selected.size < 1) { toast.error("Sélectionnez au moins un membre"); return }
     setCreating(true)
     const res = await fetch("/api/communication/conversations", {
       method: "POST",
@@ -80,7 +81,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: Props) 
       onCreated(json.data.id)
     } else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Erreur")
+      toast.error(err.error || "Erreur")
     }
   }
 

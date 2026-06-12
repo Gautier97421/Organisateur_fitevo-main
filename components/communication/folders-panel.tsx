@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { toast } from "sonner"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
   FolderClosed, FolderPlus, Upload, Download, FileText, ChevronRight,
-  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil,
+  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X,
 } from "lucide-react"
 import type { Conversation, Folder, FolderFile, DirectoryUser } from "./types"
 import { conversationTitle } from "./types"
@@ -57,6 +58,8 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
   const [infoStats, setInfoStats] = useState<{ folderCount: number; fileCount: number; totalSize: number; accessLabel: string; createdAt: string } | null>(null)
   const [infoLoading, setInfoLoading] = useState(false)
   const [editFolder, setEditFolder] = useState<FolderWithMeta | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
   const newMenuRef = useRef<HTMLDivElement>(null)
 
   const inRoot = path.length === 0
@@ -127,7 +130,7 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
 
   const uploadFile = async (f: File) => {
     if (!currentFolderId) return
-    if (f.size > 25 * 1024 * 1024) { alert("Fichier trop volumineux (max 25 Mo)"); return }
+    if (f.size > 25 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 25 Mo)"); return }
     setUploading(true)
     const fd = new FormData()
     fd.append("file", f)
@@ -137,7 +140,7 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
     if (res.ok) refreshCurrent()
     else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Échec de l'envoi")
+      toast.error(err.error || "Échec de l'envoi")
     }
   }
 
@@ -159,11 +162,18 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
     setInfoLoading(false)
   }
 
-  const deleteFolder = async (id: string) => {
-    if (!confirm("Supprimer ce dossier et son contenu ?")) return
-    const res = await fetch(`/api/communication/folders/${id}`, { method: "DELETE" })
+  const deleteFolder = (id: string) => {
+    setFolderToDelete(id)
+    setShowDeleteConfirm(true)
+  }
+
+  const executeDeleteFolder = async () => {
+    if (!folderToDelete) return
+    const res = await fetch(`/api/communication/folders/${folderToDelete}`, { method: "DELETE" })
+    setShowDeleteConfirm(false)
+    setFolderToDelete(null)
     if (res.ok) inRoot ? loadRoot() : refreshCurrent()
-    else alert("Suppression impossible")
+    else toast.error("Suppression impossible")
   }
 
   const rawFolders: FolderWithMeta[] = inRoot ? rootFolders : children
@@ -426,6 +436,30 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
           }}
         />
       )}
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Supprimer le dossier
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Êtes-vous sûr de vouloir supprimer ce dossier et tout son contenu ?
+              <br />
+              <span className="text-red-600 font-medium">Cette action est irréversible.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setFolderToDelete(null) }}>
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={executeDeleteFolder} className="bg-red-600 hover:bg-red-700 text-white">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -487,7 +521,7 @@ function CreateFolderDialog({
     setSelectedUsers((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   const create = async () => {
-    if (name.trim().length < 1) { alert("Nom requis"); return }
+    if (name.trim().length < 1) { toast.error("Nom requis"); return }
     setBusy(true)
 
     let body: Record<string, unknown>
@@ -520,7 +554,7 @@ function CreateFolderDialog({
     if (res.ok) onCreated()
     else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Erreur")
+      toast.error(err.error || "Erreur")
     }
   }
 
@@ -692,7 +726,7 @@ function EditFolderDialog({
 
   const save = async () => {
     const trimmed = name.trim()
-    if (trimmed.length < 1) { alert("Nom requis"); return }
+    if (trimmed.length < 1) { toast.error("Nom requis"); return }
     setBusy(true)
 
     const body: Record<string, unknown> = { name: trimmed }
@@ -713,7 +747,7 @@ function EditFolderDialog({
       onSaved({ ...json.data, conversationName: folder.conversationName })
     } else {
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "Erreur lors de la modification")
+      toast.error(err.error || "Erreur lors de la modification")
     }
   }
 
