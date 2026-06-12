@@ -40,11 +40,13 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - SESSION_SECRET=change-me-in-production-use-openssl-rand-base64-32
+      - UPLOAD_DIR=/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./prisma:/app/prisma
+      - uploads_dev_data:/app/uploads
 
   prisma-studio:
     build:
@@ -65,3 +67,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_dev_data:

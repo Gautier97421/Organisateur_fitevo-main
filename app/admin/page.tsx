@@ -13,8 +13,15 @@ import { CustomPageContent } from "@/components/admin/custom-page-content"
 import { CashRegisterFieldManager } from "@/components/admin/cash-register-field-manager"
 import { CashRecapManager } from "@/components/admin/cash-recap-manager"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { ClipboardList, Building2, Users, Calendar, CalendarDays, Activity, Shield, LogOut, LayoutDashboard, Banknote, BarChart3 } from "lucide-react"
 import * as LucideIcons from "lucide-react"
+
+// Widget de messagerie flottant (bulle en bas à droite), chargé à la demande.
+const CommunicationWidget = dynamic(
+  () => import("@/components/communication/communication-widget").then((m) => m.CommunicationWidget),
+  { ssr: false }
+)
 
 interface CustomPage {
   id: string
@@ -198,6 +205,9 @@ export default function AdminPage() {
           {allTabs.find((tab) => tab.id === activeTab)?.component}
         </div>
       </div>
+
+      {/* Messagerie flottante (toujours montée → temps réel persistant) */}
+      <CommunicationWidget />
     </div>
   )
 }

@@ -31,5 +31,5 @@ else
   echo "==> Skipping seed. Set RUN_SEED=true to enable."
 fi
 
-echo "==> Starting server..."
-exec ./node_modules/.bin/next start
+echo "==> Starting server (custom server + WebSocket)..."
+exec node server.js

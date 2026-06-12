@@ -120,6 +120,10 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.has_work_period_access = mapped.hasWorkPeriodAccess
       delete mapped.hasWorkPeriodAccess
     }
+    if (mapped.profilePhoto !== undefined) {
+      mapped.profile_photo = mapped.profilePhoto
+      delete mapped.profilePhoto
+    }
   }
   
   // Mapper date -> work_date pour work_schedules

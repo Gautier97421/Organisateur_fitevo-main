@@ -4,77 +4,28 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac, timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { getSessionSecret } from '@/lib/session-secret'
+import { verifySessionCookie } from '@/lib/session'
 import logger from '@/lib/logger'
-
-function decodeHex(hex: string): string {
-  return Buffer.from(hex, 'hex').toString('utf-8')
-}
-
-function verifyHmac(hexPayload: string, signatureHex: string, secret: string): boolean {
-  try {
-    const expected = createHmac('sha256', secret).update(hexPayload).digest('hex')
-    const sigBuf = Buffer.from(signatureHex, 'hex')
-    const expBuf = Buffer.from(expected, 'hex')
-    if (sigBuf.length !== expBuf.length) return false
-    return timingSafeEqual(sigBuf, expBuf)
-  } catch {
-    return false
-  }
-}
 
 /**
  * Vérifie l'authentification d'une requête via le cookie de session signé
  * Retourne l'userId si authentifié, null sinon
  */
 export async function verifyAuth(request: NextRequest): Promise<string | null> {
-  try {
-    const sessionCookie = request.cookies.get('fitevo_session')
-    if (!sessionCookie?.value) return null
-
-    const parts = sessionCookie.value.split(':')
-    if (parts.length !== 2) return null
-
-    const [hexPayload, hmac] = parts
-    const secret = getSessionSecret()
-    if (!secret) return null
-
-    const isValid = verifyHmac(hexPayload, hmac, secret)
-    if (!isValid) return null
-
-    const payload = JSON.parse(decodeHex(hexPayload))
-    return payload.id || null
-  } catch {
-    return null
-  }
+  const sessionCookie = request.cookies.get('fitevo_session')
+  const payload = verifySessionCookie(sessionCookie?.value)
+  return payload?.id || null
 }
 
 /**
  * Vérifie l'authentification et retourne userId + role
  */
 export async function verifyAuthWithRole(request: NextRequest): Promise<{ userId: string; role: string } | null> {
-  try {
-    const sessionCookie = request.cookies.get('fitevo_session')
-    if (!sessionCookie?.value) return null
-
-    const parts = sessionCookie.value.split(':')
-    if (parts.length !== 2) return null
-
-    const [hexPayload, hmac] = parts
-    const secret = getSessionSecret()
-    if (!secret) return null
-
-    const isValid = verifyHmac(hexPayload, hmac, secret)
-    if (!isValid) return null
-
-    const payload = JSON.parse(decodeHex(hexPayload))
-    if (!payload.id) return null
-    return { userId: payload.id, role: payload.role }
-  } catch {
-    return null
-  }
+  const sessionCookie = request.cookies.get('fitevo_session')
+  const payload = verifySessionCookie(sessionCookie?.value)
+  if (!payload) return null
+  return { userId: payload.id, role: payload.role }
 }
 
 /**

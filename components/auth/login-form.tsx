@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -16,10 +16,31 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null)
+  const [lockCountdown, setLockCountdown] = useState(0)
   const router = useRouter()
+
+  // Compte à rebours de blocage
+  useEffect(() => {
+    if (!lockedUntil) return
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000)
+      if (remaining <= 0) {
+        setLockedUntil(null)
+        setLockCountdown(0)
+        setError("")
+      } else {
+        setLockCountdown(remaining)
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [lockedUntil])
+
+  const isLocked = lockedUntil !== null && Date.now() < lockedUntil
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLocked) return
     setIsLoading(true)
     setError("")
 
@@ -36,6 +57,11 @@ export function LoginForm() {
       const data = await response.json()
 
       if (!response.ok) {
+        if (response.status === 429 && typeof data.remainingTime === 'number') {
+          const ts = Date.now() + data.remainingTime * 1000
+          setLockedUntil(ts)
+          setLockCountdown(data.remainingTime)
+        }
         setError(data.error || "Erreur de connexion")
         return
       }
@@ -112,14 +138,19 @@ export function LoginForm() {
 
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
-              {error}
+              <div>{error}</div>
+              {isLocked && lockCountdown > 0 && (
+                <div className="mt-1 text-sm font-semibold tabular-nums">
+                  Réessayez dans {Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, "0")}
+                </div>
+              )}
             </div>
           )}
 
           <Button
             type="submit"
             className="w-full h-12 text-base bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 shadow transition-all duration-200"
-            disabled={isLoading}
+            disabled={isLoading || isLocked}
           >
             {isLoading ? (
               <div className="flex items-center space-x-2">

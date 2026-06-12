@@ -33,6 +33,7 @@ model User {
   hasEventProposalAccess Boolean @default(true) @map("has_event_proposal_access")
   hasWorkScheduleAccess Boolean  @default(true) @map("has_work_schedule_access")
   hasWorkPeriodAccess   Boolean  @default(true) @map("has_work_period_access")
+  profilePhoto          String?  @map("profile_photo")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   
@@ -45,7 +46,9 @@ model User {
   timeEntries       TimeEntry[]
   userGyms          UserGym[]
   resetTokens       PasswordResetToken[]
-  
+  conversationMembers ConversationMember[]
+  messages          Message[]
+
   @@map("users")
 }
 
@@ -388,6 +391,102 @@ model ScheduledEventValidation {
   
   @@unique([eventId, userEmail])
   @@map("scheduled_event_validations")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Module Communication (messagerie, groupes, dossiers de rapports)
+// ─────────────────────────────────────────────────────────────
+
+model Conversation {
+  id               String   @id @default(cuid())
+  type             String   @default("direct") // "direct" | "group"
+  name             String?  // nom du groupe (null pour les directs)
+  createdBy        String   @map("created_by")
+  lastMessageAt    DateTime? @map("last_message_at")
+  pinnedMessageId  String?  @map("pinned_message_id") // ID du message épinglé (sans relation pour éviter le cycle)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  members  ConversationMember[]
+  messages Message[]
+  folders  Folder[]
+
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model ConversationMember {
+  id             String    @id @default(cuid())
+  conversationId String    @map("conversation_id")
+  userId         String    @map("user_id")
+  role           String    @default("member") // "admin" | "member" (rôle dans le groupe)
+  lastReadAt     DateTime? @map("last_read_at")
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String    @map("conversation_id")
+  senderId       String    @map("sender_id")
+  content        String    @db.Text
+  attachmentId   String?   @map("attachment_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  editedAt       DateTime? @map("edited_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  attachment   Attachment?  @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Folder {
+  id             String   @id @default(cuid())
+  name           String
+  scope          String   @default("shared") // "shared" (global, géré admin) | "group"
+  conversationId String?  @map("conversation_id") // requis si scope="group"
+  parentId       String?  @map("parent_id")       // sous-dossiers
+  visibility     String   @default("all")         // "all" | "admins" | "roles" | "users" (pour scope="shared")
+  roleIds        Json?    @map("role_ids")         // IDs des rôles autorisés si visibility="roles"
+  userIds        Json?    @map("user_ids")         // IDs des utilisateurs autorisés si visibility="users"
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent       Folder?       @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Folder[]      @relation("FolderTree")
+  attachments  Attachment[]
+
+  @@index([scope])
+  @@index([conversationId])
+  @@map("folders")
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  fileName   String   @map("file_name")   // nom d'affichage (fourni par l'utilisateur)
+  storedName String   @map("stored_name") // nom physique sur disque (aléatoire)
+  mimeType   String   @map("mime_type")
+  size       Int
+  folderId   String?  @map("folder_id")   // si déposé dans un dossier
+  uploadedBy String   @map("uploaded_by")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  folder   Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@index([folderId])
+  @@map("attachments")
 }
 
 model PasswordResetToken {

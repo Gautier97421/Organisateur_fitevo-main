@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, Building2, CalendarDays, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, Download, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -40,7 +40,14 @@ interface CashRegisterEntry {
   user_name?: string
   total_register: number
   cash_amount: number
+  notes?: string | null
   custom_values?: Record<string, any>
+}
+
+function entryMode(notes?: string | null): "Ouverture" | "Fermeture" | null {
+  if (notes?.includes("[OUVERTURE]")) return "Ouverture"
+  if (notes?.includes("[FIN_PERIODE]")) return "Fermeture"
+  return null
 }
 
 function monthLabel(month: string): string {
@@ -306,6 +313,114 @@ export function CashRecapManager() {
       .sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
   }, [displayEntries, periodFilter, employeeFilter])
 
+  const exportPDF = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ])
+
+    const gymName =
+      gymFilter === "all" ? "Toutes les salles" : (gyms.find((g) => g.id === gymFilter)?.name ?? gymFilter)
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+    const pageW = doc.internal.pageSize.getWidth()
+
+    // Bandeau titre rouge
+    doc.setFillColor(220, 38, 38)
+    doc.rect(0, 0, pageW, 18, "F")
+    doc.setFontSize(14)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(255, 255, 255)
+    doc.text(`Récap Mensuel — ${monthLabel(selectedMonth)}`, 14, 12)
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+    doc.text(
+      `Exporté le ${new Date().toLocaleDateString("fr-FR")}  ·  ${gymName}  ·  ${filteredEntries.length} saisie(s)`,
+      pageW - 14,
+      12,
+      { align: "right" },
+    )
+
+    // Résumé
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.text("Résumé", 14, 26)
+
+    autoTable(doc, {
+      startY: 29,
+      head: [["Total caisse", "Nombre de saisies", "Moyenne par saisie"]],
+      body: [[
+        `${currentTotals.totalRegister.toFixed(2)} EUR`,
+        String(currentTotals.count),
+        `${currentTotals.avg.toFixed(2)} EUR`,
+      ]],
+      theme: "grid",
+      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: "bold", fontSize: 8 },
+      bodyStyles: { fontSize: 9, fontStyle: "bold", halign: "center" },
+      margin: { left: 14, right: 14 },
+    })
+
+    const afterSummary = (doc as any).lastAutoTable?.finalY ?? 50
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    doc.text("Détail des saisies", 14, afterSummary + 8)
+
+    // Tableau principal
+    const columns = [
+      "Date", "Période", "Type", "Salle", "Employé",
+      "Total caisse", "Liquide", "Écart",
+      ...fields.map((f) => f.label),
+    ]
+    const tableRows = filteredEntries.map((entry) => {
+      const customValues = (entry.custom_values || {}) as Record<string, any>
+      const diff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
+      return [
+        new Date(entry.entry_date).toLocaleDateString("fr-FR"),
+        periodLabel(entry.period),
+        entryMode(entry.notes) ?? "-",
+        entry.gym_id ? (gymById.get(entry.gym_id) || "Salle") : "Toutes",
+        entry.user_name || entry.user_email,
+        `${Number(entry.total_register || 0).toFixed(2)} EUR`,
+        `${Number(entry.cash_amount || 0).toFixed(2)} EUR`,
+        `${diff >= 0 ? "+" : ""}${diff.toFixed(2)} EUR`,
+        ...fields.map((f) => {
+          const v = customValues[f.id]
+          return v === undefined || v === null || v === "" ? "-" : String(v)
+        }),
+      ]
+    })
+
+    autoTable(doc, {
+      startY: afterSummary + 11,
+      head: [columns],
+      body: tableRows,
+      theme: "striped",
+      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: "bold", fontSize: 7 },
+      bodyStyles: { fontSize: 7 },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      didParseCell: (data) => {
+        if (data.section !== "body") return
+        // Écart : vert si positif, rouge si négatif
+        if (data.column.index === 7) {
+          const val = String(data.cell.raw ?? "")
+          data.cell.styles.textColor = val.startsWith("+") ? [22, 163, 74] : val.startsWith("-") ? [220, 38, 38] : [17, 24, 39]
+          data.cell.styles.fontStyle = "bold"
+        }
+        // Type Ouverture/Fermeture
+        if (data.column.index === 2) {
+          const val = String(data.cell.raw ?? "")
+          if (val === "Ouverture") data.cell.styles.textColor = [29, 78, 216]
+          else if (val === "Fermeture") data.cell.styles.textColor = [21, 128, 61]
+          else data.cell.styles.textColor = [107, 114, 128]
+        }
+      },
+      margin: { left: 14, right: 14 },
+    })
+
+    doc.save(`recap-${selectedMonth}.pdf`)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -332,6 +447,9 @@ export function CashRecapManager() {
           />
           <Button variant="outline" onClick={loadData}>
             <RefreshCw className="h-4 w-4 mr-2" /> Rafraîchir
+          </Button>
+          <Button variant="outline" onClick={() => void exportPDF()} disabled={filteredEntries.length === 0}>
+            <Download className="h-4 w-4 mr-2" /> Exporter
           </Button>
         </div>
       </div>
@@ -576,6 +694,7 @@ export function CashRecapManager() {
                   <tr className="border-b bg-gray-50">
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Période</th>
+                    <th className="text-left p-2">Type</th>
                     <th className="text-left p-2">Salle</th>
                     <th className="text-left p-2">Employé</th>
                     <th className="text-right p-2">Total caisse</th>
@@ -594,6 +713,17 @@ export function CashRecapManager() {
                       <tr key={entry.id} className="border-b hover:bg-gray-50">
                         <td className="p-2">{new Date(entry.entry_date).toLocaleDateString("fr-FR")}</td>
                         <td className="p-2"><Badge variant="outline">{periodLabel(entry.period)}</Badge></td>
+                        <td className="p-2">
+                          {(() => {
+                            const m = entryMode(entry.notes)
+                            if (!m) return <span className="text-gray-400">-</span>
+                            return (
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${m === "Ouverture" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                                {m}
+                              </span>
+                            )
+                          })()}
+                        </td>
                         <td className="p-2">{entry.gym_id ? (gymById.get(entry.gym_id) || "Salle") : "Toutes"}</td>
                         <td className="p-2">{entry.user_name || entry.user_email}</td>
                         <td className="p-2 text-right font-medium">{Number(entry.total_register || 0).toFixed(2)} EUR</td>

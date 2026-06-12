@@ -23,6 +23,7 @@ export interface Employee {
   has_work_period_access?: boolean;
   gym_ids?: string[]; // IDs des salles assignées
   gyms?: Gym[]; // Salles complètes (optionnel)
+  profile_photo?: string | null;
   created_at: string;
 }
 
@@ -32,6 +33,7 @@ export interface Admin {
   email: string;
   is_active: boolean;
   is_super_admin?: boolean;
+  profile_photo?: string | null;
   created_at: string;
 }
 

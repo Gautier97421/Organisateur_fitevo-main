@@ -139,3 +139,6 @@ vite.config.ts.timestamp-*
 
 # Production
 data/
+
+# Fichiers uploadés (messagerie) — stockés sur volume en prod
+/uploads

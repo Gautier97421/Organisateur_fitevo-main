@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil } from "lucide-react"
+import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil, Camera } from "lucide-react"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { useToast } from "@/hooks/use-toast"
@@ -1179,9 +1180,30 @@ export function EmployeeManager() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-red-600" />
-                        </div>
+                        <label className="relative cursor-pointer group/avatar" title="Changer la photo">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ""
+                              if (!file) return
+                              const fd = new FormData()
+                              fd.append("photo", file)
+                              const res = await fetch(`/api/users/${employee.id}/photo`, { method: "POST", body: fd })
+                              if (res.ok) {
+                                setEmployees((prev) => prev.map((emp) => emp.id === employee.id ? { ...emp, profile_photo: employee.id } : emp))
+                              } else {
+                                alert("Erreur lors de l'upload")
+                              }
+                            }}
+                          />
+                          <UserAvatar userId={employee.id} name={employee.name} size="md" hasPhoto={!!employee.profile_photo} />
+                          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity">
+                            <Camera className="w-4 h-4 text-white" />
+                          </div>
+                        </label>
                         <div>
                           <h3 className="font-medium text-sm text-gray-900">{employee.name}</h3>
                           <p className="text-xs text-gray-500">{employee.email}</p>
@@ -1388,19 +1410,30 @@ export function EmployeeManager() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            admin.is_super_admin
-                              ? "bg-red-100"
-                              : "bg-red-100"
-                          }`}
-                        >
-                          <Shield className={`h-5 w-5 ${
-                            admin.is_super_admin
-                              ? "text-red-600"
-                              : "text-red-600"
-                          }`} />
-                        </div>
+                        <label className="relative cursor-pointer group/avatar" title="Changer la photo">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ""
+                              if (!file) return
+                              const fd = new FormData()
+                              fd.append("photo", file)
+                              const res = await fetch(`/api/users/${admin.id}/photo`, { method: "POST", body: fd })
+                              if (res.ok) {
+                                setAdmins((prev) => prev.map((a) => a.id === admin.id ? { ...a, profile_photo: admin.id } : a))
+                              } else {
+                                alert("Erreur lors de l'upload")
+                              }
+                            }}
+                          />
+                          <UserAvatar userId={admin.id} name={admin.name} size="md" hasPhoto={!!admin.profile_photo} />
+                          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity">
+                            <Camera className="w-4 h-4 text-white" />
+                          </div>
+                        </label>
                         <div>
                           <div className="flex items-center space-x-2">
                             <h3 className="font-medium text-sm text-gray-900">{admin.name}</h3>

@@ -40,6 +40,9 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM}
+      - UPLOAD_DIR=/app/uploads
+    volumes:
+      - uploads_prod_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,3 +65,4 @@ networks:
 
 volumes:
   postgres_prod_data:
+  uploads_prod_data:

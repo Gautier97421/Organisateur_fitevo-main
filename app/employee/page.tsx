@@ -35,6 +35,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import dynamic from "next/dynamic"
+
+// Widget de messagerie flottant (bulle en bas à droite), chargé à la demande.
+const CommunicationWidget = dynamic(
+  () => import("@/components/communication/communication-widget").then((m) => m.CommunicationWidget),
+  { ssr: false }
+)
 
 export default function EmployeePage() {
   const [userEmail, setUserEmail] = useState("")
@@ -668,7 +675,9 @@ export default function EmployeePage() {
     }
   }
 
-  // Menu principal
+  // Rendu de la vue courante (le widget de messagerie est monté séparément,
+  // de façon persistante, pour conserver la connexion temps réel).
+  const renderView = () => {
   if (currentView === "menu") {
     return (
       <div className="min-h-screen bg-white">
@@ -730,8 +739,6 @@ export default function EmployeePage() {
                     </div>
                   </div>
                 </Button>
-
-
 
                 {/* Bouton WhatsApp */}
                 {whatsappLink && (
@@ -1376,5 +1383,14 @@ export default function EmployeePage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+  }
+
+  return (
+    <>
+      {renderView()}
+      {/* Messagerie flottante (toujours montée → temps réel persistant) */}
+      <CommunicationWidget />
+    </>
   )
 }

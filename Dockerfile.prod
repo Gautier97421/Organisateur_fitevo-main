@@ -61,8 +61,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/server.js ./server.js
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
 
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
+
+# Répertoire de stockage des fichiers de la messagerie (monté en volume)
+RUN mkdir -p /app/uploads
 
 RUN sed -i 's/\r//' ./docker-entrypoint.sh \
     && chmod +x ./docker-entrypoint.sh \
@@ -74,6 +79,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV CI=true
 ENV PNPM_CONFIRM_MODULES_PURGE=false
+ENV UPLOAD_DIR=/app/uploads
 
 USER nextjs
 
