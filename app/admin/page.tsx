@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { TaskManager } from "@/components/admin/task-manager"
 import { EmployeeManager } from "@/components/admin/employee-manager"
 import { RealTimeMonitor } from "@/components/admin/real-time-monitor"
@@ -40,6 +40,9 @@ interface CustomPage {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("tasks")
+  // Marque le moment où l'onglet a été restauré depuis localStorage, pour
+  // ne pas écraser la valeur stockée avant la restauration.
+  const tabRestored = useRef(false)
   const [userEmail, setUserEmail] = useState("")
   const [userName, setUserName] = useState("")
   const [userRole, setUserRole] = useState("")
@@ -51,6 +54,19 @@ export default function AdminPage() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [onlineCount, setOnlineCount] = useState<number | null>(null)
   const router = useRouter()
+
+  // Restaure le dernier onglet consulté au chargement
+  useEffect(() => {
+    const saved = localStorage.getItem("admin-active-tab")
+    if (saved) setActiveTab(saved)
+    tabRestored.current = true
+  }, [])
+
+  // Sauvegarde l'onglet actif (après la restauration initiale)
+  useEffect(() => {
+    if (!tabRestored.current) return
+    localStorage.setItem("admin-active-tab", activeTab)
+  }, [activeTab])
 
   useEffect(() => {
     const init = async () => {

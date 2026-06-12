@@ -13,6 +13,7 @@ export interface Employee {
   id: string;
   name: string;
   email: string;
+  username?: string | null;
   is_active: boolean;
   remote_work_enabled?: boolean;
   role_id?: string;
@@ -31,6 +32,7 @@ export interface Admin {
   id: string;
   name: string;
   email: string;
+  username?: string | null;
   is_active: boolean;
   is_super_admin?: boolean;
   profile_photo?: string | null;

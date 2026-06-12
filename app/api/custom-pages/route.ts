@@ -12,9 +12,23 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const includeInactive = searchParams.get("includeInactive") === "true"
-    
+    const id = searchParams.get("id")
+
+    // RÃ©cupÃ©ration d'une seule page par id
+    if (id) {
+      const page = await prisma.customPage.findUnique({
+        where: { id },
+        include: {
+          items: {
+            orderBy: { orderIndex: "asc" }
+          }
+        }
+      })
+      return NextResponse.json({ data: page, error: null })
+    }
+
     const where: any = {}
-    
+
     // Si on ne demande pas spÃ©cifiquement les inactives, on ne prend que les actives
     if (!includeInactive) {
       where.isActive = true

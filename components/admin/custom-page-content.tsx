@@ -49,6 +49,22 @@ interface CustomPageContentProps {
   pageIcon: string
 }
 
+// Prisma Json? peut renvoyer un tableau, une chaîne JSON, ou null selon la sérialisation.
+// Ce helper normalise tous les cas en string[].
+function parseRoleIds(value: unknown): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string")
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 function SortableItem({ 
   item, 
   index,
@@ -254,11 +270,7 @@ export function CustomPageContent({ pageId, pageTitle, pageIcon }: CustomPageCon
       if (response.ok) {
         const result = await response.json()
         const page = result.data
-        if (page && page.roleIds) {
-          setPageRoleIds(Array.isArray(page.roleIds) ? page.roleIds : [])
-        } else {
-          setPageRoleIds([])
-        }
+        setPageRoleIds(parseRoleIds(page?.roleIds))
       }
     } catch (error) {
       console.error("Error loading page roles:", error)

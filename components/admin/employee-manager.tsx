@@ -1204,6 +1204,14 @@ export function EmployeeManager() {
                         <div>
                           <h3 className="font-medium text-sm text-gray-900">{employee.name}</h3>
                           <p className="text-xs text-gray-500">{employee.email}</p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <User className="w-3 h-3 flex-shrink-0" />
+                            {employee.username ? (
+                              <span>Pseudo : <span className="font-medium text-gray-700">{employee.username}</span></span>
+                            ) : (
+                              <span className="italic text-gray-400">Pseudo non défini</span>
+                            )}
+                          </p>
                           <div className="flex items-center space-x-2 mt-1">
                             <Badge variant={employee.is_active ? "default" : "secondary"} className="text-xs px-2 py-0">
                               {employee.is_active ? "Actif" : "Inactif"}
@@ -1441,6 +1449,14 @@ export function EmployeeManager() {
                             )}
                           </div>
                           <p className="text-xs text-gray-500">{admin.email}</p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <User className="w-3 h-3 flex-shrink-0" />
+                            {admin.username ? (
+                              <span>Pseudo : <span className="font-medium text-gray-700">{admin.username}</span></span>
+                            ) : (
+                              <span className="italic text-gray-400">Pseudo non défini</span>
+                            )}
+                          </p>
                           <Badge variant={admin.is_active ? "default" : "secondary"} className="text-xs px-2 py-0 mt-1">
                             {admin.is_active ? "Actif" : "Inactif"}
                           </Badge>
