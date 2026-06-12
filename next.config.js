@@ -46,12 +46,9 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()'
           },
-          {
-            key: 'Content-Security-Policy',
-            value: process.env.NODE_ENV === 'production'
-              ? "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'self';"
-              : "default-src 'self' 'unsafe-eval' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:;"
-          },
+          // La Content-Security-Policy est désormais gérée dans middleware.ts
+          // (CSP à nonce par requête). Ne pas la dupliquer ici : deux en-têtes
+          // CSP se combineraient de façon restrictive et casseraient les scripts.
         ],
       },
     ]

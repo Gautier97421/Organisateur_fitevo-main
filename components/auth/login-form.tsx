@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
+import { fetchCurrentUser } from "@/lib/current-user"
 
 export function LoginForm() {
   const [identifier, setIdentifier] = useState("") // Email ou pseudo
@@ -72,12 +73,11 @@ export function LoginForm() {
         return
       }
 
-      // Stocker les informations de l'utilisateur
-      localStorage.setItem("userId", data.user.id)
-      localStorage.setItem("userEmail", data.user.email)
-      localStorage.setItem("userName", data.user.name)
-      localStorage.setItem("userRole", data.user.role)
-      localStorage.setItem("isSuperAdmin", data.user.isSuperAdmin.toString())
+      // RGPD : on ne persiste plus les données personnelles dans le localStorage.
+      // L'identité est dérivée du cookie de session signé via /api/me, mise en
+      // cache (mémoire + sessionStorage) par fetchCurrentUser au chargement des
+      // pages. On l'amorce ici pour disposer de l'identité dès la redirection.
+      await fetchCurrentUser()
 
       // Rediriger selon le rôle
       if (data.user.role === 'employee') {

@@ -273,11 +273,11 @@ export function GymManager() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 px-2 md:px-0">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-2 md:space-x-3">
-          <Building className="h-6 w-6 md:h-8 md:w-8 text-red-600" />
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Gestion des Salles</h2>
+        <div className="flex items-center gap-2.5">
+          <Building className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des Salles</h2>
         </div>
         <Button
           onClick={() => setIsAddingGym(!isAddingGym)}

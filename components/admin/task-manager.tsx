@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react"
 import { type Task, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { getUserId } from "@/lib/current-user"
 import {
   DndContext,
   closestCenter,
@@ -392,8 +393,8 @@ export function TaskManager() {
       const maxOrder = currentTasks.length > 0 
         ? Math.max(...currentTasks.map((t) => t.order_index || 0)) 
         : 0
-      const userId = localStorage.getItem("userId")
-      
+      const userId = getUserId()
+
       if (!userId) {
         return
       }
@@ -688,12 +689,12 @@ export function TaskManager() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-          <ListTodo className="h-6 w-6 sm:h-8 sm:w-8 text-red-600" />
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestion des To-Do Lists</h2>
-        </div>
+          <div className="flex items-center gap-2.5">
+            <ListTodo className="w-6 h-6 text-red-600 flex-shrink-0" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des To-Do Lists</h2>
+          </div>
         <Button
           onClick={() => {
             if (showEditForm) {

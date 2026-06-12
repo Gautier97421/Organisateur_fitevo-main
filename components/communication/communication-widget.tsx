@@ -11,6 +11,7 @@ import { NewConversationDialog } from "./new-conversation-dialog"
 import { FoldersPanel } from "./folders-panel"
 import type { Conversation, RealtimeEvent, ChatMessage } from "./types"
 import { conversationTitle } from "./types"
+import { getUserId, getUserName, getUserRole } from "@/lib/current-user"
 
 interface CurrentUser {
   id: string
@@ -41,9 +42,9 @@ export function CommunicationWidget() {
 
   useEffect(() => {
     setUser({
-      id: localStorage.getItem("userId") || "",
-      name: localStorage.getItem("userName") || "",
-      role: localStorage.getItem("userRole") || "",
+      id: getUserId(),
+      name: getUserName(),
+      role: getUserRole(),
     })
   }, [])
 

@@ -56,12 +56,6 @@ function monthLabel(month: string): string {
   return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
 }
 
-function previousMonth(month: string): string {
-  const [year, monthNumber] = month.split("-")
-  const date = new Date(Number(year), Number(monthNumber) - 1, 1)
-  date.setMonth(date.getMonth() - 1)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-}
 
 function recentMonths(month: string, count: number): string[] {
   const [year, monthNumber] = month.split("-")
@@ -348,11 +342,10 @@ export function CashRecapManager() {
 
     autoTable(doc, {
       startY: 29,
-      head: [["Total caisse", "Nombre de saisies", "Moyenne par saisie"]],
+      head: [["Total caisse", "Nombre de saisies"]],
       body: [[
         `${currentTotals.totalRegister.toFixed(2)} EUR`,
         String(currentTotals.count),
-        `${currentTotals.avg.toFixed(2)} EUR`,
       ]],
       theme: "grid",
       headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: "bold", fontSize: 8 },
@@ -424,10 +417,10 @@ export function CashRecapManager() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <BarChart3 className="h-6 w-6 text-red-600" />
-          Récap Mensuel
-        </h2>
+        <div className="flex items-center gap-2.5">
+          <BarChart3 className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Récap Mensuel</h2>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={gymFilter}
@@ -454,7 +447,7 @@ export function CashRecapManager() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Total {monthLabel(selectedMonth)}</CardTitle>
@@ -462,16 +455,6 @@ export function CashRecapManager() {
           <CardContent>
             <p className="text-3xl font-bold text-gray-900">{currentTotals.totalRegister.toFixed(2)} EUR</p>
             <p className="text-sm text-gray-600 mt-1">{currentTotals.count} saisie(s)</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Moyenne par saisie</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-gray-900">{currentTotals.avg.toFixed(2)} EUR</p>
-            <p className="text-sm text-gray-600 mt-1">Montant moyen par saisie de caisse</p>
           </CardContent>
         </Card>
       </div>

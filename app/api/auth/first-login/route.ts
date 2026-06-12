@@ -115,7 +115,8 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    logger.info('Première connexion configurée pour:', updatedUser.email)
+    // RGPD: pas d'email en clair dans les logs, on utilise l'id interne.
+    logger.info('Première connexion configurée pour l’utilisateur:', updatedUser.id)
     recordFirstLoginAttempt(email, true)
 
     return NextResponse.json({

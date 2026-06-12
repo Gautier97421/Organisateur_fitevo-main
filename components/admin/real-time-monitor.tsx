@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Coffee, Loader2, MapPin, Sunrise, Sunset, Sun } from "lucide-react"
+import { Activity, Clock, Coffee, Loader2, MapPin, Sunrise, Sunset, Sun } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
 interface EmployeeStatus {
@@ -230,7 +230,10 @@ export function RealTimeMonitor() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Suivi Temps Réel</h2>
+        <div className="flex items-center gap-2.5">
+          <Activity className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Suivi Temps Réel</h2>
+        </div>
         <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
           <Clock className="h-4 w-4" />
           <span>Mise à jour : {new Date().toLocaleTimeString("fr-FR")}</span>

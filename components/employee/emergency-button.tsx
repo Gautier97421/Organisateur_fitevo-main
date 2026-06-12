@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { XCircle, AlertTriangle, Send } from "lucide-react"
+import { getUserEmail } from "@/lib/current-user"
 
 export function EmergencyButton() {
   const [isOpen, setIsOpen] = useState(false)
@@ -25,7 +26,7 @@ export function EmergencyButton() {
 
     console.log("ALERTE URGENCE:", {
       timestamp: new Date().toISOString(),
-      user: localStorage.getItem("userEmail"),
+      user: getUserEmail(),
       message: message || "Alerte d'urgence",
     })
 

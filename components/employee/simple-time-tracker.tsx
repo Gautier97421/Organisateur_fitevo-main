@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, MapPin, CheckCircle, Loader2 } from "lucide-react"
 import { supabase, type Gym } from "@/lib/api-client"
+import { getUserEmail } from "@/lib/current-user"
 
 interface TimeEntry {
   id: string
@@ -23,7 +24,7 @@ export function SimpleTimeTracker() {
   const [userEmail, setUserEmail] = useState("")
 
   useEffect(() => {
-    const email = localStorage.getItem("userEmail")
+    const email = getUserEmail()
     if (email) {
       setUserEmail(email)
       loadData(email)

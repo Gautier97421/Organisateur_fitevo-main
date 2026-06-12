@@ -1,5 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthInterceptor } from "@/components/auth/auth-interceptor"
@@ -18,16 +19,20 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Nonce CSP injecté par le middleware ; transmis à next-themes pour que son
+  // script anti-flash inline ne soit pas bloqué par la CSP stricte.
+  const nonce = (await headers()).get("x-nonce") ?? undefined
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className="font-sans bg-gray-50">
         <AuthInterceptor />
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange nonce={nonce}>
           {children}
           <Toaster />
         </ThemeProvider>

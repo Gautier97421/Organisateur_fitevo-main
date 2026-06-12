@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, MessageCircle } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { clearCurrentUser } from "@/lib/current-user"
 
 interface EmployeeHeaderProps {
   userEmail: string
@@ -31,8 +32,7 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
   }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem("userRole")
-    localStorage.removeItem("userEmail")
+    clearCurrentUser()
     router.push("/")
   }
 

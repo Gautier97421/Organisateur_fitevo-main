@@ -1,6 +1,7 @@
 import { prisma } from './prisma'
 import { verifyPassword } from './password-utils'
 import logger from './logger'
+import { getCurrentUser, clearCurrentUser } from './current-user'
 
 // Authentification avec la base de données PostgreSQL
 export async function validateCredentials(email: string, password: string): Promise<boolean> {
@@ -27,16 +28,11 @@ export async function validateCredentials(email: string, password: string): Prom
 
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false
-  return localStorage.getItem('userEmail') !== null
+  return getCurrentUser() !== null
 }
 
 export function logout(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('userName')
-    localStorage.removeItem('userRole')
-    localStorage.removeItem('isSuperAdmin')
-  }
+  clearCurrentUser()
 }
 
 // Fonction utilitaire pour créer un utilisateur admin si nécessaire

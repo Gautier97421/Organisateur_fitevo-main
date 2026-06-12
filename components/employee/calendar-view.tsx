@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle, CalendarDays, Edit2, Trash2, MapPin } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import {
   Dialog,
   DialogContent,
@@ -82,8 +83,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   })
   const getAuthHeaders = (): Record<string, string> => {
     if (typeof window === "undefined") return {}
-    const userId = localStorage.getItem("userId") || ""
-    const userEmail = localStorage.getItem("userEmail") || ""
+    const userId = getUserId() || ""
+    const userEmail = getUserEmail() || ""
     const headers: Record<string, string> = {}
     if (userId) headers["x-user-id"] = userId
     if (userEmail) headers["x-user-email"] = userEmail
@@ -171,7 +172,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       return cachedRoleId
     }
 
-    const userEmail = localStorage.getItem("userEmail")
+    const userEmail = getUserEmail()
     if (!userEmail) {
       return ""
     }
@@ -186,7 +187,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
   const loadScheduledEventsForRange = async (startDate: Date, endDate: Date) => {
     try {
-      const userEmail = localStorage.getItem("userEmail") || ""
+      const userEmail = getUserEmail() || ""
       const roleId = await getCurrentUserRoleId()
 
       const params = new URLSearchParams({
@@ -268,7 +269,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   }
 
   const validateScheduledEvent = async (eventId: string) => {
-    const userEmail = localStorage.getItem("userEmail") || ""
+    const userEmail = getUserEmail() || ""
     if (!userEmail) return
 
     try {
@@ -337,9 +338,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     }
 
     try {
-      const userEmail = localStorage.getItem("userEmail") || ""
-      const userName = localStorage.getItem("userName") || ""
-      const userId = localStorage.getItem("userId") || ""
+      const userEmail = getUserEmail() || ""
+      const userName = getUserName() || ""
+      const userId = getUserId() || ""
 
       console.log("Débug création événement:", { userEmail, userName, userId }) // Debug
 
@@ -1062,7 +1063,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                   }
 
                   return dayEvents.map((event) => {
-                    const userEmail = localStorage.getItem("userEmail")
+                    const userEmail = getUserEmail()
                     const isOwnEvent = event.created_by_email === userEmail
                     const today = new Date().toISOString().split('T')[0]
                     const isPast = event.event_date < today

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Plus, CalendarDays, Edit2, Trash2, AlertTriangle } from "lucide-react"
+import { getUserId, getUserEmail } from "@/lib/current-user"
 import {
   Dialog,
   DialogContent,
@@ -93,7 +94,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
 
   const loadUserGyms = async () => {
     try {
-      const userId = localStorage.getItem("userId")
+      const userId = getUserId()
       if (!userId) return null
 
       // Charger les salles accessibles par l'utilisateur
@@ -963,7 +964,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                     </div>
                   )}
                   {daySchedules.map((schedule) => {
-                    const userEmail = localStorage.getItem("userEmail")
+                    const userEmail = getUserEmail()
                     const isOwnSchedule = schedule.employee_email === userEmail
                     const today = new Date().toISOString().split('T')[0]
                     const isPast = schedule.work_date < today

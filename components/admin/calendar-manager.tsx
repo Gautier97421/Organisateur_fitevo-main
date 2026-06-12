@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar, Clock, Check, X, ChevronLeft, ChevronRight, Plus, ArrowLeft, Bell, CheckCircle, XCircle, CalendarDays, MapPin, Edit2, Trash2 } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import {
   Dialog,
   DialogContent,
@@ -170,8 +171,8 @@ export function CalendarManager() {
       return {}
     }
 
-    const userId = localStorage.getItem("userId") || ""
-    const userEmail = localStorage.getItem("userEmail") || ""
+    const userId = getUserId() || ""
+    const userEmail = getUserEmail() || ""
     const headers: Record<string, string> = {}
 
     if (userId) {
@@ -532,10 +533,10 @@ export function CalendarManager() {
     }
 
     try {
-      const userEmail = localStorage.getItem("userEmail") || ""
-      const userName = localStorage.getItem("userName") || ""
+      const userEmail = getUserEmail() || ""
+      const userName = getUserName() || ""
 
-      const userId = localStorage.getItem("userId")
+      const userId = getUserId()
       
       const { data, error } = await supabase
         .from("calendar_events")
@@ -653,7 +654,7 @@ export function CalendarManager() {
 
   const approveEvent = async (eventId: string): Promise<boolean> => {
     try {
-      const adminEmail = localStorage.getItem("userEmail")
+      const adminEmail = getUserEmail()
       const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
 
       const { error } = await supabase
@@ -699,7 +700,7 @@ export function CalendarManager() {
 
   const rejectEvent = async (eventId: string, reason: string) => {
     try {
-      const adminEmail = localStorage.getItem("userEmail")
+      const adminEmail = getUserEmail()
       const { data: admin } = await supabase.from("admins").select("id").eq("email", adminEmail).single()
 
       const { error } = await supabase
@@ -742,7 +743,7 @@ export function CalendarManager() {
           reminder_date: reminderDatetime.toISOString(),
           recipient_type: reminderSettings.recipient_type,
           custom_message: reminderSettings.custom_message || null,
-          created_by: localStorage.getItem("userEmail"),
+          created_by: getUserEmail(),
         },
       ])
 
@@ -955,12 +956,12 @@ export function CalendarManager() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <CalendarDays className="w-7 h-7 md:w-8 md:h-8 text-red-600" />
-          Gestion du Calendrier
-        </h2>
+        <div className="flex items-center gap-2.5">
+          <CalendarDays className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion du Calendrier</h2>
+        </div>
         <div className="flex items-center space-x-4">
           {pendingCount > 0 && (
             <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 text-lg px-4 py-2">

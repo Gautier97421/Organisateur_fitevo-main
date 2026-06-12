@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign, AlertTriangle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import { CashRegisterForm } from "./cash-register-form"
 import {
   Dialog,
@@ -242,7 +243,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   useEffect(() => {
     const loadTasksFromDb = async () => {
       setIsLoadingTasks(true)
-      const userId = localStorage.getItem("userId") || ""
+      const userId = getUserId() || ""
       
       try {
         // Charger les tâches "modèles" de la BDD pour cette période/salle
@@ -408,8 +409,8 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     try {
       const validationTime = new Date().toISOString()
       const userAgent = navigator.userAgent
-      const userId = localStorage.getItem("userId") || ""
-      const userEmail = localStorage.getItem("userEmail") || ""
+      const userId = getUserId() || ""
+      const userEmail = getUserEmail() || ""
       const today = new Date().toISOString().split('T')[0]
       const actorId = userId || userEmail
       const responseValue = taskToValidate.type === "checkbox"
@@ -515,7 +516,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   }
 
   const isFirstWorkSessionOfDay = async (): Promise<boolean> => {
-    const userId = localStorage.getItem("userId") || ""
+    const userId = getUserId() || ""
     if (!userId) return false
 
     const today = new Date().toISOString().split('T')[0]
@@ -535,7 +536,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
   const finalizeSession = async (cashData?: any, markCashRegisterDone?: boolean) => {
     try {
-      const userId = localStorage.getItem("userId") || ""
+      const userId = getUserId() || ""
       const today = new Date().toISOString().split('T')[0]
       const gymKey = gymId || "global"
       
@@ -585,8 +586,8 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           })
 
           // Envoyer l'email récapitulatif à l'admin (non bloquant)
-          const userName = localStorage.getItem("userName") || ""
-          const userEmailLocal = localStorage.getItem("userEmail") || ""
+          const userName = getUserName() || ""
+          const userEmailLocal = getUserEmail() || ""
           fetch("/api/send-email", {
             method: "POST",
             headers: {
@@ -634,9 +635,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
   const persistCashRegisterEntry = async (cashData: any, mode: "start" | "end") => {
     setCashSaveError("")
 
-    const userEmail = localStorage.getItem("userEmail") || ""
-    const userName = localStorage.getItem("userName") || ""
-    const userId = localStorage.getItem("userId") || ""
+    const userEmail = getUserEmail() || ""
+    const userName = getUserName() || ""
+    const userId = getUserId() || ""
 
     if (!userEmail || !userId) {
       setCashSaveError("Session utilisateur invalide: impossible d'enregistrer la caisse.")
@@ -741,7 +742,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         return
       }
 
-      const userId = localStorage.getItem("userId") || ""
+      const userId = getUserId() || ""
       if (!userId) return
 
       const today = new Date().toISOString().split('T')[0]

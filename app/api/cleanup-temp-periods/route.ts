@@ -50,13 +50,26 @@ export async function POST(request: NextRequest) {
       }
     })
     
-    logger.info(`Nettoyage terminé: ${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`)
-    
-    return NextResponse.json({ 
-      success: true, 
+    // RGPD (Art. 5.1.e - limitation de conservation): purger les jetons de
+    // réinitialisation de mot de passe utilisés ou expirés. Ils ne servent plus
+    // et constituent une donnée sensible à ne pas conserver indéfiniment.
+    const resetTokensResult = await prisma.passwordResetToken.deleteMany({
+      where: {
+        OR: [
+          { usedAt: { not: null } },
+          { expiresAt: { lt: new Date() } },
+        ],
+      },
+    })
+
+    logger.info(`Nettoyage terminé: ${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées, ${resetTokensResult.count} jetons de réinitialisation purgés`)
+
+    return NextResponse.json({
+      success: true,
       message: `${workSchedulesResult.count} périodes temporaires supprimées, ${tasksResult.count} tâches complétées supprimées`,
       workSchedulesDeleted: workSchedulesResult.count,
-      completedTasksDeleted: tasksResult.count 
+      completedTasksDeleted: tasksResult.count,
+      resetTokensPurged: resetTokensResult.count
     })
   } catch (error: any) {
     logger.error('Erreur lors du nettoyage des périodes temporaires', error)

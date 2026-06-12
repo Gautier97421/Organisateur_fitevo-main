@@ -19,6 +19,7 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { useToast } from "@/hooks/use-toast"
+import { getUserId, getUserName, getUserRole, getIsSuperAdmin } from "@/lib/current-user"
 import {
   Dialog,
   DialogContent,
@@ -181,9 +182,7 @@ export function EmployeeManager() {
   useEffect(() => {
     loadData()
     // Vérifier si l'utilisateur est super admin
-    const userRole = localStorage.getItem("userRole")
-    const isSuperAdminFlag = localStorage.getItem("isSuperAdmin") === "true"
-    setIsSuperAdmin(userRole === "superadmin" || isSuperAdminFlag)
+    setIsSuperAdmin(getUserRole() === "superadmin" || getIsSuperAdmin())
   }, [])
 
   // Rafraîchissement automatique toutes les 15 secondes
@@ -467,7 +466,7 @@ export function EmployeeManager() {
 
   const confirmStatusChange = (id: string, name: string, type: "employee" | "admin", isTargetSuperAdmin = false) => {
     // Un superadmin peut désactiver n'importe quel compte sauf le sien
-    const currentUserId = localStorage.getItem("userId")
+    const currentUserId = getUserId()
     if (id === currentUserId) return
     setSelectedUser({ id, name, type, isSuperAdmin: isTargetSuperAdmin })
     setShowStatusDialog(true)
@@ -508,7 +507,7 @@ export function EmployeeManager() {
   const saveWhatsappLink = async () => {
     setIsSavingWhatsapp(true)
     try {
-      const userName = localStorage.getItem("userName") || "Admin"
+      const userName = getUserName() || "Admin"
       
       await supabase
         .from("app_config")
@@ -527,7 +526,7 @@ export function EmployeeManager() {
   const saveSiteUrl = async () => {
     setIsSavingSiteUrl(true)
     try {
-      const userName = localStorage.getItem("userName") || "Admin"
+      const userName = getUserName() || "Admin"
       
       // Vérifier si la config existe déjà
       const { data: existing } = await supabase
@@ -570,12 +569,10 @@ export function EmployeeManager() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 px-2 md:px-0">
-      <div className="flex items-center space-x-2 md:space-x-3">
-        <Users className="w-6 h-6 md:w-7 md:h-7 text-gray-700" />
-        <h2 className="text-xl md:text-2xl font-semibold text-gray-800">
-          Gestion des Utilisateurs
-        </h2>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2.5">
+        <Users className="w-6 h-6 text-red-600 flex-shrink-0" />
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des Utilisateurs</h2>
       </div>
 
       {/* Navigation entre employés et admins */}
@@ -902,7 +899,7 @@ export function EmployeeManager() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
+                {/* <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
                   <Checkbox
                     id="remote-work"
                     checked={newEmployee.remoteWork}
@@ -911,7 +908,7 @@ export function EmployeeManager() {
                   <Label htmlFor="remote-work" className="text-sm text-gray-700">
                     Télétravail autorisé (pas de restriction réseau)
                   </Label>
-                </div>
+                </div> */}
 
                 <div className="flex space-x-2">
                   <Button onClick={addEmployee} className="bg-red-600 hover:bg-red-700">
@@ -1124,7 +1121,7 @@ export function EmployeeManager() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
+                {/* <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded">
                   <Checkbox
                     id="edit-remote-work"
                     checked={editEmployee.remoteWork}
@@ -1133,7 +1130,7 @@ export function EmployeeManager() {
                   <Label htmlFor="edit-remote-work" className="text-sm text-gray-700">
                     Télétravail autorisé (pas de restriction réseau)
                   </Label>
-                </div>
+                </div> */}
 
                 <div className="flex space-x-2">
                   <Button onClick={saveEditEmployee} className="bg-blue-600 hover:bg-blue-700">
@@ -1454,7 +1451,7 @@ export function EmployeeManager() {
                           variant="ghost"
                           size="sm"
                           onClick={() => confirmStatusChange(admin.id, admin.name, "admin", admin.is_super_admin)}
-                          disabled={admin.id === localStorage.getItem("userId")}
+                          disabled={admin.id === getUserId()}
                         >
                           {admin.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                         </Button>

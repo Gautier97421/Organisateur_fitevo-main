@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import dynamic from "next/dynamic"
+import { fetchCurrentUser, clearCurrentUser, getUserId } from "@/lib/current-user"
 
 // Widget de messagerie flottant (bulle en bas à droite), chargé à la demande.
 const CommunicationWidget = dynamic(
@@ -82,32 +83,36 @@ export default function EmployeePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Vérifier l'authentification
-    const role = localStorage.getItem("userRole")
-    const email = localStorage.getItem("userEmail")
-    const name = localStorage.getItem("userName")
-    
-    if (!email || !role) {
-      // Pas connecté, rediriger vers la page de connexion
-      router.push("/")
-      return
-    }
-    
-    if (role !== "employee") {
-      // Pas un employé, rediriger vers access-denied
-      router.push("/access-denied")
-      return
-    }
-    
-    setUserEmail(email)
-    setUserName(name)
+    // Vérifier l'authentification via le cookie de session (RGPD : plus de PII en localStorage)
+    let cancelled = false
+    const init = async () => {
+      const user = await fetchCurrentUser()
+      if (cancelled) return
 
-    // Charger les permissions de l'employé
-    loadUserPermissions(email)
+      if (!user || !user.email || !user.role) {
+        // Pas connecté, rediriger vers la page de connexion
+        router.push("/")
+        return
+      }
+
+      if (user.role !== "employee") {
+        // Pas un employé, rediriger vers access-denied
+        router.push("/access-denied")
+        return
+      }
+
+      const email = user.email
+      const name = user.name
+
+      setUserEmail(email)
+      setUserName(name)
+
+      // Charger les permissions de l'employé
+      loadUserPermissions(email)
 
     // Vérifier si une session existe pour aujourd'hui
     const checkExistingSession = async () => {
-      const userId = localStorage.getItem("userId") || ""
+      const userId = getUserId()
       const today = new Date().toISOString().split('T')[0]
       
       try {
@@ -183,9 +188,13 @@ export default function EmployeePage() {
 
     // Charger les instructions de nouveau adhérent
     loadInstructions()
-    
+
     // Charger les pages personnalisées
     loadCustomPages()
+    }
+
+    init()
+    return () => { cancelled = true }
   }, [])
   const loadUserPermissions = async (email: string) => {
     try {
@@ -350,6 +359,7 @@ export default function EmployeePage() {
     localStorage.removeItem("employeeSelectedPeriod")
     localStorage.removeItem("employeeBreakState")
     await fetch('/api/auth/logout', { method: 'POST' })
+    clearCurrentUser()
     localStorage.clear()
     router.push("/")
   }
@@ -539,7 +549,7 @@ export default function EmployeePage() {
       // Sauvegarder la période dans la base de données
       try {
         const today = new Date().toISOString().split('T')[0]
-        const userId = localStorage.getItem("userId") || ""
+        const userId = getUserId()
         
         const workScheduleData = {
           user_id: userId,
@@ -626,7 +636,7 @@ export default function EmployeePage() {
     setSelectedGym(null)
     
     // Nettoyer les données de session du localStorage
-    const userId = localStorage.getItem("userId") || ""
+    const userId = getUserId()
     localStorage.removeItem(`employee_${userId}_period`)
     localStorage.removeItem(`employee_${userId}_subPeriod`)
     localStorage.removeItem(`employee_${userId}_sessionDate`)
@@ -1384,6 +1394,17 @@ export default function EmployeePage() {
       </Dialog>
     </div>
   )
+  }
+
+  // Tant que l'identité n'est pas chargée (via /api/me), on n'affiche pas le
+  // contenu : évite que les composants enfants (dont le widget de messagerie)
+  // lisent une identité encore vide au premier rendu.
+  if (!userEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (

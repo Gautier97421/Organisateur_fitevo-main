@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2, CalendarDays, Plus, XCircle, Clock, Building2 } from "lucide-react"
+import { getUserEmail, getUserRole } from "@/lib/current-user"
 import {
   Dialog,
   DialogContent,
@@ -85,7 +86,7 @@ export function WorkScheduleManager() {
   ]
 
   useEffect(() => {
-    const role = localStorage.getItem("userRole") || ""
+    const role = getUserRole()
     setCurrentUserRole(role)
     loadGyms()
     loadData()
@@ -126,7 +127,7 @@ export function WorkScheduleManager() {
         })
         
         // Récupérer l'email de l'admin connecté
-        const userEmail = localStorage.getItem("userEmail") || ""
+        const userEmail = getUserEmail()
         
         // Filtrer pour garder les plannings des employés + le planning de l'admin lui-même
         return schedules.filter(schedule => {
@@ -166,7 +167,7 @@ export function WorkScheduleManager() {
         data = data.filter((schedule: any) => !schedule.is_temporary)
         
         // Filtrer selon le rôle
-        const userRole = localStorage.getItem("userRole") || ""
+        const userRole = getUserRole()
         if (userRole === "admin") {
           // Les admins ne voient que les plannings des employés
           data = await filterSchedulesForAdmin(data)
@@ -193,8 +194,8 @@ export function WorkScheduleManager() {
         const data = result.data || []
         
         // Filtrer selon le rôle de l'utilisateur actuel
-        const userRole = localStorage.getItem("userRole") || ""
-        const userEmail = localStorage.getItem("userEmail") || ""
+        const userRole = getUserRole()
+        const userEmail = getUserEmail()
         let filteredData = data
         
         if (userRole === "admin") {
@@ -610,12 +611,12 @@ export function WorkScheduleManager() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <CalendarDays className="w-7 h-7 md:w-8 md:h-8 text-red-600" />
-          Gestion des Plannings
-        </h2>
+        <div className="flex items-center gap-2.5">
+          <CalendarDays className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des Plannings</h2>
+        </div>
         {conflicts.length > 0 && (
           <Badge className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 text-lg px-4 py-2">
             <AlertTriangle className="h-4 w-4 mr-1" />

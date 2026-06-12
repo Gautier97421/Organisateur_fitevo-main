@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { Save, Loader2, Plus, Trash2, Check, X, Edit, LayoutDashboard, Eye, EyeOff, Users, Shield } from "lucide-react"
 import * as LucideIcons from "lucide-react"
+import { getUserEmail } from "@/lib/current-user"
 
 interface Role {
   id: string
@@ -36,6 +38,19 @@ interface CustomPage {
   }>
 }
 
+// Prisma renvoie les champs Json? en tableau, string JSON, ou null selon le contexte
+function parseRoleIds(value: unknown): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string")
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []
+    } catch { return [] }
+  }
+  return []
+}
+
 export function CustomPageManager() {
   const [pages, setPages] = useState<CustomPage[]>([])
   const [roles, setRoles] = useState<Role[]>([])
@@ -45,7 +60,9 @@ export function CustomPageManager() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [showRolesDialog, setShowRolesDialog] = useState<string | null>(null)
-  
+  // State local du dialog de rôles — ne sauvegarde qu'au clic "Enregistrer"
+  const [dialogRoleIds, setDialogRoleIds] = useState<string[]>([])
+
   // Form fields
   const [formTitle, setFormTitle] = useState("")
   const [formIcon, setFormIcon] = useState("FileText")
@@ -101,7 +118,7 @@ export function CustomPageManager() {
     
     setIsSaving(true)
     try {
-      const userEmail = localStorage.getItem("userEmail") || "unknown"
+      const userEmail = getUserEmail() || "unknown"
       
       const response = await fetch("/api/custom-pages", {
         method: "POST",
@@ -131,7 +148,7 @@ export function CustomPageManager() {
     setFormTitle(page.title)
     setFormIcon(page.icon)
     setFormDescription(page.description || "")
-    setFormRoleIds(Array.isArray(page.roleIds) ? page.roleIds : [])
+    setFormRoleIds(parseRoleIds(page.roleIds))
     setShowAddForm(true)
   }
 
@@ -162,14 +179,15 @@ export function CustomPageManager() {
     }
   }
 
-  const handleUpdateRoles = async (pageId: string, newRoleIds: string[]) => {
+  const handleUpdateRoles = async () => {
+    if (!showRolesDialog) return
     setIsSaving(true)
     try {
-      const response = await fetch(`/api/custom-pages?id=${pageId}`, {
+      const response = await fetch(`/api/custom-pages?id=${showRolesDialog}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          roleIds: newRoleIds.length > 0 ? newRoleIds : null
+          roleIds: dialogRoleIds.length > 0 ? dialogRoleIds : null
         })
       })
 
@@ -182,6 +200,18 @@ export function CustomPageManager() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const openRolesDialog = (pageId: string) => {
+    const page = pages.find(p => p.id === pageId)
+    setDialogRoleIds(parseRoleIds(page?.roleIds))
+    setShowRolesDialog(pageId)
+  }
+
+  const toggleDialogRole = (roleId: string) => {
+    setDialogRoleIds(prev =>
+      prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+    )
   }
 
   const toggleRoleInForm = (roleId: string) => {
@@ -423,7 +453,7 @@ export function CustomPageManager() {
             pages.map((page) => {
               const IconComponent = (LucideIcons as any)[page.icon]
               const itemCount = (page as any).items?.length || 0
-              const pageRoleIds = Array.isArray(page.roleIds) ? page.roleIds : []
+              const pageRoleIds = parseRoleIds(page.roleIds)
               return (
                 <Card key={page.id} className={`border ${page.isActive ? 'border-gray-200' : 'border-gray-300 bg-gray-100 opacity-60'}`}>
                   <CardContent className="p-4">
@@ -466,7 +496,7 @@ export function CustomPageManager() {
                       <div className="flex gap-1 flex-shrink-0">
                         {/* Bouton pour modifier les rôles */}
                         <Button
-                          onClick={() => setShowRolesDialog(page.id)}
+                          onClick={() => openRolesDialog(page.id)}
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
@@ -527,75 +557,80 @@ export function CustomPageManager() {
         </AlertDialog>
 
         {/* Dialog de gestion des rôles */}
-        <AlertDialog open={showRolesDialog !== null} onOpenChange={(open) => !open && setShowRolesDialog(null)}>
-          <AlertDialogContent className="max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
+        <Dialog open={showRolesDialog !== null} onOpenChange={(open) => !open && setShowRolesDialog(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-purple-600" />
                 Gérer les accès
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                Sélectionnez les rôles qui peuvent voir cette page. Si aucun rôle n'est sélectionné, tous les employés y auront accès.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4">
-              {(() => {
-                const currentPage = pages.find(p => p.id === showRolesDialog)
-                if (!currentPage) return null
-                const currentRoleIds = Array.isArray(currentPage.roleIds) ? currentPage.roleIds : []
-                
-                return (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 min-h-[80px]">
-                      {roles.length === 0 ? (
-                        <span className="text-sm text-gray-500 italic">Aucun rôle créé. Créez des rôles dans l'onglet "Rôles".</span>
-                      ) : (
-                        roles.map(role => {
-                          const isSelected = currentRoleIds.includes(role.id)
-                          return (
-                            <button
-                              key={role.id}
-                              type="button"
-                              onClick={() => {
-                                const newRoleIds = isSelected
-                                  ? currentRoleIds.filter(id => id !== role.id)
-                                  : [...currentRoleIds, role.id]
-                                handleUpdateRoles(showRolesDialog!, newRoleIds)
-                              }}
-                              disabled={isSaving}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
-                                isSelected
-                                  ? getRoleColor(role.color) + " ring-2 ring-offset-1 ring-gray-400"
-                                  : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
-                              }`}
-                            >
-                              {isSelected && <Check className="w-3 h-3 inline mr-1" />}
-                              {role.name}
-                            </button>
-                          )
-                        })
-                      )}
-                    </div>
-                    {currentRoleIds.length === 0 ? (
-                      <p className="text-sm text-green-600 flex items-center gap-1">
-                        <Users className="w-4 h-4" />
-                        Actuellement accessible à tous les employés
-                      </p>
-                    ) : (
-                      <p className="text-sm text-purple-600 flex items-center gap-1">
-                        <Shield className="w-4 h-4" />
-                        Accessible uniquement aux {currentRoleIds.length} rôle{currentRoleIds.length > 1 ? 's' : ''} sélectionné{currentRoleIds.length > 1 ? 's' : ''}
-                      </p>
-                    )}
-                  </div>
-                )
-              })()}
+              </DialogTitle>
+              <DialogDescription>
+                Cochez les rôles qui peuvent voir cette page. Laissez tout décoché pour que tous les employés y aient accès.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-2">
+              <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 min-h-[80px]">
+                {roles.length === 0 ? (
+                  <span className="text-sm text-gray-500 italic">Aucun rôle créé. Créez des rôles dans l'onglet "Utilisateurs".</span>
+                ) : (
+                  roles.map(role => {
+                    const isSelected = dialogRoleIds.includes(role.id)
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => toggleDialogRole(role.id)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                          isSelected
+                            ? getRoleColor(role.color) + " ring-2 ring-offset-1 ring-gray-400"
+                            : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 inline mr-1" />}
+                        {role.name}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+              {dialogRoleIds.length === 0 ? (
+                <p className="text-sm text-green-600 flex items-center gap-1 mt-2">
+                  <Users className="w-4 h-4" />
+                  Accessible à tous les employés
+                </p>
+              ) : (
+                <p className="text-sm text-purple-600 flex items-center gap-1 mt-2">
+                  <Shield className="w-4 h-4" />
+                  Accessible uniquement aux {dialogRoleIds.length} rôle{dialogRoleIds.length > 1 ? 's' : ''} sélectionné{dialogRoleIds.length > 1 ? 's' : ''}
+                </p>
+              )}
             </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Fermer</AlertDialogCancel>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowRolesDialog(null)}
+                disabled={isSaving}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                onClick={handleUpdateRoles}
+                disabled={isSaving}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {isSaving ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enregistrement...</>
+                ) : (
+                  <><Save className="w-4 h-4 mr-2" />Enregistrer</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )

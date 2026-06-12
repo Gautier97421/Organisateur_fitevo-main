@@ -30,7 +30,39 @@ function decodeHex(hex: string): string {
   return new TextDecoder().decode(bytes)
 }
 
-function clearSessionAndRedirect(url: URL, request: NextRequest) {
+/**
+ * Construit la Content-Security-Policy à nonce (défense en profondeur anti-XSS).
+ *
+ * En production : script-src verrouillé sur un nonce par requête + 'strict-dynamic'
+ * (plus de 'unsafe-inline' ni 'unsafe-eval' pour les scripts). Next.js propage le
+ * nonce à ses propres balises <script> via l'en-tête CSP de la requête ; next-themes
+ * le reçoit via le layout (prop `nonce`).
+ *
+ * En développement : CSP permissive (le HMR / React Refresh utilisent eval et des
+ * scripts inline). Le verrouillage strict ne s'applique donc qu'en prod.
+ */
+function buildCsp(nonce: string): string {
+  const isProd = process.env.NODE_ENV === 'production'
+  const scriptSrc = isProd
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic'`
+    : `'self' 'unsafe-eval' 'unsafe-inline'`
+
+  return [
+    `default-src 'self'`,
+    `script-src ${scriptSrc}`,
+    `style-src 'self' 'unsafe-inline'`, // Tailwind / styles inline
+    `img-src 'self' data: https:`,
+    `font-src 'self' data:`,
+    `connect-src 'self' ws: wss:`, // API same-origin + WebSocket temps réel
+    `object-src 'none'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `frame-ancestors 'self'`,
+    ...(isProd ? [`upgrade-insecure-requests`] : []),
+  ].join('; ')
+}
+
+function clearSessionAndRedirect(url: URL) {
   const res = NextResponse.redirect(url)
   res.cookies.set('fitevo_session', '', { maxAge: 0, path: '/' })
   return res
@@ -39,11 +71,31 @@ function clearSessionAndRedirect(url: URL, request: NextRequest) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // ── CSP à nonce : calculée pour toutes les requêtes traversant le proxy ──
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const nonce = btoa(String.fromCharCode(...bytes))
+  const csp = buildCsp(nonce)
+
+  // Le nonce + la CSP doivent voyager dans les en-têtes de requête pour que Next
+  // et le layout (next-themes) les récupèrent pendant le rendu.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', csp)
+
+  // Laisse passer la requête en attachant la CSP (réponse) + le nonce (requête).
+  const allow = () => {
+    const res = NextResponse.next({ request: { headers: requestHeaders } })
+    res.headers.set('Content-Security-Policy', csp)
+    return res
+  }
+
+  // ── Contrôle d'accès basé sur le rôle (routes protégées uniquement) ──
   const isAdminRoute = pathname.startsWith('/admin')
   const isEmployeeRoute = pathname.startsWith('/employee')
 
   if (!isAdminRoute && !isEmployeeRoute) {
-    return NextResponse.next()
+    return allow()
   }
 
   const sessionCookie = request.cookies.get('fitevo_session')
@@ -53,29 +105,28 @@ export async function proxy(request: NextRequest) {
 
   const parts = sessionCookie.value.split(':')
   if (parts.length !== 2) {
-    return clearSessionAndRedirect(new URL('/', request.url), request)
+    return clearSessionAndRedirect(new URL('/', request.url))
   }
 
   const [hexPayload, hmac] = parts
   const secret = getSessionSecret()
 
   if (!secret) {
-    return clearSessionAndRedirect(new URL('/', request.url), request)
+    return clearSessionAndRedirect(new URL('/', request.url))
   }
 
   const isValid = await verifyHmac(hexPayload, hmac, secret)
   if (!isValid) {
-    return clearSessionAndRedirect(new URL('/', request.url), request)
+    return clearSessionAndRedirect(new URL('/', request.url))
   }
 
   let payload: { id: string; role: string }
   try {
     payload = JSON.parse(decodeHex(hexPayload))
   } catch {
-    return clearSessionAndRedirect(new URL('/', request.url), request)
+    return clearSessionAndRedirect(new URL('/', request.url))
   }
 
-  // Contrôle d'accès basé sur le rôle
   if (isAdminRoute && payload.role !== 'admin' && payload.role !== 'superadmin') {
     return NextResponse.redirect(new URL('/access-denied', request.url))
   }
@@ -84,9 +135,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/access-denied', request.url))
   }
 
-  return NextResponse.next()
+  return allow()
 }
 
 export const config = {
-  matcher: ['/admin', '/admin/:path*', '/employee', '/employee/:path*'],
+  // S'applique à toutes les pages (pour la CSP) sauf les assets statiques et les
+  // images optimisées. La protection par rôle ne concerne que /admin et /employee.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|favicon_io|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|avif|woff|woff2)$).*)',
+  ],
 }

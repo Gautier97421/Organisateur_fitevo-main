@@ -156,7 +156,8 @@ export async function POST(request: NextRequest) {
     // Succès - enregistrer et retourner les informations
     recordLoginAttempt(identifier, true)
     
-    logger.info('Connexion réussie pour:', user.email)
+    // RGPD: ne pas journaliser de données personnelles (email). On utilise l'id interne.
+    logger.info('Connexion réussie pour l’utilisateur:', user.id)
 
     // Auto-migration: si l'ancien hash SHA-256 est utilisé, le mettre à jour avec bcrypt
     if (!user.password.startsWith('$2b$') && !user.password.startsWith('$2a$')) {

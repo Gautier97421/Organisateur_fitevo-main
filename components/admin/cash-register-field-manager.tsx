@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Edit2, Trash2, GripVertical } from "lucide-react"
+import { Plus, Edit2, Trash2, GripVertical, Banknote } from "lucide-react"
+import { getUserEmail } from "@/lib/current-user"
 
 interface CashRegisterField {
   id: string
@@ -113,7 +114,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
           })
         })
       } else {
-        const userEmail = localStorage.getItem("userEmail") || "admin"
+        const userEmail = getUserEmail() || "admin"
         await fetch("/api/db/cash-register-fields", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -181,28 +182,24 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="border-2 border-blue-200 bg-blue-50">
-        <CardHeader className="pb-4">
-          <div className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl">Champs de Caisse Personnalisés</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">Gérez les champs supplémentaires pour la fiche de caisse</p>
-            </div>
-            <Button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleOpenDialog()
-              }}
-              className="bg-blue-600 hover:bg-blue-700 flex-shrink-0"
-              type="button"
-            >
-              <Plus className="h-4 w-4 mr-2" /> Ajouter un champ
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
+    <div className="space-y-6">
+      <div className="flex flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Banknote className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Champs de Caisse Personnalisés</h2>
+        </div>
+        <Button
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleOpenDialog()
+          }}
+          className="bg-red-600 hover:bg-red-700 text-white flex-shrink-0"
+          type="button"
+        >
+          <Plus className="h-4 w-4 mr-2" /> Ajouter un champ
+        </Button>
+      </div>
 
       {fields.length === 0 ? (
         <Card>
