@@ -56,6 +56,10 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.hasWorkPeriodAccess = mapped.has_work_period_access
       delete mapped.has_work_period_access
     }
+    if (mapped.has_manager_access !== undefined) {
+      mapped.hasManagerAccess = mapped.has_manager_access
+      delete mapped.has_manager_access
+    }
     if (mapped.role_id !== undefined) {
       mapped.roleId = mapped.role_id
       delete mapped.role_id
@@ -209,6 +213,10 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.hasWorkPeriodAccess !== undefined) {
       mapped.has_work_period_access = mapped.hasWorkPeriodAccess
       delete mapped.hasWorkPeriodAccess
+    }
+    if (mapped.hasManagerAccess !== undefined) {
+      mapped.has_manager_access = mapped.hasManagerAccess
+      delete mapped.hasManagerAccess
     }
     if (mapped.roleId !== undefined) {
       mapped.role_id = mapped.roleId

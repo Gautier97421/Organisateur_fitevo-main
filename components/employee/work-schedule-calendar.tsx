@@ -57,7 +57,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string>("") 
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const [selectedEmployee, setSelectedEmployee] = useState<{ email: string; name: string } | null>(null)
   const [showDayDetailsDialog, setShowDayDetailsDialog] = useState(false)
   const [selectedDayForDetails, setSelectedDayForDetails] = useState<Date | null>(null)
@@ -71,6 +71,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     end_time: "",
     end_date: "",
   })
+  const [isManager, setIsManager] = useState(false)
+  const [currentUserInfo, setCurrentUserInfo] = useState<{ email: string; name: string } | null>(null)
 
   const employeeColors = [
     "bg-red-600",
@@ -84,6 +86,28 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     "bg-red-400",
     "bg-gray-400",
   ]
+
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const userId = getUserId()
+        if (!userId) return
+        const res = await fetch(`/api/db/users/${userId}`)
+        if (!res.ok) return
+        const result = await res.json()
+        const user = result.data
+        if (!user) return
+        const info = { email: user.email, name: user.name }
+        setCurrentUserInfo(info)
+        const manager = user.has_manager_access === true
+        setIsManager(manager)
+        if (!manager) setSelectedEmployee(info)
+      } catch {
+        // silencieux
+      }
+    }
+    loadCurrentUser()
+  }, [])
 
   useEffect(() => {
     const loadData = async () => {
@@ -444,7 +468,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       await loadSchedules()
 
       setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
-      setSelectedEmployee(null)
+      if (isManager) setSelectedEmployee(null)
       setAttemptedSubmit(false)
       setErrorMessage("")
       setShowScheduleDialog(false)
@@ -797,7 +821,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
           setAttemptedSubmit(false)
           setErrorMessage("")
           setSelectedDate(null)
-          setSelectedEmployee(null)
+          if (isManager) setSelectedEmployee(null)
+          // Non-manager : on garde selectedEmployee pointé sur soi-même
         }
       }}>
         <DialogContent className="max-w-[90vw] sm:max-w-md bg-white max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -851,25 +876,38 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Employé <span className="text-red-500">*</span></label>
-              <Select
-                value={selectedEmployee?.email || ""}
-                onValueChange={(email) => {
-                  const emp = employees.find(e => e.email === email)
-                  if (emp) setSelectedEmployee({ email: emp.email, name: emp.name })
-                }}
-              >
-                <SelectTrigger className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !selectedEmployee ? 'border-red-500' : ''}`}>
-                  <SelectValue placeholder="Sélectionner un employé" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.email} value={employee.email}>{employee.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isManager ? (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Employé <span className="text-red-500">*</span></label>
+                <Select
+                  value={selectedEmployee?.email || ""}
+                  onValueChange={(email) => {
+                    const emp = employees.find(e => e.email === email)
+                    if (emp) setSelectedEmployee({ email: emp.email, name: emp.name })
+                    else if (currentUserInfo && email === currentUserInfo.email) setSelectedEmployee(currentUserInfo)
+                  }}
+                >
+                  <SelectTrigger className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !selectedEmployee ? 'border-red-500' : ''}`}>
+                    <SelectValue placeholder="Sélectionner un employé" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentUserInfo && (
+                      <SelectItem value={currentUserInfo.email}>{currentUserInfo.name} (moi)</SelectItem>
+                    )}
+                    {employees.filter(e => e.email !== currentUserInfo?.email).map((employee) => (
+                      <SelectItem key={employee.email} value={employee.email}>{employee.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Employé</label>
+                <p className="text-sm text-gray-800 font-medium px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl">
+                  {currentUserInfo?.name || "—"}
+                </p>
+              </div>
+            )}
 
             {userGyms.length > 1 && (
               <div>

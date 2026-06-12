@@ -61,7 +61,8 @@ export function EmployeeManager() {
     hasCalendarAccess: true,
     hasEventProposalAccess: true,
     hasWorkScheduleAccess: true,
-    hasWorkPeriodAccess: true
+    hasWorkPeriodAccess: true,
+    hasManagerAccess: false,
   })
   const [newAdmin, setNewAdmin] = useState({ name: "", email: "", isSuperAdmin: false })
   const [isAddingAdmin, setIsAddingAdmin] = useState(false)
@@ -94,6 +95,7 @@ export function EmployeeManager() {
     hasEventProposalAccess: boolean;
     hasWorkScheduleAccess: boolean;
     hasWorkPeriodAccess: boolean;
+    hasManagerAccess: boolean;
   } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
@@ -258,6 +260,7 @@ export function EmployeeManager() {
             has_event_proposal_access: newEmployee.hasEventProposalAccess,
             has_work_schedule_access: newEmployee.hasWorkScheduleAccess,
             has_work_period_access: newEmployee.hasWorkPeriodAccess,
+            has_manager_access: newEmployee.hasManagerAccess,
             active: true
           }
         })
@@ -291,7 +294,8 @@ export function EmployeeManager() {
         hasCalendarAccess: true,
         hasEventProposalAccess: true,
         hasWorkScheduleAccess: true,
-        hasWorkPeriodAccess: true
+        hasWorkPeriodAccess: true,
+        hasManagerAccess: false,
       })
       setIsAddingEmployee(false)
     } catch (error) {
@@ -328,7 +332,8 @@ export function EmployeeManager() {
       hasCalendarAccess: employee.has_calendar_access !== false,
       hasEventProposalAccess: employee.has_event_proposal_access !== false,
       hasWorkScheduleAccess: employee.has_work_schedule_access !== false,
-      hasWorkPeriodAccess: employee.has_work_period_access !== false
+      hasWorkPeriodAccess: employee.has_work_period_access !== false,
+      hasManagerAccess: employee.has_manager_access === true,
     })
     setShowEditFormConflict(false)
     setIsEditingEmployee(true)
@@ -399,7 +404,8 @@ export function EmployeeManager() {
           has_calendar_access: editEmployee.hasCalendarAccess,
           has_event_proposal_access: editEmployee.hasEventProposalAccess,
           has_work_schedule_access: editEmployee.hasWorkScheduleAccess,
-          has_work_period_access: editEmployee.hasWorkPeriodAccess
+          has_work_period_access: editEmployee.hasWorkPeriodAccess,
+          has_manager_access: editEmployee.hasManagerAccess,
         })
       })
 
@@ -885,9 +891,24 @@ export function EmployeeManager() {
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {newEmployee.hasWorkPeriodAccess 
-                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                      {newEmployee.hasWorkPeriodAccess
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)"
                         : "L'employé n'aura pas accès aux périodes de travail"}
+                    </div>
+                    <div className="flex items-center space-x-2 pt-1">
+                      <Checkbox
+                        id="perm-manager"
+                        checked={newEmployee.hasManagerAccess}
+                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasManagerAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="perm-manager" className="text-sm text-gray-700">
+                        Accès manager
+                      </Label>
+                    </div>
+                    <div className="ml-6 text-xs text-gray-500">
+                      {newEmployee.hasManagerAccess
+                        ? "L'employé pourra gérer les plannings des autres employés"
+                        : "L'employé n'aura pas accès à la gestion des plannings des autres employés"}
                     </div>
                   </div>
                 </div>
@@ -1107,9 +1128,19 @@ export function EmployeeManager() {
                       </Label>
                     </div>
                     <div className="ml-6 text-xs text-gray-500">
-                      {editEmployee.hasWorkPeriodAccess 
-                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)" 
+                      {editEmployee.hasWorkPeriodAccess
+                        ? "L'employé pourra démarrer des périodes de travail (matin, après-midi, journée)"
                         : "L'employé n'aura pas accès aux périodes de travail"}
+                    </div>
+                    <div className="flex items-center space-x-2 pt-1">
+                      <Checkbox
+                        id="edit-perm-manager"
+                        checked={editEmployee.hasManagerAccess}
+                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasManagerAccess: checked as boolean })}
+                      />
+                      <Label htmlFor="edit-perm-manager" className="text-sm text-gray-700">
+                        Accès manager (gérer les plannings des autres employés)
+                      </Label>
                     </div>
                   </div>
                 </div>
