@@ -210,6 +210,8 @@ model WorkSchedule {
   date             DateTime @map("work_date")
   startTime        String   @map("start_time")
   endTime          String   @map("end_time")
+  endDate          DateTime? @map("end_date")   // fin de période pour les congés
+  label            String   @default("travail") // travail, conges
   period           String?  // matin, aprem, journee (période lancée par employé)
   subPeriod        String?  @map("sub_period") // debut, milieu, fin
   type             String   @default("work") // work, break, absence
@@ -369,7 +371,8 @@ model ScheduledEvent {
   assignedEmployeeEmail String? @map("assigned_employee_email")
   assignedRoleId   String?  @map("assigned_role_id")
   requiresValidation Boolean @default(true) @map("requires_validation")
-  status           String   @default("pending") // pending, moved (déplacé lendemain)
+  status           String   @default("pending") // pending, moved, overdue_notified
+  validationNotifiedAt DateTime? @map("validation_notified_at")
   createdByEmail   String   @map("created_by_email")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")

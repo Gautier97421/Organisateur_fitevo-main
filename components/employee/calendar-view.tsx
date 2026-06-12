@@ -617,37 +617,39 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
           <Calendar className="h-4 w-4 sm:h-5 sm:w-5 inline-block mr-2" />
-          Calendrier & Planning
+          Calendrier évenementiel
         </h2>
       </div>
 
-      {/* Navigation entre vues */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-        <Button
-          variant={activeView === "events" ? "default" : "outline"}
-          onClick={() => setActiveView("events")}
-          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-            activeView === "events"
-              ? "bg-red-600 text-white shadow-lg"
-              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-          }`}
-        >
-          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Événements Annuels
-        </Button>
-        <Button
-          variant={activeView === "schedule" ? "default" : "outline"}
-          onClick={() => setActiveView("schedule")}
-          className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
-            activeView === "schedule"
-              ? "bg-red-600 text-white shadow-lg"
-              : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
-          }`}
-        >
-          <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Planning de Travail
-        </Button>
-      </div>
+      {/* Navigation entre vues — l'onglet Planning n'apparaît que si l'accès est accordé */}
+      {hasWorkScheduleAccess && (
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+          <Button
+            variant={activeView === "events" ? "default" : "outline"}
+            onClick={() => setActiveView("events")}
+            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+              activeView === "events"
+                ? "bg-red-600 text-white shadow-lg"
+                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+            }`}
+          >
+            <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+            Événements Annuels
+          </Button>
+          <Button
+            variant={activeView === "schedule" ? "default" : "outline"}
+            onClick={() => setActiveView("schedule")}
+            className={`text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+              activeView === "schedule"
+                ? "bg-red-600 text-white shadow-lg"
+                : "border-2 border-gray-300 hover:bg-gray-50 bg-white"
+            }`}
+          >
+            <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+            Planning de Travail
+          </Button>
+        </div>
+      )}
 
       {activeView === "events" ? (
         /* Vue Événements Annuels */

@@ -113,6 +113,40 @@ export async function sendWorkRecapEmail(data: {
   await dispatch(data.adminEmails, `Fin de période – ${data.employeeName} (${periodDisplay})`, html)
 }
 
+export async function sendValidationOverdueEmail(data: {
+  eventTitle: string
+  eventDate: string
+  recipientEmails: string[]
+}): Promise<void> {
+  if (data.recipientEmails.length === 0) return
+
+  const dateDisplay = new Date(data.eventDate).toLocaleDateString("fr-FR", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  })
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
+      <div style="background:#f59e0b;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0;font-size:18px">⏰ Validation en retard — FitEvo</h2>
+      </div>
+      <div style="border:1px solid #fcd34d;border-top:none;border-radius:0 0 8px 8px;padding:20px">
+        <p style="color:#374151;margin-bottom:12px">
+          L'événement planifié ci-dessous nécessitait une validation qui n'a pas été effectuée avant la fin de la journée prévue.
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+          <tr><td style="padding:6px 0;color:#6b7280">Événement</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.eventTitle}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280">Date prévue</td><td style="padding:6px 0;font-weight:600;color:#111827">${dateDisplay}</td></tr>
+        </table>
+        <p style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;padding:12px;border-radius:6px;font-size:14px">
+          Veuillez contacter un responsable pour régulariser cette situation.
+        </p>
+        <p style="color:#6b7280;font-size:12px;margin-top:24px">Email automatique FitEvo — ne pas répondre.</p>
+      </div>
+    </div>
+  `
+  await dispatch(data.recipientEmails, `⏰ Validation en retard : ${data.eventTitle}`, html)
+}
+
 export async function sendEmergencyEmail(data: {
   employeeName: string
   employeeEmail: string

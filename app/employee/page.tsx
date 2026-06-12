@@ -13,7 +13,7 @@ import { NewMemberInstructionsDialog } from "@/components/employee/new-member-in
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -48,7 +48,6 @@ export default function EmployeePage() {
   const [userEmail, setUserEmail] = useState("")
   const [userName, setUserName] = useState("")
   const [userRoleId, setUserRoleId] = useState<string | null>(null)
-  const [hasWorkScheduleAccess, setHasWorkScheduleAccess] = useState(false)
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
@@ -205,8 +204,7 @@ export default function EmployeePage() {
       if (response.ok) {
         const { data } = await response.json()
         if (data) {
-          setHasWorkScheduleAccess(data.has_work_schedule_access !== false)
-          setHasCalendarAccess(data.has_calendar_access !== false)
+setHasCalendarAccess(data.has_calendar_access !== false)
           setHasWorkPeriodAccess(data.has_work_period_access !== false)
           
           // Sauvegarder le roleId pour le filtrage des tâches
@@ -758,15 +756,22 @@ export default function EmployeePage() {
 
     const navItems = [
       {
-        id: "planning" as const,
-        label: "Planning",
-        icon: ClipboardList,
+        id: "home" as const,
+        label: "Accueil",
+        icon: Home,
         active: currentView === "menu" || currentView === "tasks",
         onClick: () => {
           setMobileOpen(false)
           if (selectedPeriod) setCurrentView("tasks")
           else setCurrentView("menu")
         },
+      },
+      {
+        id: "schedule" as const,
+        label: "Planning",
+        icon: ClipboardList,
+        active: currentView === "schedule",
+        onClick: () => { setCurrentView("schedule"); setMobileOpen(false) },
       },
       {
         id: "calendar" as const,
@@ -777,7 +782,7 @@ export default function EmployeePage() {
       },
     ]
 
-    const activeLabel = navItems.find((n) => n.active)?.label ?? "Planning"
+    const activeLabel = navItems.find((n) => n.active)?.label ?? "Accueil"
 
     return (
       <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
@@ -1108,12 +1113,21 @@ export default function EmployeePage() {
               </>
             )}
 
-            {/* ── VUE CALENDRIER ─────────────────────────────── */}
+            {/* ── VUE PLANNING (horaires de travail) ──────────── */}
+            {currentView === "schedule" && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <WorkScheduleCalendar />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE CALENDRIER (événements) ─────────────────── */}
             {currentView === "calendar" && (
               <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
                   <CalendarView
-                    hasWorkScheduleAccess={hasWorkScheduleAccess}
+                    hasWorkScheduleAccess={false}
                     hasCalendarAccess={hasCalendarAccess}
                   />
                 </div>

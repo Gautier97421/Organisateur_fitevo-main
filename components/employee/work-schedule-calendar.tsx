@@ -23,6 +23,8 @@ interface WorkSchedule {
   work_date: string
   start_time: string
   end_time: string
+  end_date?: string
+  label?: string   // "travail" | "conges"
   gym_id?: string
   break_duration?: number
   break_start_time?: string
@@ -64,8 +66,10 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   const [scheduleToEdit, setScheduleToEdit] = useState<WorkSchedule | null>(null)
   const [scheduleToDelete, setScheduleToDelete] = useState<WorkSchedule | null>(null)
   const [newSchedule, setNewSchedule] = useState({
+    label: "travail" as "travail" | "conges",
     start_time: "",
     end_time: "",
+    end_date: "",
   })
 
   const employeeColors = [
@@ -325,9 +329,21 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     setAttemptedSubmit(true)
     setErrorMessage("")
     
-    // Validation des champs obligatoires
-    if (!newSchedule.start_time || !newSchedule.end_time || !selectedDate || !selectedEmployee) {
+    // Validation des champs obligatoires selon le label
+    if (!selectedDate || !selectedEmployee) {
       setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
+      return
+    }
+    if (newSchedule.label === "travail" && (!newSchedule.start_time || !newSchedule.end_time)) {
+      setErrorMessage("⚠️ Pour un jour de travail, les heures de début et de fin sont obligatoires")
+      return
+    }
+    if (newSchedule.label === "conges" && !newSchedule.end_date) {
+      setErrorMessage("⚠️ Pour des congés, la date de fin est obligatoire")
+      return
+    }
+    if (newSchedule.label === "conges" && newSchedule.end_date < selectedDate.toISOString().split("T")[0]) {
+      setErrorMessage("⚠️ La date de fin des congés doit être égale ou postérieure à la date de début")
       return
     }
 
@@ -352,14 +368,14 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         let existingSchedules = Array.isArray(checkResult.data) ? checkResult.data : (checkResult.data ? [checkResult.data] : [])
         
         
-        // Filtrer côté client pour garantir qu'on vérifie uniquement les horaires du même employé ET du même jour (exclure les périodes temporaires)
+        // Filtrer côté client pour garantir qu'on vérifie uniquement les horaires du même employé ET du même jour (exclure les périodes temporaires et les congés)
         existingSchedules = existingSchedules.filter((s: any) => {
           const isSameEmployee = s.employee_email === selectedEmployee.email
-          // Normaliser les dates pour comparer (extraire juste YYYY-MM-DD)
           const scheduleDate = s.work_date?.split('T')[0] || s.work_date
           const isSameDate = scheduleDate === selectedDateStr
           const isNotTemporary = !s.is_temporary
-          return isSameEmployee && isSameDate && isNotTemporary
+          const isWork = (s.label || "travail") === "travail"
+          return isSameEmployee && isSameDate && isNotTemporary && isWork
         })
         
         
@@ -396,8 +412,10 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         employee_email: selectedEmployee.email,
         employee_name: selectedEmployee.name,
         work_date: selectedDateStr,
-        start_time: newSchedule.start_time,
-        end_time: newSchedule.end_time,
+        label: newSchedule.label,
+        start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
+        end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
+        end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
         status: "scheduled",
       }
 
@@ -425,10 +443,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       // Recharger les schedules depuis le serveur
       await loadSchedules()
 
-      setNewSchedule({
-        start_time: "",
-        end_time: "",
-      })
+      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
       setSelectedEmployee(null)
       setAttemptedSubmit(false)
       setErrorMessage("")
@@ -476,12 +491,17 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   const getSchedulesForDate = (date: Date) => {
     const dateString = date.toISOString().split("T")[0]
     return schedules.filter((schedule) => {
-      // Gérer différents formats de date
-      const scheduleDate = schedule.work_date 
-        ? (typeof schedule.work_date === 'string' 
-            ? schedule.work_date.split("T")[0] 
+      const scheduleDate = schedule.work_date
+        ? (typeof schedule.work_date === 'string'
+            ? schedule.work_date.split("T")[0]
             : new Date(schedule.work_date).toISOString().split("T")[0])
         : ''
+      if ((schedule.label || "travail") === "conges" && schedule.end_date) {
+        const endDate = typeof schedule.end_date === 'string'
+          ? schedule.end_date.split("T")[0]
+          : new Date(schedule.end_date).toISOString().split("T")[0]
+        return scheduleDate <= dateString && endDate >= dateString
+      }
       return scheduleDate === dateString
     })
   }
@@ -492,24 +512,33 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     setAttemptedSubmit(true)
     setErrorMessage("")
 
-    if (!newSchedule.start_time || !newSchedule.end_time) {
-      setErrorMessage("⚠️ Veuillez remplir tous les champs obligatoires")
-      return
-    }
-
-    if (newSchedule.start_time >= newSchedule.end_time) {
-      setErrorMessage("⚠️ L'heure de début doit être avant l'heure de fin")
-      return
+    if (newSchedule.label === "travail") {
+      if (!newSchedule.start_time || !newSchedule.end_time) {
+        setErrorMessage("⚠️ Veuillez remplir les heures de début et de fin")
+        return
+      }
+      if (newSchedule.start_time >= newSchedule.end_time) {
+        setErrorMessage("⚠️ L'heure de début doit être avant l'heure de fin")
+        return
+      }
+    } else {
+      if (!newSchedule.end_date) {
+        setErrorMessage("⚠️ Veuillez renseigner la date de fin des congés")
+        return
+      }
     }
 
     try {
+      const patchData: any = {
+        label: newSchedule.label,
+        start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
+        end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
+        end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
+      }
       const response = await fetch(`/api/db/work_schedules/${scheduleToEdit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          start_time: newSchedule.start_time,
-          end_time: newSchedule.end_time,
-        })
+        body: JSON.stringify(patchData)
       })
 
       if (!response.ok) {
@@ -520,7 +549,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       await loadSchedules()
       setShowEditDialog(false)
       setScheduleToEdit(null)
-      setNewSchedule({ start_time: "", end_time: "" })
+      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
       setAttemptedSubmit(false)
     } catch (error) {
       setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
@@ -590,6 +619,12 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Titre */}
+      <div>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Planning de travail</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Consultez et gérez les horaires et congés de l'équipe</p>
+      </div>
+
       {/* Sélecteur de salle (si plusieurs salles accessibles) */}
       {userGyms.length > 1 && (
         <Card className="border border-gray-200 shadow-lg bg-white">
@@ -696,16 +731,19 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                     )}
                   </div>
                   <div className="space-y-0.5 md:space-y-1">
-                    {daySchedules.slice(0, 2).map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        className={`text-[8px] md:text-xs p-0.5 md:p-1 rounded text-white truncate ${getEmployeeColor(schedule.employee_email)}`}
-                        title={`${schedule.employee_name || 'Sans nom'}: ${schedule.start_time || ''} - ${schedule.end_time || ''}${schedule.break_start_time ? ` (Pause: ${schedule.break_start_time})` : ""}`}
-                      >
-                        <span className="hidden md:inline">{schedule.employee_name ? schedule.employee_name.split(" ")[0] : 'Employé'} </span>
-                        {schedule.start_time || ''}-{schedule.end_time || ''}
-                      </div>
-                    ))}
+                    {daySchedules.slice(0, 2).map((schedule) => {
+                      const isConges = (schedule.label || "travail") === "conges"
+                      return (
+                        <div
+                          key={schedule.id}
+                          className={`text-[8px] md:text-xs p-0.5 md:p-1 rounded text-white truncate ${isConges ? "bg-green-600" : getEmployeeColor(schedule.employee_email)}`}
+                          title={`${schedule.employee_name || 'Sans nom'}: ${isConges ? "Congés" : `${schedule.start_time || ''} - ${schedule.end_time || ''}`}`}
+                        >
+                          <span className="hidden md:inline">{schedule.employee_name ? schedule.employee_name.split(" ")[0] : 'Employé'} </span>
+                          {isConges ? "🏖️" : `${schedule.start_time || ''}-${schedule.end_time || ''}`}
+                        </div>
+                      )
+                    })}
                     {daySchedules.length > 2 && (
                       <div className="text-[8px] md:text-xs text-gray-500">
                         +{daySchedules.length - 2}
@@ -792,10 +830,29 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
           )}
           
           <div className="space-y-4">
+            {/* Label Travail / Congés */}
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Employé <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Type <span className="text-red-500">*</span></label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "travail" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "travail" ? "bg-red-600 border-red-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-red-400"}`}
+                >
+                  Travail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "conges" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "conges" ? "bg-green-600 border-green-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-green-400"}`}
+                >
+                  Congés
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Employé <span className="text-red-500">*</span></label>
               <Select
                 value={selectedEmployee?.email || ""}
                 onValueChange={(email) => {
@@ -808,30 +865,22 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((employee) => (
-                    <SelectItem key={employee.email} value={employee.email}>
-                      {employee.name}
-                    </SelectItem>
+                    <SelectItem key={employee.email} value={employee.email}>{employee.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             {userGyms.length > 1 && (
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Salle <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  value={selectedGymId}
-                  onValueChange={setSelectedGymId}
-                >
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Salle <span className="text-red-500">*</span></label>
+                <Select value={selectedGymId} onValueChange={setSelectedGymId}>
                   <SelectTrigger className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && selectedGymId === 'all' ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Sélectionner une salle" />
                   </SelectTrigger>
                   <SelectContent>
                     {userGyms.map((gym) => (
-                      <SelectItem key={gym.id} value={gym.id}>
-                        {gym.name}
-                      </SelectItem>
+                      <SelectItem key={gym.id} value={gym.id}>{gym.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -839,43 +888,48 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
             )}
             {userGyms.length === 1 && (
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Salle
-                </label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Salle</label>
+                <Input type="text" value={userGyms[0].name} disabled className="border-2 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed" />
+              </div>
+            )}
+
+            {/* Champs selon le type */}
+            {newSchedule.label === "travail" ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de début <span className="text-red-500">*</span></label>
+                  <Input
+                    type="time"
+                    value={newSchedule.start_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de fin <span className="text-red-500">*</span></label>
+                  <Input
+                    type="time"
+                    value={newSchedule.end_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500' : ''}`}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
+                <p className="text-xs text-gray-500 mb-1">La date de début est la date sélectionnée sur le calendrier.</p>
                 <Input
-                  type="text"
-                  value={userGyms[0].name}
-                  disabled
-                  className="border-2 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed"
+                  type="date"
+                  value={newSchedule.end_date}
+                  min={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_date ? 'border-red-500' : ''}`}
                 />
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure de début <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.start_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
-                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500 focus:border-red-600' : ''}`}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure de fin <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.end_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500 focus:border-red-600' : ''}`}
-                />
-              </div>
-            </div>
           </div>
-          <DialogFooter className="flex space-x-3">
+          <DialogFooter className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -885,12 +939,12 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 setAttemptedSubmit(false)
                 setErrorMessage("")
               }}
-              className="text-lg px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2"
+              className="border-gray-300 flex items-center gap-2"
             >
-              <XCircle className="h-5 w-5" /> Annuler
+              <XCircle className="h-4 w-4" /> Annuler
             </Button>
-            <Button onClick={addSchedule} className="bg-red-600 hover:bg-red-700 text-lg px-6 flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" /> Ajouter
+            <Button onClick={addSchedule} className="bg-red-600 hover:bg-red-700 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Ajouter
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -990,16 +1044,25 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                             </span>
                           </div>
                           <div className="space-y-1 text-sm text-gray-600">
-                            <div className="flex items-center space-x-2">
-                              <Clock className="h-4 w-4" />
-                              <span className="font-medium">
-                                {schedule.start_time} - {schedule.end_time}
-                              </span>
-                            </div>
-                            {schedule.break_start_time && schedule.break_duration && (
-                              <p className="text-gray-600 text-xs mt-1">
-                                🕐 Pause : {schedule.break_start_time} ({schedule.break_duration} min)
-                              </p>
+                            {(schedule.label || "travail") === "conges" ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🏖️</span>
+                                <span className="font-medium text-green-700">
+                                  Congés{schedule.end_date ? ` jusqu'au ${new Date(schedule.end_date + (schedule.end_date.includes("T") ? "" : "T00:00:00")).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center space-x-2">
+                                  <Clock className="h-4 w-4" />
+                                  <span className="font-medium">{schedule.start_time} - {schedule.end_time}</span>
+                                </div>
+                                {schedule.break_start_time && schedule.break_duration && (
+                                  <p className="text-gray-600 text-xs mt-1">
+                                    🕐 Pause : {schedule.break_start_time} ({schedule.break_duration} min)
+                                  </p>
+                                )}
+                              </>
                             )}
                           </div>
                           {canModify && (
@@ -1009,8 +1072,10 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                                 onClick={() => {
                                   setScheduleToEdit(schedule)
                                   setNewSchedule({
-                                    start_time: schedule.start_time,
-                                    end_time: schedule.end_time,
+                                    label: (schedule.label || "travail") as "travail" | "conges",
+                                    start_time: schedule.start_time || "",
+                                    end_time: schedule.end_time || "",
+                                    end_date: schedule.end_date ? schedule.end_date.split("T")[0] : "",
                                   })
                                   setShowDayDetailsDialog(false)
                                   setShowEditDialog(true)
@@ -1059,7 +1124,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         setShowEditDialog(open)
         if (!open) {
           setScheduleToEdit(null)
-          setNewSchedule({ start_time: "", end_time: "" })
+          setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
           setAttemptedSubmit(false)
           setErrorMessage("")
         }
@@ -1068,66 +1133,81 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl flex items-center space-x-2 text-gray-900">
               <Edit2 className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
-              <span>Modifier l'Horaire de Travail</span>
+              <span>Modifier le planning</span>
             </DialogTitle>
-            <DialogDescription className="text-sm md:text-base text-gray-600">
-              {scheduleToEdit && (
-                <>
-                  {scheduleToEdit.employee_name} - {new Date(scheduleToEdit.work_date + 'T00:00:00').toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </>
-              )}
+            <DialogDescription className="text-sm text-gray-600">
+              {scheduleToEdit && `${scheduleToEdit.employee_name} — ${new Date(scheduleToEdit.work_date + 'T00:00:00').toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
             </DialogDescription>
           </DialogHeader>
-          
+
           {errorMessage && (
             <div className="bg-red-50 border-2 border-red-500 rounded-xl p-3 mb-4">
               <p className="text-red-700 text-sm font-medium text-center">{errorMessage}</p>
             </div>
           )}
-          
+
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure de début <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.start_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
-                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500 focus:border-red-600' : ''}`}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Heure de fin <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.end_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500 focus:border-red-600' : ''}`}
-                />
+            {/* Label */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Type</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "travail" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "travail" ? "bg-red-600 border-red-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-red-400"}`}
+                >
+                  Travail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "conges" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "conges" ? "bg-green-600 border-green-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-green-400"}`}
+                >
+                  Congés
+                </button>
               </div>
             </div>
+
+            {newSchedule.label === "travail" ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de début <span className="text-red-500">*</span></label>
+                  <Input
+                    type="time"
+                    value={newSchedule.start_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.start_time ? 'border-red-500' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de fin <span className="text-red-500">*</span></label>
+                  <Input
+                    type="time"
+                    value={newSchedule.end_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_time ? 'border-red-500' : ''}`}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
+                <Input
+                  type="date"
+                  value={newSchedule.end_date}
+                  min={scheduleToEdit ? scheduleToEdit.work_date.split("T")[0] : ""}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
+                  className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_date ? 'border-red-500' : ''}`}
+                />
+              </div>
+            )}
           </div>
-          <DialogFooter className="flex space-x-3">
-            <Button
-              variant="outline"
-              onClick={() => setShowEditDialog(false)}
-              className="flex-1 border-2 rounded-xl"
-            >
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1 border-gray-300">
               Annuler
             </Button>
-            <Button
-              onClick={handleEditSchedule}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-            >
+            <Button onClick={handleEditSchedule} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
               Enregistrer
             </Button>
           </DialogFooter>
