@@ -12,6 +12,8 @@
 const { createServer } = require('node:http')
 const { parse } = require('node:url')
 const { createHmac, timingSafeEqual } = require('node:crypto')
+const { promises: fsp } = require('node:fs')
+const path = require('node:path')
 const next = require('next')
 const { WebSocketServer } = require('ws')
 
@@ -70,10 +72,71 @@ function verifySession(cookieValue) {
   }
 }
 
+// Vérifie le jeton d'accès à un document collaboratif (cf. lib/collab-token.ts).
+function verifyCollabToken(token, docId) {
+  try {
+    if (!token) return null
+    const parts = token.split(':')
+    if (parts.length !== 2) return null
+    const [hexPayload, hmac] = parts
+    const secret = getSessionSecret()
+    if (!secret) return null
+
+    const expected = createHmac('sha256', secret).update(hexPayload).digest('hex')
+    const sigBuf = Buffer.from(hmac, 'hex')
+    const expBuf = Buffer.from(expected, 'hex')
+    if (sigBuf.length !== expBuf.length) return null
+    if (!timingSafeEqual(sigBuf, expBuf)) return null
+
+    const payload = JSON.parse(Buffer.from(hexPayload, 'hex').toString('utf-8'))
+    if (!payload || payload.docId !== docId) return null
+    if (payload.exp && Date.now() / 1000 > payload.exp) return null
+    return payload
+  } catch {
+    return null
+  }
+}
+
+// ── Persistance des documents collaboratifs (état Yjs sur disque) ──
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
+const COLLAB_DIR = path.join(UPLOAD_DIR, 'collab')
+// docId sûr : uniquement caractères de cuid (anti-traversée de chemin).
+const SAFE_DOC_ID = /^[a-zA-Z0-9_-]{1,64}$/
+
+async function loadCollabDoc(docName) {
+  if (!SAFE_DOC_ID.test(docName)) return null
+  try {
+    const buf = await fsp.readFile(path.join(COLLAB_DIR, `${docName}.ydoc`))
+    return new Uint8Array(buf)
+  } catch {
+    return null
+  }
+}
+
+async function saveCollabDoc(docName, update) {
+  if (!SAFE_DOC_ID.test(docName)) return
+  await fsp.mkdir(COLLAB_DIR, { recursive: true })
+  const target = path.join(COLLAB_DIR, `${docName}.ydoc`)
+  const tmp = `${target}.tmp`
+  await fsp.writeFile(tmp, Buffer.from(update))
+  await fsp.rename(tmp, target)
+}
+
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
+  // Chargement dynamique du module ESM de synchronisation Yjs (server.js est en CommonJS).
+  let setupCollabConnection = null
+  let collabWss = null
+  try {
+    const collab = await import('./collab-server.mjs')
+    setupCollabConnection = collab.setupCollabConnection
+    collabWss = new WebSocketServer({ noServer: true })
+  } catch (err) {
+    console.error('Collaboration Yjs indisponible :', err)
+  }
+
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url, true)
     handle(req, res, parsedUrl)
@@ -83,7 +146,36 @@ app.prepare().then(() => {
   const wss = new WebSocketServer({ noServer: true })
 
   server.on('upgrade', (req, socket, head) => {
-    const { pathname } = parse(req.url || '')
+    const parsed = parse(req.url || '', true)
+    const pathname = parsed.pathname
+
+    // ── Collaboration documents (Yjs) ──────────────────────────────
+    // Le client y-websocket place le nom de salle dans le chemin : /api/collab/<docId>
+    if (pathname && pathname.startsWith('/api/collab/')) {
+      if (!setupCollabConnection || !collabWss) {
+        socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+        socket.destroy()
+        return
+      }
+      const docId = decodeURIComponent(pathname.slice('/api/collab/'.length))
+      const token = typeof parsed.query.token === 'string' ? parsed.query.token : ''
+      // Le jeton doit être valide ET correspondre au document demandé.
+      if (!docId || !SAFE_DOC_ID.test(docId) || !verifyCollabToken(token, docId)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+        socket.destroy()
+        return
+      }
+      collabWss.handleUpgrade(req, socket, head, (ws) => {
+        setupCollabConnection(ws, docId, { loadDoc: loadCollabDoc, saveDoc: saveCollabDoc })
+          .catch((err) => {
+            console.error('Erreur connexion collaboration :', err)
+            try { ws.close() } catch {}
+          })
+      })
+      return
+    }
+
+    // ── Messagerie temps réel ──────────────────────────────────────
     if (pathname !== '/api/ws') {
       // Laisser Next gérer les autres upgrades (HMR en dev)
       return

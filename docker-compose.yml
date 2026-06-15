@@ -9,10 +9,11 @@ services:
     restart: always
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      POSTGRES_PASSWORD: Ft3vo-Pg-K7mWq2Rx9LbN4
       POSTGRES_DB: fitevo
     ports:
-      - "5433:5432"
+      # Accessible uniquement en local sur le serveur (pas exposé à Internet)
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,16 +34,15 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     ports:
-      - "3000"
+      - "3001:3000"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://admin:Ft3vo-Pg-K7mWq2Rx9LbN4@postgres:5432/fitevo
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - DB_HOST=postgres
       - DB_PORT=5432
-      - SESSION_SECRET=change-me-in-production-use-openssl-rand-base64-32
       - UPLOAD_DIR=/app/uploads
     depends_on:
       postgres:
@@ -61,9 +61,10 @@ services:
     container_name: fitevo-prisma-studio
     restart: always
     ports:
-      - "5557:5555"
+      # Prisma Studio accessible uniquement en local (tunnel SSH requis pour y accéder)
+      - "127.0.0.1:5557:5555"
     environment:
-      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://admin:Ft3vo-Pg-K7mWq2Rx9LbN4@postgres:5432/fitevo
     depends_on:
       postgres:
         condition: service_healthy

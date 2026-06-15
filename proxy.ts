@@ -53,7 +53,7 @@ function buildCsp(nonce: string): string {
     `style-src 'self' 'unsafe-inline'`, // Tailwind / styles inline
     `img-src 'self' data: https:`,
     `font-src 'self' data:`,
-    `connect-src 'self' ws: wss:`, // API same-origin + WebSocket temps réel
+    `connect-src 'self' ws: wss:`, // API same-origin + WebSocket temps réel (Yjs + messagerie)
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,

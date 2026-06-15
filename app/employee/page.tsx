@@ -9,6 +9,7 @@ import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
 import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
+import { TaskManager } from "@/components/admin/task-manager"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
@@ -50,7 +51,8 @@ export default function EmployeePage() {
   const [userRoleId, setUserRoleId] = useState<string | null>(null)
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule">("menu")
+  const [hasManagerAccess, setHasManagerAccess] = useState(false)
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
@@ -206,6 +208,7 @@ export default function EmployeePage() {
         if (data) {
 setHasCalendarAccess(data.has_calendar_access !== false)
           setHasWorkPeriodAccess(data.has_work_period_access !== false)
+          setHasManagerAccess(data.has_manager_access === true)
           
           // Sauvegarder le roleId pour le filtrage des tâches
           if (data.role_id) {
@@ -780,6 +783,16 @@ setHasCalendarAccess(data.has_calendar_access !== false)
         active: currentView === "calendar",
         onClick: () => { setCurrentView("calendar"); setMobileOpen(false) },
       },
+      // Accès manageur : gestion des tâches (To-Do List), comme côté admin
+      ...(hasManagerAccess
+        ? [{
+            id: "todos" as const,
+            label: "To-Do List",
+            icon: ClipboardList,
+            active: currentView === "todos",
+            onClick: () => { setCurrentView("todos"); setMobileOpen(false) },
+          }]
+        : []),
     ]
 
     const activeLabel = navItems.find((n) => n.active)?.label ?? "Accueil"
@@ -1129,7 +1142,17 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                   <CalendarView
                     hasWorkScheduleAccess={false}
                     hasCalendarAccess={hasCalendarAccess}
+                    isManager={hasManagerAccess}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE TO-DO LIST (accès manageur : gestion des tâches) ─── */}
+            {currentView === "todos" && hasManagerAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <TaskManager />
                 </div>
               </div>
             )}

@@ -178,7 +178,14 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.total_tasks = mapped.totalTasks
       delete mapped.totalTasks
     }
-    // Note: breakDuration et breakStartTime ne sont pas dans le schéma Prisma
+    if (mapped.breakDuration !== undefined) {
+      mapped.break_duration = mapped.breakDuration
+      delete mapped.breakDuration
+    }
+    if (mapped.breakStartTime !== undefined) {
+      mapped.break_start_time = mapped.breakStartTime
+      delete mapped.breakStartTime
+    }
   }
   
   // Mapper les champs de user_gyms
@@ -542,11 +549,7 @@ export async function POST(
             (camelKey === 'employeeRole' || camelKey === 'roleColor')) {
           continue
         }
-        // Ignorer break_duration et break_start_time car ils n'existent pas dans le schéma WorkSchedule
-        if (table === 'work_schedules' && (camelKey === 'breakDuration' || camelKey === 'breakStartTime')) {
-          continue
-        }
-        
+
         converted[camelKey] = value
       }
       
@@ -808,8 +811,9 @@ export async function PATCH(
       )
     }
     
-    // Construire le where selon ce qui est fourni
-    const where: any = id ? { id: parseInt(id) } : { email }
+    // Construire le where selon ce qui est fourni.
+    // id peut être un cuid (string) ou un entier : ne convertir que si purement numérique.
+    const where: any = id ? { id: /^\d+$/.test(id) ? parseInt(id, 10) : id } : { email }
     
     // Convertir snake_case vers camelCase
     const converted: any = {}
@@ -913,9 +917,13 @@ export async function DELETE(
       )
     }
     
-    // Supprimer l'enregistrement par ID
+    // Supprimer l'enregistrement par ID.
+    // La plupart des modèles utilisent un id string (cuid) ; seuls quelques-uns
+    // utilisent un entier auto-incrémenté. On ne convertit en entier que si l'id
+    // est purement numérique, sinon parseInt() casserait les ids cuid (NaN).
+    const idValue: string | number = /^\d+$/.test(id) ? parseInt(id, 10) : id
     const result = await (prisma as any)[prismaModel].delete({
-      where: { id: parseInt(id) }
+      where: { id: idValue }
     })
     
     return NextResponse.json({ data: result, error: null })

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle, CalendarDays, Edit2, Trash2, MapPin } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle, CalendarDays, Edit2, Trash2, MapPin, Bell } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import {
@@ -16,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { supabase } from "@/lib/api-client"
 import { WorkScheduleCalendar } from "./work-schedule-calendar"
 
@@ -52,9 +59,11 @@ interface ScheduledEvent {
 interface CalendarViewProps {
   hasWorkScheduleAccess?: boolean
   hasCalendarAccess?: boolean
+  // Accès manageur : permet de programmer des rappels sur les événements, comme les admins
+  isManager?: boolean
 }
 
-export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess = true }: CalendarViewProps) {
+export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess = true, isManager = false }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -80,7 +89,55 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     location: "",
     event_time: "",
     duration_minutes: 60,
+    requires_validation: false,
   })
+  // Rappels (accès manageur uniquement)
+  const [showReminderDialog, setShowReminderDialog] = useState(false)
+  const [reminderEventId, setReminderEventId] = useState<string | null>(null)
+  const [reminderSettings, setReminderSettings] = useState({
+    reminder_date: "",
+    reminder_time: "09:00",
+    recipient_type: "all" as "all" | "admins" | "employees",
+    custom_message: "",
+  })
+
+  const resetReminder = () => {
+    setReminderSettings({
+      reminder_date: "",
+      reminder_time: "09:00",
+      recipient_type: "all",
+      custom_message: "",
+    })
+    setReminderEventId(null)
+  }
+
+  const addReminder = async (eventId: string) => {
+    try {
+      if (!reminderSettings.reminder_date) return
+
+      // Combiner la date et l'heure choisies par le manageur
+      const reminderDatetime = new Date(`${reminderSettings.reminder_date}T${reminderSettings.reminder_time}:00`)
+      if (isNaN(reminderDatetime.getTime())) return
+
+      const { error } = await supabase.from("event_reminders").insert([
+        {
+          event_id: eventId,
+          reminder_date: reminderDatetime.toISOString(),
+          recipient_type: reminderSettings.recipient_type,
+          custom_message: reminderSettings.custom_message || null,
+          created_by: getUserEmail(),
+        },
+      ])
+
+      if (error) throw error
+
+      setShowReminderDialog(false)
+      resetReminder()
+    } catch (error) {
+      // Erreur silencieuse
+    }
+  }
+
   const getAuthHeaders = (): Record<string, string> => {
     if (typeof window === "undefined") return {}
     const userId = getUserId() || ""
@@ -359,6 +416,28 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         return
       }
 
+      // Accès manageur : si une restriction de validation est demandée, créer
+      // l'événement planifié correspondant (même mécanisme que côté admin).
+      if (isManager && newEvent.requires_validation) {
+        try {
+          await fetch("/api/db/scheduled-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+            body: JSON.stringify({
+              title: newEvent.title,
+              description: newEvent.description,
+              eventDate: toLocalDateOnly(selectedDate.toISOString()),
+              startTime: newEvent.event_time || null,
+              durationMinutes: newEvent.duration_minutes,
+              requiresValidation: true,
+              createdByEmail: userEmail,
+            }),
+          })
+        } catch {
+          // Non bloquant : l'événement est créé même si la planification échoue.
+        }
+      }
+
       // Recharger les événements pour afficher le nouvel événement
       if (calendarView === "year") {
         await loadEvents()
@@ -372,6 +451,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         location: "",
         event_time: "",
         duration_minutes: 60,
+        requires_validation: false,
       })
       setShowEventDialog(false)
       setSelectedDate(null)
@@ -418,7 +498,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
       setShowEditEventDialog(false)
       setEventToEdit(null)
-      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false })
       setAttemptedSubmit(false)
       setErrorMessage("")
     } catch (error) {
@@ -1006,6 +1086,26 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     />
                   </div>
                 </div>
+                {/* Restriction de validation — réservé aux accès manageur, comme les admins */}
+                {isManager && (
+                  <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
+                    <input
+                      type="checkbox"
+                      id="employee-requires-validation"
+                      checked={newEvent.requires_validation}
+                      onChange={(e) => setNewEvent({ ...newEvent, requires_validation: e.target.checked })}
+                      className="mt-1 h-4 w-4 accent-red-600 cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="employee-requires-validation" className="text-sm font-medium text-gray-800 cursor-pointer">
+                        Restriction de validation
+                      </label>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Si activé, l'événement passe au lendemain tant qu'il n'est pas validé.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <Button
@@ -1121,6 +1221,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                                     location: event.location,
                                     event_time: event.event_time || "",
                                     duration_minutes: event.duration_minutes,
+                                    requires_validation: false,
                                   })
                                   setShowDayEventsDialog(false)
                                   setShowEditEventDialog(true)
@@ -1142,6 +1243,25 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                               >
                                 <Trash2 className="h-3 w-3 mr-1" />
                                 Supprimer
+                              </Button>
+                            </div>
+                          )}
+                          {/* Accès manageur : programmer un rappel sur un événement approuvé */}
+                          {isManager && event.status === "approved" && (
+                            <div className="mt-3">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  resetReminder()
+                                  setReminderEventId(event.id)
+                                  setShowDayEventsDialog(false)
+                                  setShowReminderDialog(true)
+                                }}
+                                className="border-gray-300 text-gray-700 hover:bg-gray-50 w-full"
+                              >
+                                <Bell className="h-3 w-3 mr-1" />
+                                Programmer un rappel
                               </Button>
                             </div>
                           )}
@@ -1167,7 +1287,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
             setShowEditEventDialog(open)
             if (!open) {
               setEventToEdit(null)
-              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60 })
+              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false })
               setAttemptedSubmit(false)
               setErrorMessage("")
             }
@@ -1311,6 +1431,102 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl"
                 >
                   Supprimer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de rappel (accès manageur) */}
+          <Dialog
+            open={showReminderDialog}
+            onOpenChange={(open) => {
+              setShowReminderDialog(open)
+              if (!open) resetReminder()
+            }}
+          >
+            <DialogContent className="sm:max-w-md bg-white" aria-describedby="employee-reminder-description">
+              <DialogHeader>
+                <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+                  <Bell className="h-6 w-6 text-red-600" />
+                  <span>Programmer un rappel</span>
+                </DialogTitle>
+                <DialogDescription id="employee-reminder-description" className="text-sm text-gray-600">
+                  Configurez la date et l'heure exacte d'envoi du rappel par email
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">Date d'envoi</label>
+                    <input
+                      type="date"
+                      value={reminderSettings.reminder_date}
+                      onChange={(e) => setReminderSettings({ ...reminderSettings, reminder_date: e.target.value })}
+                      className="w-full border-2 rounded-xl px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">Heure d'envoi</label>
+                    <input
+                      type="time"
+                      value={reminderSettings.reminder_time}
+                      onChange={(e) => setReminderSettings({ ...reminderSettings, reminder_time: e.target.value })}
+                      className="w-full border-2 rounded-xl px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Destinataires</label>
+                  <Select
+                    value={reminderSettings.recipient_type}
+                    onValueChange={(value) =>
+                      setReminderSettings({
+                        ...reminderSettings,
+                        recipient_type: value as "all" | "admins" | "employees",
+                      })
+                    }
+                  >
+                    <SelectTrigger className="border-2 rounded-xl bg-white text-gray-900">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tout le monde</SelectItem>
+                      <SelectItem value="admins">Administrateurs seulement</SelectItem>
+                      <SelectItem value="employees">Employés seulement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Message personnalisé (optionnel)
+                  </label>
+                  <Textarea
+                    placeholder="Message supplémentaire..."
+                    value={reminderSettings.custom_message}
+                    onChange={(e) => setReminderSettings({ ...reminderSettings, custom_message: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowReminderDialog(false)
+                    resetReminder()
+                  }}
+                  className="flex-1 border-2 rounded-xl bg-white border-gray-300 hover:bg-gray-50 flex items-center gap-2 justify-center"
+                >
+                  <XCircle className="h-5 w-5" /> Annuler
+                </Button>
+                <Button
+                  onClick={() => reminderEventId && addReminder(reminderEventId)}
+                  disabled={!reminderSettings.reminder_date}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl"
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Programmer
                 </Button>
               </DialogFooter>
             </DialogContent>

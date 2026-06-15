@@ -70,6 +70,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
     start_time: "",
     end_time: "",
     end_date: "",
+    break_duration: 0,
+    break_start_time: "",
   })
   const [isManager, setIsManager] = useState(false)
   const [currentUserInfo, setCurrentUserInfo] = useState<{ email: string; name: string } | null>(null)
@@ -440,6 +442,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
         end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
         end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
+        break_duration: newSchedule.label === "travail" ? (newSchedule.break_duration || 0) : 0,
+        break_start_time: newSchedule.label === "travail" ? (newSchedule.break_start_time || null) : null,
         status: "scheduled",
       }
 
@@ -467,7 +471,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       // Recharger les schedules depuis le serveur
       await loadSchedules()
 
-      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
+      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "", break_duration: 0, break_start_time: "" })
       if (isManager) setSelectedEmployee(null)
       setAttemptedSubmit(false)
       setErrorMessage("")
@@ -558,6 +562,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
         end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
         end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
+        break_duration: newSchedule.label === "travail" ? (newSchedule.break_duration || 0) : 0,
+        break_start_time: newSchedule.label === "travail" ? (newSchedule.break_start_time || null) : null,
       }
       const response = await fetch(`/api/db/work_schedules/${scheduleToEdit.id}`, {
         method: 'PATCH',
@@ -573,7 +579,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       await loadSchedules()
       setShowEditDialog(false)
       setScheduleToEdit(null)
-      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
+      setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "", break_duration: 0, break_start_time: "" })
       setAttemptedSubmit(false)
     } catch (error) {
       setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
@@ -933,6 +939,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
 
             {/* Champs selon le type */}
             {newSchedule.label === "travail" ? (
+              <>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de début <span className="text-red-500">*</span></label>
@@ -953,6 +960,29 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Pause (minutes)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newSchedule.break_duration || ""}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Début de pause</label>
+                  <Input
+                    type="time"
+                    value={newSchedule.break_start_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+              </div>
+              </>
             ) : (
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
@@ -1114,6 +1144,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                                     start_time: schedule.start_time || "",
                                     end_time: schedule.end_time || "",
                                     end_date: schedule.end_date ? schedule.end_date.split("T")[0] : "",
+                                    break_duration: schedule.break_duration || 0,
+                                    break_start_time: schedule.break_start_time || "",
                                   })
                                   setShowDayDetailsDialog(false)
                                   setShowEditDialog(true)
@@ -1162,7 +1194,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
         setShowEditDialog(open)
         if (!open) {
           setScheduleToEdit(null)
-          setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "" })
+          setNewSchedule({ label: "travail", start_time: "", end_time: "", end_date: "", break_duration: 0, break_start_time: "" })
           setAttemptedSubmit(false)
           setErrorMessage("")
         }
@@ -1207,6 +1239,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
             </div>
 
             {newSchedule.label === "travail" ? (
+              <>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">Heure de début <span className="text-red-500">*</span></label>
@@ -1227,6 +1260,29 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Pause (minutes)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newSchedule.break_duration || ""}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Début de pause</label>
+                  <Input
+                    type="time"
+                    value={newSchedule.break_start_time}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+              </div>
+              </>
             ) : (
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>

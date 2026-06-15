@@ -11,8 +11,12 @@ export const runtime = 'nodejs'
 
 /**
  * GET /api/communication/files/[id]
- * Télécharge une pièce jointe après vérification d'accès (dossier visible OU
- * message d'une conversation dont l'utilisateur est membre). Stream depuis le disque.
+ *
+ * Sert une pièce jointe après vérification d'accès (dossier visible OU message
+ * d'une conversation dont l'utilisateur est membre). Stream depuis le disque.
+ *
+ * `?disposition=inline` affiche le fichier dans le navigateur (prévisualisation)
+ * au lieu de forcer le téléchargement.
  */
 export async function GET(
   request: NextRequest,
@@ -26,6 +30,8 @@ export async function GET(
     if (!reqUser) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 401 })
 
     const { id } = await params
+    const disposition = request.nextUrl.searchParams.get('disposition') === 'inline' ? 'inline' : 'attachment'
+
     if (!(await canAccessAttachment(id, reqUser))) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
@@ -36,8 +42,10 @@ export async function GET(
     const filePath = resolveStoredPath(attachment.storedName)
     if (!filePath) return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
 
+    let fileSize = attachment.size
     try {
-      await stat(filePath)
+      const info = await stat(filePath)
+      fileSize = info.size
     } catch {
       return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
     }
@@ -50,8 +58,8 @@ export async function GET(
     return new NextResponse(webStream, {
       headers: {
         'Content-Type': attachment.mimeType || 'application/octet-stream',
-        'Content-Length': String(attachment.size),
-        'Content-Disposition': `attachment; filename*=UTF-8''${encoded}`,
+        'Content-Length': String(fileSize),
+        'Content-Disposition': `${disposition}; filename*=UTF-8''${encoded}`,
         'X-Content-Type-Options': 'nosniff',
         'Cache-Control': 'private, no-store',
       },

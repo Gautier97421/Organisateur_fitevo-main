@@ -467,6 +467,8 @@ export function WorkScheduleManager() {
         work_date: selectedDate.toISOString().split("T")[0],
         start_time: newSchedule.start_time,
         end_time: newSchedule.end_time,
+        break_duration: newSchedule.break_duration || 0,
+        break_start_time: newSchedule.break_start_time || null,
         status: "scheduled",
         gym_id: addDialogGymId // Toujours ajouter la salle sélectionnée dans le dialog
       }

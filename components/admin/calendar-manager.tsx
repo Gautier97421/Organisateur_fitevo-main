@@ -369,9 +369,7 @@ export function CalendarManager() {
   }
 
   const requestDeleteEvent = (event: CalendarEvent) => {
-    if (isEventPast(event.event_date)) {
-      return
-    }
+    // Les admins peuvent supprimer n'importe quel événement, y compris passés.
     setEventToDelete(event)
     setShowDeleteConfirmDialog(true)
   }
@@ -1231,17 +1229,15 @@ export function CalendarManager() {
                       </div>
                     </div>
                     <div className="flex flex-col space-y-2 ml-4">
-                      {!isEventPast(event.event_date) && (
-                        <Button
-                          onClick={() => requestDeleteEvent(event)}
-                          variant="outline"
-                          className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700"
-                          size="sm"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Supprimer
-                        </Button>
-                      )}
+                      <Button
+                        onClick={() => requestDeleteEvent(event)}
+                        variant="outline"
+                        className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700"
+                        size="sm"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Supprimer
+                      </Button>
                       {event.status === "pending" && (
                         <>
                           <Button
@@ -1992,16 +1988,14 @@ export function CalendarManager() {
                 </Button>
               )}
 
-              {!isEventPast(selectedEventForDetails.event_date) && (
-                <Button
-                  onClick={() => requestDeleteEvent(selectedEventForDetails)}
-                  variant="outline"
-                  className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700 w-full mt-4"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Supprimer l'evenement
-                </Button>
-              )}
+              <Button
+                onClick={() => requestDeleteEvent(selectedEventForDetails)}
+                variant="outline"
+                className="border-2 rounded-xl bg-white hover:bg-red-50 border-red-300 text-red-700 w-full mt-4"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Supprimer l'evenement
+              </Button>
 
               {(() => {
                 const today = new Date().toISOString().split('T')[0]

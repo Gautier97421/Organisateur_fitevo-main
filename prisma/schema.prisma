@@ -211,6 +211,8 @@ model WorkSchedule {
   date             DateTime @map("work_date")
   startTime        String   @map("start_time")
   endTime          String   @map("end_time")
+  breakDuration    Int      @default(0) @map("break_duration") // durée de pause en minutes
+  breakStartTime   String?  @map("break_start_time") // heure de début de pause
   endDate          DateTime? @map("end_date")   // fin de période pour les congés
   label            String   @default("travail") // travail, conges
   period           String?  // matin, aprem, journee (période lancée par employé)

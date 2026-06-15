@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
   if (!auth) return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
 
   try {
+    const reqUser = await getRequestUser(auth.userId)
+    if (!reqUser) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 401 })
+
     const body = await request.json()
     const scope = body.scope === 'group' ? 'group' : 'shared'
     const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -85,15 +88,45 @@ export async function POST(request: NextRequest) {
     const parentId: string | null = typeof body.parentId === 'string' ? body.parentId : null
 
     if (scope === 'shared') {
-      if (!isAppAdmin(auth.role)) {
-        return NextResponse.json({ error: 'Réservé aux administrateurs' }, { status: 403 })
+      // Sous-dossier : on vérifie l'accès au parent et on hérite de ses droits.
+      if (parentId) {
+        const parent = await prisma.folder.findUnique({ where: { id: parentId } })
+        if (!parent) return NextResponse.json({ error: 'Dossier parent introuvable' }, { status: 404 })
+        if (!(await canViewFolder(parent, reqUser))) {
+          return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+        }
+        const folder = await prisma.folder.create({
+          data: {
+            name,
+            scope: 'shared',
+            visibility: parent.visibility,
+            roleIds: parent.roleIds ?? undefined,
+            userIds: parent.userIds ?? undefined,
+            parentId,
+            createdBy: auth.userId,
+          },
+        })
+        return NextResponse.json({ data: folder, error: null })
       }
-      const visibility = ['all', 'admins', 'roles', 'users'].includes(body.visibility) ? body.visibility : 'all'
-      const roleIds = visibility === 'roles' && Array.isArray(body.roleIds) ? body.roleIds : null
-      const userIds = visibility === 'users' && Array.isArray(body.userIds) ? body.userIds : null
+
+      // Dossier racine : tout utilisateur peut en créer un.
+      // - Admin : choix complet (tout le monde / rôles / personnes / privé).
+      // - Employé : uniquement partage avec des personnes (le créateur garde toujours l'accès).
+      let visibility: string
+      let roleIds: any = null
+      let userIds: any = null
+      if (isAppAdmin(auth.role)) {
+        visibility = ['all', 'admins', 'roles', 'users'].includes(body.visibility) ? body.visibility : 'all'
+        roleIds = visibility === 'roles' && Array.isArray(body.roleIds) ? body.roleIds : null
+        userIds = visibility === 'users' && Array.isArray(body.userIds) ? body.userIds : null
+      } else {
+        // Le créateur a toujours accès (via canViewFolder/createdBy) ; il choisit avec qui partager.
+        visibility = 'users'
+        userIds = Array.isArray(body.userIds) ? body.userIds.filter((u: unknown) => typeof u === 'string') : []
+      }
 
       const folder = await prisma.folder.create({
-        data: { name, scope: 'shared', visibility, roleIds, userIds, parentId, createdBy: auth.userId },
+        data: { name, scope: 'shared', visibility, roleIds, userIds, parentId: null, createdBy: auth.userId },
       })
       return NextResponse.json({ data: folder, error: null })
     }

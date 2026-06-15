@@ -96,12 +96,22 @@ export async function PATCH(
       updates.name = name
     }
 
-    // Visibilité uniquement sur les dossiers partagés et si admin
-    if (folder.scope === 'shared' && isAppAdmin(auth.role)) {
-      if (['all', 'admins', 'roles', 'users'].includes(body.visibility)) {
-        updates.visibility = body.visibility
-        updates.roleIds = body.visibility === 'roles' && Array.isArray(body.roleIds) ? body.roleIds : null
-        updates.userIds = body.visibility === 'users' && Array.isArray(body.userIds) ? body.userIds : null
+    // Modification du partage (dossiers partagés uniquement).
+    if (folder.scope === 'shared' && body.visibility !== undefined) {
+      if (isAppAdmin(auth.role)) {
+        // Admin : choix complet.
+        if (['all', 'admins', 'roles', 'users'].includes(body.visibility)) {
+          updates.visibility = body.visibility
+          updates.roleIds = body.visibility === 'roles' && Array.isArray(body.roleIds) ? body.roleIds : null
+          updates.userIds = body.visibility === 'users' && Array.isArray(body.userIds) ? body.userIds : null
+        }
+      } else if (folder.createdBy === auth.userId) {
+        // Créateur non-admin : peut uniquement gérer le partage avec des personnes.
+        updates.visibility = 'users'
+        updates.roleIds = null
+        updates.userIds = Array.isArray(body.userIds)
+          ? body.userIds.filter((u: unknown) => typeof u === 'string')
+          : []
       }
     }
 

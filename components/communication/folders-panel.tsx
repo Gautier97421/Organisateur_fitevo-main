@@ -13,10 +13,25 @@ import {
 } from "@/components/ui/select"
 import {
   FolderClosed, FolderPlus, Upload, Download, FileText, ChevronRight,
-  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X,
+  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X, Eye,
 } from "lucide-react"
 import type { Conversation, Folder, FolderFile, DirectoryUser } from "./types"
-import { conversationTitle } from "./types"
+import { CollabEditorDialog } from "./collab-editor-dialog"
+import { FilePreviewDialog } from "./file-preview-dialog"
+
+// Type MIME interne des documents collaboratifs (éditeur Tiptap/Yjs).
+const COLLAB_DOC_MIME = "application/vnd.fitevo-doc"
+
+// Un document collaboratif (éditable en ligne) vs un fichier classique.
+function isCollabDoc(file: FolderFile): boolean {
+  return file.mimeType === COLLAB_DOC_MIME
+}
+
+// Fichier texte .txt existant : éditable en collaboratif (texte brut).
+function isTextEditable(file: FolderFile): boolean {
+  const ext = (file.fileName.split(".").pop() || "").toLowerCase()
+  return file.mimeType === "text/plain" || ext === "txt"
+}
 
 interface Props {
   currentUser: { id: string; name: string; role: string }
@@ -40,9 +55,8 @@ function visibilityLabel(v: string): string {
   return ""
 }
 
-export function FoldersPanel({ currentUser, conversations }: Props) {
+export function FoldersPanel({ currentUser }: Props) {
   const isAdmin = currentUser.role === "admin" || currentUser.role === "superadmin"
-  const groups = conversations.filter((c) => c.type === "group")
 
   const [rootFolders, setRootFolders] = useState<FolderWithMeta[]>([])
   const [path, setPath] = useState<PathItem[]>([])
@@ -60,6 +74,11 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
   const [editFolder, setEditFolder] = useState<FolderWithMeta | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
+  // Document ouvert dans l'éditeur collaboratif (doc = HTML, text = .txt brut)
+  const [editorTarget, setEditorTarget] = useState<{ id: string; name: string; kind: "doc" | "text" } | null>(null)
+  const [creatingDoc, setCreatingDoc] = useState(false)
+  // Fichier affiché dans la modale d'aperçu
+  const [previewTarget, setPreviewTarget] = useState<FolderFile | null>(null)
   const newMenuRef = useRef<HTMLDivElement>(null)
 
   const inRoot = path.length === 0
@@ -79,6 +98,9 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
   const loadRoot = useCallback(async () => {
     setLoading(true)
     setPath([])
+    // Vider le contenu du dossier précédemment ouvert (sinon il reste affiché à l'accueil).
+    setChildren([])
+    setFiles([])
     const res = await fetch("/api/communication/folders")
     if (res.ok) {
       const json = await res.json()
@@ -113,6 +135,36 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
       const json = await res.json()
       setChildren(json.data.children || [])
       setFiles(json.data.files || [])
+    }
+  }
+
+  // Prévisualisation : affiche le fichier dans une modale sur le site.
+  const previewFile = (file: FolderFile) => {
+    setPreviewTarget(file)
+  }
+
+  // Crée un document collaboratif dans le dossier courant puis l'ouvre.
+  const createDocument = async () => {
+    if (!currentFolderId || creatingDoc) return
+    setShowNewMenu(false)
+    setCreatingDoc(true)
+    try {
+      const res = await fetch("/api/communication/docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Nouveau document", folderId: currentFolderId }),
+      })
+      const json = await res.json()
+      if (res.ok && json.data) {
+        await refreshCurrent()
+        setEditorTarget({ id: json.data.id, name: json.data.fileName, kind: "doc" })
+      } else {
+        toast.error(json.error || "Création impossible")
+      }
+    } catch {
+      toast.error("Création impossible")
+    } finally {
+      setCreatingDoc(false)
     }
   }
 
@@ -216,6 +268,16 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
                 <FolderPlus className="w-4 h-4 text-red-500" />
                 Nouveau dossier
               </button>
+              {!inRoot && (
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 text-left disabled:opacity-50"
+                  onClick={createDocument}
+                  disabled={creatingDoc}
+                >
+                  {creatingDoc ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <Pencil className="w-4 h-4 text-red-500" />}
+                  Nouveau document texte
+                </button>
+              )}
               {!inRoot && (
                 <label className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 cursor-pointer">
                   <input type="file" className="hidden" onChange={(e) => { onUpload(e); setShowNewMenu(false) }} disabled={uploading} />
@@ -342,24 +404,74 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
               </div>
             ))}
 
-            {sortedFiles.map((file) => (
-              <a
-                key={file.id}
-                href={`/api/communication/files/${file.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-2 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg group"
-              >
-                <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="truncate text-sm text-gray-900 dark:text-white">{file.fileName}</div>
-                  <div className="text-xs text-gray-400">
-                    {file.uploaderName} · {formatSize(file.size)} · {new Date(file.uploadedAt).toLocaleDateString("fr-FR")}
+            {sortedFiles.map((file) => {
+              const collab = isCollabDoc(file)
+              const txtEdit = !collab && isTextEditable(file)
+              return (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 px-2 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg group"
+                >
+                  {collab
+                    ? <Pencil className="w-5 h-5 text-red-500 flex-shrink-0" />
+                    : <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />}
+                  <button
+                    type="button"
+                    onClick={() => collab ? setEditorTarget({ id: file.id, name: file.fileName, kind: "doc" }) : previewFile(file)}
+                    className="flex-1 min-w-0 text-left"
+                    title={collab ? "Ouvrir le document" : "Prévisualiser"}
+                  >
+                    <div className="truncate text-sm text-gray-900 dark:text-white">{file.fileName}</div>
+                    <div className="text-xs text-gray-400">
+                      {collab ? "Document collaboratif" : `${file.uploaderName} · ${formatSize(file.size)}`} · {new Date(file.uploadedAt).toLocaleDateString("fr-FR")}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    {collab ? (
+                      /* Ouvrir l'éditeur collaboratif (document) */
+                      <button
+                        onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "doc" })}
+                        title="Ouvrir / Modifier"
+                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <>
+                        {/* Prévisualiser */}
+                        <button
+                          onClick={() => previewFile(file)}
+                          title="Prévisualiser"
+                          className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {/* Modifier en collaboratif (fichiers .txt) */}
+                        {txtEdit && (
+                          <button
+                            onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "text" })}
+                            title="Modifier"
+                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {/* Télécharger */}
+                    <a
+                      href={`/api/communication/files/${file.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Télécharger"
+                      className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
                   </div>
                 </div>
-                <Download className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 flex-shrink-0" />
-              </a>
-            ))}
+              )
+            })}
           </div>
         )}
       </ScrollArea>
@@ -410,6 +522,7 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
           open={!!editFolder}
           folder={editFolder}
           isAdmin={isAdmin}
+          currentUserId={currentUser.id}
           onOpenChange={(v: boolean) => { if (!v) setEditFolder(null) }}
           onSaved={(updated) => {
             setEditFolder(null)
@@ -427,8 +540,6 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
           open={showCreate}
           onOpenChange={setShowCreate}
           isAdmin={isAdmin}
-          groups={groups}
-          currentUserId={currentUser.id}
           parentFolder={currentFolder}
           onCreated={() => {
             setShowCreate(false)
@@ -460,43 +571,56 @@ export function FoldersPanel({ currentUser, conversations }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Aperçu d'un fichier (image, PDF, texte) sur le site */}
+      {previewTarget && (
+        <FilePreviewDialog file={previewTarget} onClose={() => setPreviewTarget(null)} />
+      )}
+
+      {/* Éditeur de document collaboratif (Tiptap + Yjs) */}
+      {editorTarget && (
+        <CollabEditorDialog
+          docId={editorTarget.id}
+          docName={editorTarget.name}
+          kind={editorTarget.kind}
+          onClose={() => {
+            setEditorTarget(null)
+            // Recharger pour refléter la taille/maj du document.
+            refreshCurrent()
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Dialogue "Nouveau dossier" ───────────────────────────────────────────────
 
-type AccessType = "all" | "admins" | "roles" | "users" | "group"
+type AccessType = "all" | "admins" | "roles" | "users"
 
 function CreateFolderDialog({
-  open, onOpenChange, isAdmin, groups, currentUserId, parentFolder, onCreated,
+  open, onOpenChange, isAdmin, parentFolder, onCreated,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   isAdmin: boolean
-  groups: Conversation[]
-  currentUserId: string
   parentFolder: PathItem | null
   onCreated: () => void
 }) {
   const isSubFolder = parentFolder !== null
-  const inheritedConvId = parentFolder?.conversationId ?? null
 
   const [name, setName] = useState("")
-  const [access, setAccess] = useState<AccessType>(
-    isSubFolder
-      ? (parentFolder.scope === "group" ? "group" : "all")
-      : (isAdmin ? "all" : "group")
-  )
-  const [selectedGroupId, setSelectedGroupId] = useState(
-    inheritedConvId ?? groups[0]?.id ?? ""
-  )
+  // Admin : choix complet. Employé : partage avec des personnes (toujours accès au créateur).
+  const [access, setAccess] = useState<AccessType>(isAdmin ? "all" : "users")
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([])
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
   const [userSearch, setUserSearch] = useState("")
   const [userCandidates, setUserCandidates] = useState<DirectoryUser[]>([])
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+
+  // Sélecteur de personnes : employé (toujours) ou admin en mode "personnes".
+  const showUserPicker = !isSubFolder && (!isAdmin || access === "users")
 
   useEffect(() => {
     if (isAdmin && !isSubFolder) {
@@ -505,7 +629,7 @@ function CreateFolderDialog({
   }, [isAdmin, isSubFolder])
 
   useEffect(() => {
-    if (access !== "users" || isSubFolder) return
+    if (!showUserPicker) return
     let cancelled = false
     const t = setTimeout(async () => {
       const res = await fetch(`/api/communication/directory?q=${encodeURIComponent(userSearch)}`)
@@ -515,7 +639,7 @@ function CreateFolderDialog({
       }
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [access, userSearch, isSubFolder])
+  }, [showUserPicker, userSearch])
 
   const toggleUser = (id: string) =>
     setSelectedUsers((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -527,15 +651,14 @@ function CreateFolderDialog({
     let body: Record<string, unknown>
 
     if (isSubFolder) {
+      // Sous-dossier : hérite de l'accès du parent (géré côté serveur).
       body = {
         name: name.trim(),
         parentId: parentFolder!.id,
         scope: parentFolder!.scope,
-        ...(parentFolder!.scope === "group" ? { conversationId: inheritedConvId } : { visibility: "all" }),
+        ...(parentFolder!.scope === "group" ? { conversationId: parentFolder!.conversationId } : {}),
       }
-    } else if (access === "group") {
-      body = { name: name.trim(), scope: "group", conversationId: selectedGroupId }
-    } else {
+    } else if (isAdmin) {
       body = {
         name: name.trim(),
         scope: "shared",
@@ -543,6 +666,9 @@ function CreateFolderDialog({
         ...(access === "roles" ? { roleIds: [...selectedRoles] } : {}),
         ...(access === "users" ? { userIds: [...selectedUsers] } : {}),
       }
+    } else {
+      // Employé : dossier partagé. Le créateur garde l'accès ; liste vide = dossier privé.
+      body = { name: name.trim(), scope: "shared", visibility: "users", userIds: [...selectedUsers] }
     }
 
     const res = await fetch("/api/communication/folders", {
@@ -558,9 +684,7 @@ function CreateFolderDialog({
     }
   }
 
-  const canSubmit = !busy && name.trim().length > 0 &&
-    (isSubFolder || (access === "group" ? !!selectedGroupId : true)) &&
-    (!isAdmin && groups.length === 0 ? false : true)
+  const canSubmit = !busy && name.trim().length > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -592,24 +716,14 @@ function CreateFolderDialog({
                   <SelectItem value="admins">Administrateurs uniquement</SelectItem>
                   <SelectItem value="roles">Rôles spécifiques</SelectItem>
                   <SelectItem value="users">Personnes spécifiques</SelectItem>
-                  <SelectItem value="group">Un groupe</SelectItem>
                 </SelectContent>
               </Select>
             )}
 
-            {!isAdmin && groups.length === 0 && (
-              <p className="text-sm text-gray-400">Vous devez être membre d'un groupe pour créer un dossier.</p>
-            )}
-
-            {(access === "group" || !isAdmin) && groups.length > 0 && (
-              <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-                <SelectTrigger><SelectValue placeholder="Choisir un groupe" /></SelectTrigger>
-                <SelectContent>
-                  {groups.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>{conversationTitle(g, currentUserId)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {!isAdmin && (
+              <p className="text-xs text-gray-400">
+                Vous aurez toujours accès à ce dossier. Ajoutez des personnes pour le partager, ou laissez vide pour un dossier privé.
+              </p>
             )}
 
             {access === "roles" && isAdmin && (
@@ -630,7 +744,7 @@ function CreateFolderDialog({
               </div>
             )}
 
-            {access === "users" && isAdmin && (
+            {showUserPicker && (
               <div className="space-y-2">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -677,14 +791,17 @@ function CreateFolderDialog({
 // ─── Dialogue "Modifier un dossier" ──────────────────────────────────────────
 
 function EditFolderDialog({
-  open, onOpenChange, folder, isAdmin, onSaved,
+  open, onOpenChange, folder, isAdmin, currentUserId, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   folder: FolderWithMeta
   isAdmin: boolean
+  currentUserId: string
   onSaved: (updated: Partial<FolderWithMeta>) => void
 }) {
+  // Créateur non-admin : peut gérer le partage (personnes) de son propre dossier.
+  const isCreator = (folder as any).createdBy === currentUserId
   const [name, setName] = useState(folder.name)
   const [access, setAccess] = useState<"all" | "admins" | "roles" | "users">(
     (folder.visibility as "all" | "admins" | "roles" | "users") || "all"
@@ -708,8 +825,10 @@ function EditFolderDialog({
     }
   }, [isAdmin, isShared])
 
+  // Recherche de personnes : admin en mode "users", ou créateur non-admin (partage).
+  const needUserPicker = isShared && (access === "users" || (!isAdmin && isCreator))
   useEffect(() => {
-    if (access !== "users" || !isShared) return
+    if (!needUserPicker) return
     let cancelled = false
     const t = setTimeout(async () => {
       const res = await fetch(`/api/communication/directory?q=${encodeURIComponent(userSearch)}`)
@@ -719,7 +838,7 @@ function EditFolderDialog({
       }
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [access, userSearch, isShared])
+  }, [needUserPicker, userSearch])
 
   const toggleUser = (id: string) =>
     setSelectedUsers((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -734,6 +853,10 @@ function EditFolderDialog({
       body.visibility = access
       if (access === "roles") body.roleIds = [...selectedRoles]
       if (access === "users") body.userIds = [...selectedUsers]
+    } else if (isCreator && isShared) {
+      // Créateur non-admin : met à jour le partage avec des personnes.
+      body.visibility = "users"
+      body.userIds = [...selectedUsers]
     }
 
     const res = await fetch(`/api/communication/folders/${folder.id}`, {
@@ -830,6 +953,43 @@ function EditFolderDialog({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Créateur non-admin : gestion du partage de son dossier */}
+        {!isAdmin && isCreator && isShared && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Partager avec des personnes</label>
+            <p className="text-xs text-gray-400">Vous gardez toujours l'accès. Laissez vide pour un dossier privé.</p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Rechercher une personne..." className="pl-8" />
+            </div>
+            {selectedUsers.size > 0 && (
+              <div className="text-xs text-red-600">{selectedUsers.size} personne{selectedUsers.size > 1 ? "s" : ""} sélectionnée{selectedUsers.size > 1 ? "s" : ""}</div>
+            )}
+            <div className="border border-gray-100 dark:border-gray-800 rounded-lg max-h-36 overflow-y-auto">
+              {userCandidates.length === 0
+                ? <div className="text-xs text-gray-400 p-2">Aucun résultat</div>
+                : userCandidates.map((u) => {
+                    const sel = selectedUsers.has(u.id)
+                    return (
+                      <button key={u.id} type="button"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
+                        onClick={() => toggleUser(u.id)}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-gray-400 text-white flex items-center justify-center text-xs flex-shrink-0">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="flex-1 truncate text-sm">{u.name}</span>
+                        <span className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${sel ? "bg-red-600 border-red-600" : "border-gray-300"}`}>
+                          {sel && <Check className="w-3.5 h-3.5 text-white" />}
+                        </span>
+                      </button>
+                    )
+                  })
+              }
+            </div>
           </div>
         )}
 

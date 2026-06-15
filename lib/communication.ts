@@ -22,12 +22,19 @@ export const ALLOWED_MIME_TYPES = new Set<string>([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf',
   'text/plain', 'text/csv',
+  // Microsoft Office
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // OpenDocument (LibreOffice / OpenOffice)
+  'application/vnd.oasis.opendocument.text',          // .odt
+  'application/vnd.oasis.opendocument.spreadsheet',   // .ods
+  'application/vnd.oasis.opendocument.presentation',  // .odp
+  // Texte enrichi
+  'application/rtf', 'text/rtf',
   'application/zip',
 ])
 
@@ -76,6 +83,7 @@ type FolderLike = {
   visibility: string
   roleIds: unknown
   userIds?: unknown
+  createdBy?: string
 }
 
 /**
@@ -94,6 +102,8 @@ export async function canViewFolder(
   }
   // scope === 'shared'
   if (isAppAdmin(user.role)) return true
+  // Le créateur du dossier garde toujours un accès total.
+  if (folder.createdBy && folder.createdBy === user.userId) return true
   if (folder.visibility === 'all') return true
   if (folder.visibility === 'admins') return false
   if (folder.visibility === 'roles') {
