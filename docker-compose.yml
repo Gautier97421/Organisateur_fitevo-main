@@ -47,6 +47,8 @@ services:
     volumes:
       - ./prisma:/app/prisma
       - uploads_dev_data:/app/uploads
+    networks:
+      - npm_network
 
   prisma-studio:
     build:
@@ -68,3 +70,8 @@ services:
 volumes:
   postgres_data:
   uploads_dev_data:
+
+networks:
+  npm_network:
+    external: true
+    name: npm_network
