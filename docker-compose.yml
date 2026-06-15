@@ -37,7 +37,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://admin:admin123@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
       - NODE_ENV=production
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -62,7 +62,7 @@ services:
     ports:
       - "5557:5555"
     environment:
-      - DATABASE_URL=postgresql://admin:admin123@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
     depends_on:
       postgres:
         condition: service_healthy
