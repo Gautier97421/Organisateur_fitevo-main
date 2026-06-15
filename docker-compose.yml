@@ -39,6 +39,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
       - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
       - DB_HOST=postgres
       - DB_PORT=5432
       - SESSION_SECRET=change-me-in-production-use-openssl-rand-base64-32
