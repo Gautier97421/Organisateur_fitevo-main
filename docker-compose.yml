@@ -20,6 +20,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - fitevo_internal
 
   web:
     build:
@@ -48,6 +50,7 @@ services:
       - ./prisma:/app/prisma
       - uploads_dev_data:/app/uploads
     networks:
+      - fitevo_internal
       - npm_network
 
   prisma-studio:
@@ -66,12 +69,16 @@ services:
     volumes:
       - ./prisma:/app/prisma
     command: ["pnpm", "prisma:studio", "--browser", "none", "--port", "5555"]
+    networks:
+      - fitevo_internal
 
 volumes:
   postgres_data:
   uploads_dev_data:
 
 networks:
+  fitevo_internal:
+    driver: bridge
   npm_network:
     external: true
     name: npm_network
