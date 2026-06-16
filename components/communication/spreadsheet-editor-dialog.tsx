@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties } from "react"
-import { Loader2, X, AlertTriangle, Save, Plus, Minus } from "lucide-react"
+import { Loader2, X, AlertTriangle, Save, Plus, Minus, Undo2, Redo2 } from "lucide-react"
 import { loadXlsx, saveXlsx, mergeInfo } from "./xlsx-style"
 
 interface SpreadsheetEditorDialogProps {
@@ -17,6 +17,9 @@ interface SheetData {
   styles?: (CSSProperties | null)[][]
   merges?: string[]
 }
+
+// Plage de sélection : (r1,c1) = ancre, (r2,c2) = cellule active courante
+interface CellRange { r1: number; c1: number; r2: number; c2: number }
 
 function colLabel(index: number): string {
   let s = ""
@@ -88,6 +91,27 @@ function computeDisplay(rows: string[][], FormulaParser: any): string[][] {
   )
 }
 
+// Continue une série de valeurs (pour le remplissage par glisser).
+function computeSeries(vals: string[], count: number): string[] {
+  const out: string[] = []
+  const nonEmpty = vals.filter((v) => v.trim() !== "")
+  const allNumeric = nonEmpty.length > 0 && nonEmpty.every((v) => isNumeric(v))
+  if (allNumeric && nonEmpty.length >= 2) {
+    const nums = nonEmpty.map(Number)
+    const step = (nums[nums.length - 1] - nums[0]) / (nums.length - 1)
+    const last = nums[nums.length - 1]
+    for (let i = 1; i <= count; i++) out.push(String(last + step * i))
+  } else if (allNumeric && nonEmpty.length === 1) {
+    // Une seule valeur numérique : on incrémente de 1 (comportement Excel par défaut)
+    const base = Number(nonEmpty[0])
+    for (let i = 1; i <= count; i++) out.push(String(base + i))
+  } else {
+    // Texte ou motif mixte : on répète le motif sélectionné
+    for (let i = 0; i < count; i++) out.push(vals.length ? vals[i % vals.length] : "")
+  }
+  return out
+}
+
 export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: SpreadsheetEditorDialogProps) {
   const [sheets, setSheets] = useState<SheetData[]>([])
   const [active, setActive] = useState(0)
@@ -96,7 +120,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null)
-  const [selected, setSelected] = useState<{ r: number; c: number } | null>(null)
+  const [selection, setSelection] = useState<CellRange | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null)
   const [fillAnchor, setFillAnchor] = useState<{ r: number; c: number } | null>(null)
   const [fillTarget, setFillTarget] = useState<{ r: number; c: number } | null>(null)
@@ -106,6 +130,20 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   const [FormulaParser, setFormulaParser] = useState<any>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const formulaRefInserted = useRef(false)
+
+  // Sélection à la souris (glisser)
+  const isSelectingRef = useRef(false)
+  // Insertion de référence en mode formule (glisser pour une plage)
+  const formulaSelectingRef = useRef(false)
+  const formulaAnchorRef = useRef<{ r: number; c: number } | null>(null)
+  const refStartRef = useRef(0)
+  const refLenRef = useRef(0)
+
+  // Historique annuler/rétablir
+  const pastRef = useRef<SheetData[][]>([])
+  const futureRef = useRef<SheetData[][]>([])
+  const editDirtyRef = useRef(false)
+  const [, bumpHist] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -179,57 +217,6 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     return () => { document.body.style.cursor = ""; document.body.style.userSelect = "" }
   }, [!!fillAnchor])
 
-  // Fin du drag fill → appliquer le remplissage
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (fillAnchor && fillTarget &&
-        (fillAnchor.r !== fillTarget.r || fillAnchor.c !== fillTarget.c)) {
-        const anchor = fillAnchor
-        const target = fillTarget
-        const dr = target.r - anchor.r
-        const dc = target.c - anchor.c
-        setSheets(prev => {
-          const next = cloneSheets(prev)
-          const sheet = next[active]
-          if (!sheet) return prev
-          const sourceVal = sheet.rows[anchor.r]?.[anchor.c] ?? ""
-
-          if (Math.abs(dr) >= Math.abs(dc) && dr > 0) {
-            // Remplissage vers le bas
-            const prevVal = sheet.rows[anchor.r - 1]?.[anchor.c] ?? ""
-            const step = (prevVal !== "" && isNumeric(prevVal) && isNumeric(sourceVal))
-              ? Number(sourceVal) - Number(prevVal) : null
-            for (let i = 1; i <= dr; i++) {
-              const tr = anchor.r + i
-              while (sheet.rows.length <= tr)
-                sheet.rows.push(Array.from({ length: sheet.rows[0]?.length || 6 }, () => ""))
-              sheet.rows[tr][anchor.c] = step !== null
-                ? String(Number(sourceVal) + step * i) : sourceVal
-            }
-          } else if (Math.abs(dc) > Math.abs(dr) && dc > 0) {
-            // Remplissage vers la droite
-            const prevVal = sheet.rows[anchor.r]?.[anchor.c - 1] ?? ""
-            const step = (prevVal !== "" && isNumeric(prevVal) && isNumeric(sourceVal))
-              ? Number(sourceVal) - Number(prevVal) : null
-            for (let i = 1; i <= dc; i++) {
-              const tc = anchor.c + i
-              while ((sheet.rows[anchor.r]?.length ?? 0) <= tc)
-                sheet.rows[anchor.r].push("")
-              sheet.rows[anchor.r][tc] = step !== null
-                ? String(Number(sourceVal) + step * i) : sourceVal
-            }
-          }
-          return next
-        })
-        setDirty(true)
-      }
-      setFillAnchor(null)
-      setFillTarget(null)
-    }
-    window.addEventListener("mouseup", handleMouseUp)
-    return () => window.removeEventListener("mouseup", handleMouseUp)
-  }, [fillAnchor, fillTarget, active])
-
   const current = sheets[active]
   const isFormulaMode = editing !== null && current != null &&
     (current.rows[editing.r]?.[editing.c] ?? "").startsWith("=")
@@ -248,7 +235,47 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       merges: s.merges ? [...s.merges] : undefined,
     }))
 
+  // ── Historique ──────────────────────────────────────────────────
+  const pushSnapshot = (snap: SheetData[]) => {
+    pastRef.current.push(snap)
+    if (pastRef.current.length > 100) pastRef.current.shift()
+    futureRef.current = []
+    bumpHist((v) => v + 1)
+  }
+
+  // Mutation structurelle (avec snapshot historique)
+  const mutate = (fn: (s: SheetData[]) => SheetData[]) => {
+    pushSnapshot(cloneSheets(sheets))
+    setSheets((prev) => fn(prev))
+    setDirty(true)
+  }
+
+  const undo = () => {
+    if (!pastRef.current.length) return
+    futureRef.current.push(cloneSheets(sheets))
+    const snap = pastRef.current.pop()!
+    setSheets(snap)
+    setEditing(null)
+    setDirty(true)
+    bumpHist((v) => v + 1)
+  }
+
+  const redo = () => {
+    if (!futureRef.current.length) return
+    pastRef.current.push(cloneSheets(sheets))
+    const snap = futureRef.current.pop()!
+    setSheets(snap)
+    setEditing(null)
+    setDirty(true)
+    bumpHist((v) => v + 1)
+  }
+
+  // Modification d'une cellule (groupe l'historique par session d'édition)
   const setCell = (r: number, c: number, value: string) => {
+    if (!editDirtyRef.current) {
+      pushSnapshot(cloneSheets(sheets))
+      editDirtyRef.current = true
+    }
     setSheets((prev) => {
       const next = cloneSheets(prev)
       next[active].rows[r][c] = value
@@ -257,9 +284,55 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     setDirty(true)
   }
 
+  // ── Sélection ───────────────────────────────────────────────────
+  const norm = (s: CellRange) => ({
+    top: Math.min(s.r1, s.r2),
+    bottom: Math.max(s.r1, s.r2),
+    left: Math.min(s.c1, s.c2),
+    right: Math.max(s.c1, s.c2),
+  })
+
+  const inSelection = (r: number, c: number): boolean => {
+    if (!selection) return false
+    const n = norm(selection)
+    return r >= n.top && r <= n.bottom && c >= n.left && c <= n.right
+  }
+
+  const beginEdit = (r: number, c: number, initial?: string) => {
+    setSelection({ r1: r, c1: c, r2: r, c2: c })
+    setEditing({ r, c })
+    editDirtyRef.current = false
+    if (initial !== undefined) setCell(r, c, initial)
+  }
+
+  const moveSelection = (dr: number, dc: number) => {
+    const maxR = (current?.rows.length || 1) - 1
+    const maxC = (current?.rows[0]?.length || 1) - 1
+    setSelection((s) => {
+      const base = s ? { r: s.r1, c: s.c1 } : { r: 0, c: 0 }
+      const nr = Math.max(0, Math.min(maxR, base.r + dr))
+      const nc = Math.max(0, Math.min(maxC, base.c + dc))
+      return { r1: nr, c1: nc, r2: nr, c2: nc }
+    })
+  }
+
+  const clearSelection = () => {
+    if (!selection) return
+    const n = norm(selection)
+    mutate((prev) => {
+      const next = cloneSheets(prev)
+      for (let r = n.top; r <= n.bottom; r++) {
+        for (let c = n.left; c <= n.right; c++) {
+          if (next[active].rows[r]) next[active].rows[r][c] = ""
+        }
+      }
+      return next
+    })
+  }
+
   // ── Insertion / suppression de lignes et colonnes ───────────────
   const insertRowAbove = (r: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
       const cols = sheet.rows[0]?.length || 6
@@ -267,12 +340,11 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       if (sheet.styles) sheet.styles.splice(r, 0, Array.from({ length: cols }, () => null))
       return next
     })
-    setDirty(true)
     setContextMenu(null)
   }
 
   const insertRowBelow = (r: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
       const cols = sheet.rows[0]?.length || 6
@@ -280,12 +352,11 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       if (sheet.styles) sheet.styles.splice(r + 1, 0, Array.from({ length: cols }, () => null))
       return next
     })
-    setDirty(true)
     setContextMenu(null)
   }
 
   const deleteRow = (r: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
       if (sheet.rows.length <= 1) return next
@@ -293,71 +364,178 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       if (sheet.styles) sheet.styles.splice(r, 1)
       return next
     })
-    setDirty(true)
     setContextMenu(null)
   }
 
   const insertColLeft = (c: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
-      sheet.rows = sheet.rows.map(row => { const r = [...row]; r.splice(c, 0, ""); return r })
-      if (sheet.styles) sheet.styles = sheet.styles.map(row => { const r = [...row]; r.splice(c, 0, null); return r })
+      sheet.rows = sheet.rows.map((row) => { const r = [...row]; r.splice(c, 0, ""); return r })
+      if (sheet.styles) sheet.styles = sheet.styles.map((row) => { const r = [...row]; r.splice(c, 0, null); return r })
       return next
     })
-    setDirty(true)
     setContextMenu(null)
   }
 
   const insertColRight = (c: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
-      sheet.rows = sheet.rows.map(row => { const r = [...row]; r.splice(c + 1, 0, ""); return r })
-      if (sheet.styles) sheet.styles = sheet.styles.map(row => { const r = [...row]; r.splice(c + 1, 0, null); return r })
+      sheet.rows = sheet.rows.map((row) => { const r = [...row]; r.splice(c + 1, 0, ""); return r })
+      if (sheet.styles) sheet.styles = sheet.styles.map((row) => { const r = [...row]; r.splice(c + 1, 0, null); return r })
       return next
     })
-    setDirty(true)
     setContextMenu(null)
   }
 
   const deleteCol = (c: number) => {
-    setSheets(prev => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const sheet = next[active]
       if ((sheet.rows[0]?.length ?? 0) <= 1) return next
-      sheet.rows = sheet.rows.map(row => { const r = [...row]; r.splice(c, 1); return r })
-      if (sheet.styles) sheet.styles = sheet.styles.map(row => { const r = [...row]; r.splice(c, 1); return r })
+      sheet.rows = sheet.rows.map((row) => { const r = [...row]; r.splice(c, 1); return r })
+      if (sheet.styles) sheet.styles = sheet.styles.map((row) => { const r = [...row]; r.splice(c, 1); return r })
       return next
     })
-    setDirty(true)
     setContextMenu(null)
+  }
+
+  // ── Insertion de référence en mode formule ──────────────────────
+  const startFormulaRef = (r: number, c: number) => {
+    const ta = textareaRef.current
+    if (!ta || !editing) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const ref = colLabel(c) + (r + 1)
+    const cur = current.rows[editing.r][editing.c]
+    const newVal = cur.slice(0, start) + ref + cur.slice(end)
+    setCell(editing.r, editing.c, newVal)
+    refStartRef.current = start
+    refLenRef.current = ref.length
+    formulaAnchorRef.current = { r, c }
+    formulaSelectingRef.current = true
+    formulaRefInserted.current = true
+    requestAnimationFrame(() => {
+      const t = textareaRef.current
+      if (t) { t.setSelectionRange(start + ref.length, start + ref.length); t.focus() }
+    })
+  }
+
+  const updateFormulaRef = (r: number, c: number) => {
+    const a = formulaAnchorRef.current
+    if (!a || !editing) return
+    const top = Math.min(a.r, r), bottom = Math.max(a.r, r)
+    const left = Math.min(a.c, c), right = Math.max(a.c, c)
+    const ref = (top === bottom && left === right)
+      ? colLabel(left) + (top + 1)
+      : `${colLabel(left)}${top + 1}:${colLabel(right)}${bottom + 1}`
+    const cur = current.rows[editing.r][editing.c]
+    const start = refStartRef.current
+    const newVal = cur.slice(0, start) + ref + cur.slice(start + refLenRef.current)
+    refLenRef.current = ref.length
+    setCell(editing.r, editing.c, newVal)
+    requestAnimationFrame(() => {
+      const t = textareaRef.current
+      if (t) { t.setSelectionRange(start + ref.length, start + ref.length); t.focus() }
+    })
   }
 
   // ── Interactions cellules ───────────────────────────────────────
   const handleCellMouseDown = (e: React.MouseEvent, r: number, c: number) => {
     formulaRefInserted.current = false
-    // Mode formule : cliquer une autre cellule insère sa référence
+    // Mode formule : cliquer (ou glisser) insère une référence
     if (isFormulaMode && editing && !(editing.r === r && editing.c === c)) {
-      e.preventDefault() // Empêche le changement de focus
-      const ref = colLabel(c) + (r + 1)
-      const ta = textareaRef.current
-      if (ta) {
-        const start = ta.selectionStart
-        const end = ta.selectionEnd
-        const currentVal = current.rows[editing.r][editing.c]
-        const newVal = currentVal.slice(0, start) + ref + currentVal.slice(end)
-        setCell(editing.r, editing.c, newVal)
-        requestAnimationFrame(() => {
-          if (textareaRef.current) {
-            textareaRef.current.setSelectionRange(start + ref.length, start + ref.length)
-            textareaRef.current.focus()
-          }
-        })
-      }
-      formulaRefInserted.current = true
+      e.preventDefault() // garde le focus dans le textarea
+      startFormulaRef(r, c)
+      return
+    }
+    if (editing) setEditing(null)
+    if (e.shiftKey && selection) {
+      setSelection({ ...selection, r2: r, c2: c })
+    } else {
+      setSelection({ r1: r, c1: c, r2: r, c2: c })
+      isSelectingRef.current = true
     }
   }
+
+  const handleCellMouseEnter = (r: number, c: number) => {
+    if (isSelectingRef.current) {
+      setSelection((s) => (s ? { ...s, r2: r, c2: c } : { r1: r, c1: c, r2: r, c2: c }))
+    } else if (formulaSelectingRef.current) {
+      updateFormulaRef(r, c)
+    } else if (fillAnchor) {
+      setFillTarget({ r, c })
+    }
+  }
+
+  // Fin de glisser (sélection, formule ou remplissage)
+  useEffect(() => {
+    const onUp = () => {
+      if (fillAnchor && fillTarget && selection) {
+        const n = norm(selection)
+        const down = fillTarget.r > n.bottom
+        const right = fillTarget.c > n.right
+        if (down || right) {
+          pushSnapshot(cloneSheets(sheets))
+          setSheets((prev) => {
+            const next = cloneSheets(prev)
+            const rows = next[active].rows
+            const width = rows[0]?.length || 6
+            if (down) {
+              while (rows.length <= fillTarget.r) rows.push(Array.from({ length: width }, () => ""))
+              const count = fillTarget.r - n.bottom
+              for (let c = n.left; c <= n.right; c++) {
+                const vals: string[] = []
+                for (let r = n.top; r <= n.bottom; r++) vals.push(rows[r]?.[c] ?? "")
+                const series = computeSeries(vals, count)
+                for (let i = 0; i < count; i++) rows[n.bottom + 1 + i][c] = series[i]
+              }
+            } else if (right) {
+              for (const row of rows) { while (row.length <= fillTarget.c) row.push("") }
+              const count = fillTarget.c - n.right
+              for (let r = n.top; r <= n.bottom; r++) {
+                const vals: string[] = []
+                for (let c = n.left; c <= n.right; c++) vals.push(rows[r]?.[c] ?? "")
+                const series = computeSeries(vals, count)
+                for (let i = 0; i < count; i++) rows[r][n.right + 1 + i] = series[i]
+              }
+            }
+            return next
+          })
+          setDirty(true)
+        }
+      }
+      setFillAnchor(null)
+      setFillTarget(null)
+      isSelectingRef.current = false
+      formulaSelectingRef.current = false
+    }
+    window.addEventListener("mouseup", onUp)
+    return () => window.removeEventListener("mouseup", onUp)
+  }, [fillAnchor, fillTarget, selection, sheets, active])
+
+  // Raccourcis clavier (annuler/rétablir, navigation, saisie)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); return }
+      if (mod && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) { e.preventDefault(); redo(); return }
+      if (editing) return // pendant l'édition, le textarea gère le clavier
+      if (mod) return
+      if (!selection) return
+      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); clearSelection(); return }
+      if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); beginEdit(selection.r1, selection.c1); return }
+      if (e.key === "ArrowUp") { e.preventDefault(); moveSelection(-1, 0); return }
+      if (e.key === "ArrowDown") { e.preventDefault(); moveSelection(1, 0); return }
+      if (e.key === "ArrowLeft") { e.preventDefault(); moveSelection(0, -1); return }
+      if (e.key === "ArrowRight") { e.preventDefault(); moveSelection(0, 1); return }
+      if (e.key === "Tab") { e.preventDefault(); moveSelection(0, e.shiftKey ? -1 : 1); return }
+      if (e.key.length === 1 && !e.altKey) { e.preventDefault(); beginEdit(selection.r1, selection.c1, e.key); return }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [editing, selection, sheets, active, current])
 
   const handleContextMenu = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault()
@@ -367,39 +545,30 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   }
 
   const inFillRange = (r: number, c: number): boolean => {
-    if (!fillAnchor || !fillTarget) return false
-    const dr = fillTarget.r - fillAnchor.r
-    const dc = fillTarget.c - fillAnchor.c
-    if (dr === 0 && dc === 0) return false
-    if (Math.abs(dr) >= Math.abs(dc)) {
-      if (dr > 0) return c === fillAnchor.c && r > fillAnchor.r && r <= fillTarget.r
-      if (dr < 0) return c === fillAnchor.c && r >= fillTarget.r && r < fillAnchor.r
-    } else {
-      if (dc > 0) return r === fillAnchor.r && c > fillAnchor.c && c <= fillTarget.c
-      if (dc < 0) return r === fillAnchor.r && c >= fillTarget.c && c < fillAnchor.c
-    }
+    if (!fillAnchor || !fillTarget || !selection) return false
+    const n = norm(selection)
+    if (fillTarget.r > n.bottom) return c >= n.left && c <= n.right && r > n.bottom && r <= fillTarget.r
+    if (fillTarget.c > n.right) return r >= n.top && r <= n.bottom && c > n.right && c <= fillTarget.c
     return false
   }
 
   const addRow = () => {
-    setSheets((prev) => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       const cols = next[active].rows[0]?.length || 6
       next[active].rows.push(Array.from({ length: cols }, () => ""))
       if (next[active].styles) next[active].styles!.push(Array.from({ length: cols }, () => null))
       return next
     })
-    setDirty(true)
   }
 
   const addCol = () => {
-    setSheets((prev) => {
+    mutate((prev) => {
       const next = cloneSheets(prev)
       next[active].rows = next[active].rows.map((row) => [...row, ""])
       if (next[active].styles) next[active].styles = next[active].styles!.map((row) => [...row, null])
       return next
     })
-    setDirty(true)
   }
 
   const save = async () => {
@@ -462,16 +631,17 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   }
 
   // Barre de formule (affiche le contenu brut de la cellule active)
-  const formulaBarValue = editing
-    ? (current?.rows[editing.r]?.[editing.c] ?? "")
-    : selected
-      ? (current?.rows[selected.r]?.[selected.c] ?? "")
-      : ""
-  const formulaBarLabel = editing
-    ? `${colLabel(editing.c)}${editing.r + 1}`
-    : selected
-      ? `${colLabel(selected.c)}${selected.r + 1}`
-      : ""
+  const activeCell = editing ?? (selection ? { r: selection.r1, c: selection.c1 } : null)
+  const formulaBarValue = activeCell ? (current?.rows[activeCell.r]?.[activeCell.c] ?? "") : ""
+  const selectionLabel = (() => {
+    if (!selection) return ""
+    const n = norm(selection)
+    if (n.top === n.bottom && n.left === n.right) return `${colLabel(n.left)}${n.top + 1}`
+    return `${colLabel(n.left)}${n.top + 1}:${colLabel(n.right)}${n.bottom + 1}`
+  })()
+
+  const canUndo = pastRef.current.length > 0
+  const canRedo = futureRef.current.length > 0
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-white dark:bg-gray-900" onClick={() => setContextMenu(null)}>
@@ -482,6 +652,14 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           {dirty && <span className="text-xs text-amber-500 flex-shrink-0">• non enregistré</span>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={undo} disabled={!canUndo || loading} title="Annuler (Ctrl+Z)"
+            className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent">
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button onClick={redo} disabled={!canRedo || loading} title="Rétablir (Ctrl+Y)"
+            className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent">
+            <Redo2 className="w-4 h-4" />
+          </button>
           <button onClick={save} disabled={saving || loading || !dirty}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -496,16 +674,16 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       {/* Barre de formule */}
       {!loading && !error && (
         <div className="flex items-center gap-2 px-3 h-9 border-b border-gray-100 dark:border-gray-800 flex-shrink-0 bg-white dark:bg-gray-900">
-          <span className="text-xs font-mono text-gray-500 w-12 text-center flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5">
-            {formulaBarLabel || "—"}
+          <span className="text-xs font-mono text-gray-500 w-16 text-center flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 truncate">
+            {selectionLabel || "—"}
           </span>
           <span className="text-xs text-gray-400 flex-shrink-0">fx</span>
           <span className="flex-1 text-xs font-mono text-gray-700 dark:text-gray-300 truncate">
-            {formulaBarValue || (isFormulaMode ? "Cliquez une cellule pour insérer sa référence" : "")}
+            {formulaBarValue || (isFormulaMode ? "Cliquez ou glissez sur des cellules pour insérer une référence" : "")}
           </span>
           {isFormulaMode && (
             <span className="text-xs text-blue-500 flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
-              Mode formule — cliquez une cellule
+              Mode formule
             </span>
           )}
         </div>
@@ -543,6 +721,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                 <tbody>
                   {(() => {
                     const mi = mergeInfo(current.merges || [])
+                    const sel = selection ? norm(selection) : null
                     return current.rows.map((row, r) => (
                       <tr key={r}>
                         <td
@@ -556,8 +735,10 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                           if (mi.slaves.has(key)) return null
                           const span = mi.masters.get(key)
                           const isEditing = editing?.r === r && editing?.c === c
-                          const isSelected = !isEditing && selected?.r === r && selected?.c === c
+                          const selectedHere = inSelection(r, c)
+                          const isActive = !isEditing && selection?.r1 === r && selection?.c1 === c
                           const isFilling = inFillRange(r, c)
+                          const isFillCorner = !!sel && !isEditing && r === sel.bottom && c === sel.right
                           const shown = isEditing ? raw : (display?.[r]?.[c] ?? raw)
                           const st = current.styles?.[r]?.[c] || undefined
 
@@ -568,18 +749,14 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                               colSpan={span?.colspan}
                               className={[
                                 "border border-gray-200 dark:border-gray-700 p-0 relative min-w-[7rem] max-w-[20rem] align-top",
-                                isFilling ? "bg-blue-50 dark:bg-blue-900/20" : "",
-                                isSelected ? "outline outline-2 outline-red-500 -outline-offset-1 z-[5]" : "",
+                                isFilling ? "bg-blue-100 dark:bg-blue-900/30" : "",
+                                selectedHere && !isActive && !isFilling ? "bg-blue-50 dark:bg-blue-900/20" : "",
+                                isActive ? "outline outline-2 outline-red-500 -outline-offset-1 z-[5]" : "",
                                 isEditing ? "z-[6]" : "",
                               ].join(" ")}
                               onMouseDown={(e) => handleCellMouseDown(e, r, c)}
-                              onClick={() => {
-                                if (formulaRefInserted.current) { formulaRefInserted.current = false; return }
-                                if (isEditing) return
-                                setSelected({ r, c })
-                                setEditing({ r, c })
-                              }}
-                              onMouseEnter={() => { if (fillAnchor) setFillTarget({ r, c }) }}
+                              onMouseEnter={() => handleCellMouseEnter(r, c)}
+                              onDoubleClick={() => beginEdit(r, c)}
                               onContextMenu={(e) => handleContextMenu(e, r, c)}
                             >
                               {isEditing ? (
@@ -588,17 +765,20 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                                   autoFocus
                                   value={raw}
                                   onChange={(e) => setCell(r, c, e.target.value)}
-                                  onBlur={() => setEditing(null)}
+                                  onBlur={() => { if (!formulaSelectingRef.current) setEditing(null) }}
                                   onKeyDown={(e) => {
                                     if (e.key === "Escape") { e.preventDefault(); setEditing(null) }
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault()
+                                      setEditing(null)
+                                      const nr = r + 1
+                                      if (nr < (current.rows.length || 0)) setSelection({ r1: nr, c1: c, r2: nr, c2: c })
+                                    }
                                     if (e.key === "Tab") {
                                       e.preventDefault()
                                       setEditing(null)
                                       const nc = c + 1
-                                      if (nc < (current.rows[r]?.length || 0)) {
-                                        setSelected({ r, c: nc })
-                                        setTimeout(() => setEditing({ r, c: nc }), 0)
-                                      }
+                                      if (nc < (current.rows[r]?.length || 0)) setSelection({ r1: r, c1: nc, r2: r, c2: nc })
                                     }
                                   }}
                                   rows={Math.min(8, Math.max(1, raw.split("\n").length))}
@@ -614,16 +794,16 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                                 </div>
                               )}
 
-                              {/* Poignée de remplissage (bas-droite de la cellule sélectionnée) */}
-                              {isSelected && !fillAnchor && (
+                              {/* Poignée de remplissage (coin bas-droite de la sélection) */}
+                              {isFillCorner && !fillAnchor && (
                                 <div
                                   className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-red-600 border border-white z-10 cursor-crosshair"
                                   style={{ transform: "translate(50%, 50%)" }}
                                   onMouseDown={(e) => {
                                     e.stopPropagation()
                                     e.preventDefault()
-                                    setFillAnchor({ r, c })
-                                    setFillTarget({ r, c })
+                                    setFillAnchor({ r: sel!.bottom, c: sel!.right })
+                                    setFillTarget({ r: sel!.bottom, c: sel!.right })
                                   }}
                                 />
                               )}
@@ -642,7 +822,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           <div className="flex items-center justify-between gap-2 px-3 h-10 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-x-auto">
             <div className="flex items-center gap-1">
               {sheets.map((s, i) => (
-                <button key={i} onClick={() => { setActive(i); setEditing(null); setSelected(null) }}
+                <button key={i} onClick={() => { setActive(i); setEditing(null); setSelection(null) }}
                   className={`px-3 py-1 text-xs rounded-md whitespace-nowrap ${i === active ? "bg-red-50 text-red-600 dark:bg-red-900/30 font-medium" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>
                   {s.name}
                 </button>
