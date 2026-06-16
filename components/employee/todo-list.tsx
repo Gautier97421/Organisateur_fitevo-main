@@ -268,10 +268,14 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
             
             // Mettre à jour le statut des tâches selon les données utilisateur
             const mergedTasks = dbTasks.map(task => {
-              // Chercher si l'utilisateur a complété une tâche avec le même titre
-              // On compare juste par titre car c'est l'identifiant unique le plus fiable
+              // Priorité : correspondance par templateTaskId (stocké dans options lors de la validation)
+              // Évite le bug où deux tâches de même titre sont toutes les deux marquées validées
               const userTask = userTasks.find((t: any) => {
-                // Comparaison flexible : même titre ET même période
+                try {
+                  const opts = typeof t.options === 'string' ? JSON.parse(t.options) : (t.options || {})
+                  if (opts?.templateTaskId) return opts.templateTaskId === task.id
+                } catch { /* ignore */ }
+                // Fallback pour les enregistrements anciens sans templateTaskId
                 return t.title === task.title
               })
               
@@ -421,6 +425,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         responseType: taskToValidate.type,
         response: responseValue,
         qcmAllowMultiple: Boolean(taskToValidate.qcmAllowMultiple),
+        templateTaskId: taskToValidate.id, // identifiant du template pour éviter les doublons par titre
       }
 
       // Sauvegarder dans la base de données
@@ -453,8 +458,17 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       }
       
       const existingTaskData = await existingTaskResponse.json()
-      const existingTask = Array.isArray(existingTaskData.data) ? existingTaskData.data[0] : existingTaskData.data
-      
+      const existingCandidates = Array.isArray(existingTaskData.data)
+        ? existingTaskData.data
+        : existingTaskData.data ? [existingTaskData.data] : []
+      // Préférer la correspondance par templateTaskId (évite les faux positifs avec des titres identiques)
+      const existingTask = existingCandidates.find((t: any) => {
+        try {
+          const opts = typeof t.options === 'string' ? JSON.parse(t.options) : (t.options || {})
+          return opts?.templateTaskId === taskToValidate.id
+        } catch { return false }
+      }) || null
+
       if (existingTask) {
         // Mettre à jour la tâche existante
         const updateResponse = await fetch(`/api/db/tasks/${existingTask.id}`, {

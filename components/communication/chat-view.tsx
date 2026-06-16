@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowLeft, Send, Paperclip, X, Settings, Users, Download, FileText,
-  Loader2, Pin, PinOff, Images,
+  Loader2, Pin, PinOff, Images, Image as ImageIcon,
 } from "lucide-react"
 import { GroupSettingsDialog } from "./group-settings-dialog"
 import { toast } from "sonner"
@@ -79,12 +79,24 @@ export function ChatView({
   const [convAttachments, setConvAttachments] = useState<ConvAttachment[]>([])
   const [loadingAttachments, setLoadingAttachments] = useState(false)
   const [pinnedInfo, setPinnedInfo] = useState<PinnedInfo | null>(null)
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const convId = conversation.id
+
+  // Prévisualisation locale de l'image en attente d'envoi
+  useEffect(() => {
+    if (!pendingFile || !pendingFile.type.startsWith("image/")) {
+      setPendingFilePreview(null)
+      return
+    }
+    const url = URL.createObjectURL(pendingFile)
+    setPendingFilePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [pendingFile])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior }))
@@ -455,7 +467,12 @@ export function ChatView({
       <div className="border-t border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-900">
         {pendingFile && (
           <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded text-sm">
-            <FileText className="w-4 h-4 text-gray-500" />
+            {pendingFilePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={pendingFilePreview} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" />
+            ) : (
+              <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            )}
             <span className="flex-1 truncate">{pendingFile.name}</span>
             <span className="text-xs text-gray-400">{formatSize(pendingFile.size)}</span>
             <button onClick={() => setPendingFile(null)} className="text-gray-400 hover:text-red-600">
@@ -506,6 +523,23 @@ export function ChatView({
 
 function AttachmentBubble({ attachment, mine }: { attachment: AttachmentInfo; mine: boolean }) {
   const href = `/api/communication/files/${attachment.id}`
+  const inlineUrl = `/api/communication/files/${attachment.id}?disposition=inline`
+  const isImage = attachment.mimeType?.startsWith("image/")
+
+  if (isImage) {
+    return (
+      <div className="mb-1">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={inlineUrl}
+          alt={attachment.fileName}
+          className="max-w-[260px] max-h-[200px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => window.open(inlineUrl, "_blank")}
+        />
+      </div>
+    )
+  }
+
   return (
     <a
       href={href}

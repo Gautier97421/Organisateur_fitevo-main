@@ -27,6 +27,7 @@ interface CalendarEvent {
   description?: string
   location: string
   event_date: string
+  event_end_date?: string
   event_time?: string
   duration_minutes: number
   created_by_email: string
@@ -101,6 +102,9 @@ export function CalendarManager() {
     assigned_employee_emails: [] as string[],
     assigned_role_ids: [] as string[],
     requires_validation: false,
+    is_multi_day: false,
+    event_start_date: "",
+    event_end_date: "",
   })
   const [reminderSettings, setReminderSettings] = useState({
     reminder_date: "",
@@ -435,13 +439,19 @@ export function CalendarManager() {
         .order("event_date", { ascending: true })
 
       if (error) throw error
-      
-      // Debug pour voir les données
-      if (data && data.length > 0) {
-      }
-      
+
+      // Événements multi-jours commençant avant l'année mais s'étendant dessus
+      const { data: spanning } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .lte("event_date", endDate)
+        .gte("event_end_date", startDate)
+        .order("event_date", { ascending: true })
+
+      const merged = mergeUniqueById(data || [], spanning || [])
+
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
+      setEvents(mergeCalendarWithScheduledStatuses(merged, scheduledEvents))
     } catch (error) {
     } finally {
       setIsLoading(false)
@@ -475,6 +485,7 @@ export function CalendarManager() {
       const startDate = toLocalDateOnly(startOfMonth.toISOString())
       const endDate = toLocalDateOnly(endOfMonth.toISOString())
 
+      // Événements commençant dans le mois (jour unique ou multi-jours)
       const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
@@ -484,8 +495,18 @@ export function CalendarManager() {
 
       if (error) throw error
 
+      // Événements multi-jours commençant AVANT le mois mais s'étendant dessus
+      const { data: spanning } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .lte("event_date", endDate)
+        .gte("event_end_date", startDate)
+        .order("event_date", { ascending: true })
+
+      const merged = mergeUniqueById(data || [], spanning || [])
+
       const scheduledEvents = await fetchScheduledEventsInRange(startDate, endDate)
-      setEvents(mergeCalendarWithScheduledStatuses(data || [], scheduledEvents))
+      setEvents(mergeCalendarWithScheduledStatuses(merged, scheduledEvents))
     } catch (error) {
       // Erreur silencieuse
     }
@@ -514,29 +535,31 @@ export function CalendarManager() {
 
   const addEvent = async () => {
     setAttemptedSubmit(true)
-    if (!newEvent.title || !newEvent.location || !selectedDate) {
-      return
-    }
-
-    // Valider que selectedDate est une date valide
-    if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
-      return
+    if (!newEvent.title || !newEvent.location) return
+    if (newEvent.is_multi_day) {
+      if (!newEvent.event_start_date || !newEvent.event_end_date) return
+      if (newEvent.event_end_date < newEvent.event_start_date) return
+    } else {
+      if (!selectedDate || !(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) return
     }
 
     try {
       const userEmail = getUserEmail() || ""
       const userName = getUserName() || ""
-
       const userId = getUserId()
-      
-      const { data, error } = await supabase
+      const eventDate = newEvent.is_multi_day
+        ? newEvent.event_start_date
+        : toLocalDateOnly(selectedDate!.toISOString())
+
+      const { error } = await supabase
         .from("calendar_events")
         .insert([
           {
             title: newEvent.title,
             description: newEvent.description,
             location: newEvent.location,
-            event_date: toLocalDateOnly(selectedDate.toISOString()),
+            event_date: eventDate,
+            ...(newEvent.is_multi_day && newEvent.event_end_date ? { event_end_date: newEvent.event_end_date } : {}),
             event_time: newEvent.event_time || null,
             duration_minutes: newEvent.duration_minutes,
             created_by_email: userEmail,
@@ -548,27 +571,28 @@ export function CalendarManager() {
 
       if (error) throw error
 
-      const scheduledResponse = await fetch("/api/db/scheduled-events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          title: newEvent.title,
-          description: newEvent.description,
-          eventDate: toLocalDateOnly(selectedDate.toISOString()),
-          startTime: newEvent.event_time || null,
-          durationMinutes: newEvent.duration_minutes,
-          assignedEmployeeEmails: newEvent.assigned_employee_emails,
-          assignedRoleIds: newEvent.assigned_role_ids,
-          requiresValidation: newEvent.requires_validation,
-          createdByEmail: userEmail,
-        }),
-      })
-
-      if (!scheduledResponse.ok) {
-        throw new Error("Impossible d'enregistrer l'assignation planifiee")
+      if (!newEvent.is_multi_day) {
+        const scheduledResponse = await fetch("/api/db/scheduled-events", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            title: newEvent.title,
+            description: newEvent.description,
+            eventDate,
+            startTime: newEvent.event_time || null,
+            durationMinutes: newEvent.duration_minutes,
+            assignedEmployeeEmails: newEvent.assigned_employee_emails,
+            assignedRoleIds: newEvent.assigned_role_ids,
+            requiresValidation: newEvent.requires_validation,
+            createdByEmail: userEmail,
+          }),
+        })
+        if (!scheduledResponse.ok) {
+          throw new Error("Impossible d'enregistrer l'assignation planifiée")
+        }
       }
 
       // Recharger les événements après l'ajout
@@ -587,6 +611,9 @@ export function CalendarManager() {
         assigned_employee_emails: [],
         assigned_role_ids: [],
         requires_validation: false,
+        is_multi_day: false,
+        event_start_date: "",
+        event_end_date: "",
       })
       setShowAddEventDialog(false)
       setSelectedDate(null)
@@ -610,6 +637,9 @@ export function CalendarManager() {
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
+          ...(newEvent.is_multi_day && newEvent.event_end_date
+            ? { event_end_date: newEvent.event_end_date }
+            : { event_end_date: null }),
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
         })
@@ -634,6 +664,9 @@ export function CalendarManager() {
         assigned_employee_emails: [],
         assigned_role_ids: [],
         requires_validation: false,
+        is_multi_day: false,
+        event_start_date: "",
+        event_end_date: "",
       })
       setAttemptedSubmit(false)
     } catch (error) {
@@ -756,15 +789,24 @@ export function CalendarManager() {
     return months
   }
 
+  // Fusionne deux listes d'événements en supprimant les doublons (par id)
+  const mergeUniqueById = (a: any[], b: any[]): any[] => {
+    const map = new Map<string, any>()
+    for (const ev of [...a, ...b]) {
+      if (ev && ev.id) map.set(ev.id, ev)
+    }
+    return Array.from(map.values())
+  }
+
   const getEventsForMonth = (month: Date) => {
-    const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)
-    const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+    const monthStart = toLocalDateOnly(new Date(month.getFullYear(), month.getMonth(), 1).toISOString())
+    const monthEnd = toLocalDateOnly(new Date(month.getFullYear(), month.getMonth() + 1, 0).toISOString())
 
     return events.filter((event) => {
       try {
-        const eventDate = new Date(event.event_date)
-        if (isNaN(eventDate.getTime())) return false
-        return eventDate >= startOfMonth && eventDate <= endOfMonth
+        const evStart = normalizeDateOnly(event.event_date)
+        const evEnd = event.event_end_date ? normalizeDateOnly(event.event_end_date) : evStart
+        return evStart <= monthEnd && evEnd >= monthStart
       } catch {
         return false
       }
@@ -773,13 +815,13 @@ export function CalendarManager() {
 
   const getEventsForDate = (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) return []
-    
+
     const dateString = toLocalDateOnly(date.toISOString())
     return events.filter((event) => {
       try {
-        const eventDate = new Date(event.event_date)
-        if (isNaN(eventDate.getTime())) return false
-        return toLocalDateOnly(eventDate.toISOString()) === dateString
+        const evStart = normalizeDateOnly(event.event_date)
+        const evEnd = event.event_end_date ? normalizeDateOnly(event.event_end_date) : evStart
+        return dateString >= evStart && dateString <= evEnd
       } catch {
         return false
       }
@@ -844,6 +886,7 @@ export function CalendarManager() {
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date)
+    setNewEvent(prev => ({ ...prev, event_start_date: toLocalDateOnly(date.toISOString()) }))
     setShowAddEventDialog(true)
   }
 
@@ -1146,9 +1189,10 @@ export function CalendarManager() {
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.scheduled_status || event.status)}`}
-                              title={`${event.title} - ${event.scheduled_status || event.status}`}
+                              className={`text-xs p-1 rounded text-white truncate ${event.event_end_date ? "bg-purple-500 dark:bg-purple-600" : getStatusColor(event.scheduled_status || event.status)}`}
+                              title={`${event.title}${event.event_end_date ? " (période)" : ""} - ${event.scheduled_status || event.status}`}
                             >
+                              {event.event_end_date && <span className="mr-1 opacity-80">↔</span>}
                               {event.title}
                             </div>
                           ))}
@@ -1368,6 +1412,9 @@ export function CalendarManager() {
             assigned_employee_emails: [],
             assigned_role_ids: [],
             requires_validation: false,
+            is_multi_day: false,
+            event_start_date: "",
+            event_end_date: "",
           })
         }
       }}>
@@ -1378,19 +1425,21 @@ export function CalendarManager() {
               <span>Nouvel Événement</span>
             </DialogTitle>
             <DialogDescription id="add-event-description" className="text-lg text-gray-600">
-              {selectedDate ? (
-                <>
-                  Date sélectionnée :{" "}
-                  <strong>
-                    {selectedDate.toLocaleDateString("fr-FR", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </strong>
-                </>
-              ) : "Sélectionnez les détails de l'événement"}
+              {newEvent.is_multi_day
+                ? "Définissez les dates de début et de fin de la période"
+                : selectedDate ? (
+                  <>
+                    Date sélectionnée :{" "}
+                    <strong>
+                      {selectedDate.toLocaleDateString("fr-FR", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </strong>
+                  </>
+                ) : "Sélectionnez les détails de l'événement"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1428,6 +1477,53 @@ export function CalendarManager() {
                 rows={3}
               />
             </div>
+            {/* Type d'événement */}
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <span className="text-sm font-medium text-gray-700 flex-shrink-0">Type :</span>
+              <div className="flex bg-white border border-gray-300 rounded-lg p-0.5 gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, is_multi_day: false, event_end_date: "" })}
+                  className={`px-3 py-1 text-xs rounded-md transition-all ${!newEvent.is_multi_day ? "bg-red-600 text-white font-medium shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+                >
+                  Jour unique
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, is_multi_day: true })}
+                  className={`px-3 py-1 text-xs rounded-md transition-all ${newEvent.is_multi_day ? "bg-red-600 text-white font-medium shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+                >
+                  Période
+                </button>
+              </div>
+            </div>
+            {newEvent.is_multi_day && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Date de début <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="date"
+                    value={newEvent.event_start_date}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_start_date: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.event_start_date ? "border-red-500" : ""}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Date de fin <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="date"
+                    value={newEvent.event_end_date}
+                    min={newEvent.event_start_date}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_end_date: e.target.value })}
+                    className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.event_end_date ? "border-red-500" : ""}`}
+                  />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
@@ -1547,6 +1643,9 @@ export function CalendarManager() {
                   assigned_employee_emails: [],
                   assigned_role_ids: [],
                   requires_validation: false,
+                  is_multi_day: false,
+                  event_start_date: "",
+                  event_end_date: "",
                 })
               }}
               className="text-sm md:text-lg px-4 md:px-6 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 w-full sm:w-auto"
@@ -1874,13 +1973,17 @@ export function CalendarManager() {
               <div className="space-y-2 text-gray-600 dark:text-gray-400">
                 <p className="flex items-center space-x-2">
                   <Calendar className="h-4 w-4" />
-                  <span>{formatDate(selectedEventForDetails.event_date)}</span>
+                  <span>
+                    {selectedEventForDetails.event_end_date
+                      ? `${formatDate(selectedEventForDetails.event_date)} → ${formatDate(selectedEventForDetails.event_end_date)}`
+                      : formatDate(selectedEventForDetails.event_date)}
+                  </span>
                 </p>
                 <p className="flex items-center space-x-2">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {selectedEventForDetails.event_time 
-                      ? `${formatTime(selectedEventForDetails.event_time)} • Durée : ${selectedEventForDetails.duration_minutes} minutes` 
+                    {selectedEventForDetails.event_time
+                      ? `${formatTime(selectedEventForDetails.event_time)} • Durée : ${selectedEventForDetails.duration_minutes} minutes`
                       : "Heure non précisée"}
                   </span>
                 </p>
@@ -2015,6 +2118,11 @@ export function CalendarManager() {
                         assigned_employee_emails: [],
                         assigned_role_ids: [],
                         requires_validation: false,
+                        is_multi_day: !!selectedEventForDetails.event_end_date,
+                        event_start_date: normalizeDateOnly(selectedEventForDetails.event_date),
+                        event_end_date: selectedEventForDetails.event_end_date
+                          ? normalizeDateOnly(selectedEventForDetails.event_end_date)
+                          : "",
                       })
                       setShowEventDetailsDialog(false)
                       setShowEditEventDialog(true)
@@ -2056,6 +2164,9 @@ export function CalendarManager() {
             assigned_employee_emails: [],
             assigned_role_ids: [],
             requires_validation: false,
+            is_multi_day: false,
+            event_start_date: "",
+            event_end_date: "",
           })
           setAttemptedSubmit(false)
         }
@@ -2114,6 +2225,29 @@ export function CalendarManager() {
                 className="border-2 rounded-xl bg-white text-gray-900 min-h-[80px]"
               />
             </div>
+            {newEvent.is_multi_day && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Date de début</label>
+                  <Input
+                    type="date"
+                    value={newEvent.event_start_date}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_start_date: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin</label>
+                  <Input
+                    type="date"
+                    value={newEvent.event_end_date}
+                    min={newEvent.event_start_date}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_end_date: e.target.value })}
+                    className="border-2 rounded-xl bg-white text-gray-900"
+                  />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">

@@ -121,6 +121,7 @@ model CalendarEvent {
   description      String?
   location         String    @default("")
   eventDate        DateTime  @map("event_date")
+  eventEndDate     DateTime? @map("event_end_date")
   eventTime        String?   @map("event_time")
   durationMinutes  Int       @default(60) @map("duration_minutes")
   createdByEmail   String    @map("created_by_email")

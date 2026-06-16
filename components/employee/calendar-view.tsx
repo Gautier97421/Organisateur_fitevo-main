@@ -32,6 +32,7 @@ interface CalendarEvent {
   description?: string
   location: string
   event_date: string
+  event_end_date?: string
   event_time?: string
   duration_minutes: number
   created_by_email: string
@@ -90,6 +91,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     event_time: "",
     duration_minutes: 60,
     requires_validation: false,
+    is_multi_day: false,
+    event_start_date: "",
+    event_end_date: "",
   })
   // Rappels (accès manageur uniquement)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
@@ -284,19 +288,38 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     }
   }
 
+  // Fusionne deux listes d'événements en supprimant les doublons (par id)
+  const mergeUniqueById = (a: any[], b: any[]): any[] => {
+    const map = new Map<string, any>()
+    for (const ev of [...a, ...b]) {
+      if (ev && ev.id) map.set(ev.id, ev)
+    }
+    return Array.from(map.values())
+  }
+
   const loadEvents = async () => {
     try {
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1)
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31)
+      const startDate = startOfYear.toISOString().split("T")[0]
+      const endDate = endOfYear.toISOString().split("T")[0]
 
       const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
-        .gte("event_date", startOfYear.toISOString().split("T")[0])
-        .lte("event_date", endOfYear.toISOString().split("T")[0])
+        .gte("event_date", startDate)
+        .lte("event_date", endDate)
 
       if (error) throw error
-      setEvents(data || [])
+
+      // Événements multi-jours commençant avant l'année mais s'étendant dessus
+      const { data: spanning } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .lte("event_date", endDate)
+        .gte("event_end_date", startDate)
+
+      setEvents(mergeUniqueById(data || [], spanning || []))
       await loadScheduledEventsForRange(startOfYear, endOfYear)
     } catch (error) {
     }
@@ -308,15 +331,25 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     try {
       const startOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
       const endOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0)
+      const startDate = startOfMonth.toISOString().split("T")[0]
+      const endDate = endOfMonth.toISOString().split("T")[0]
 
       const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
-        .gte("event_date", startOfMonth.toISOString().split("T")[0])
-        .lte("event_date", endOfMonth.toISOString().split("T")[0])
+        .gte("event_date", startDate)
+        .lte("event_date", endDate)
 
       if (error) throw error
-      setEvents(data || [])
+
+      // Événements multi-jours commençant avant le mois mais s'étendant dessus
+      const { data: spanning } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .lte("event_date", endDate)
+        .gte("event_end_date", startDate)
+
+      setEvents(mergeUniqueById(data || [], spanning || []))
       await loadScheduledEventsForRange(startOfMonth, endOfMonth)
     } catch (error) {
       // Erreur silencieuse
@@ -380,22 +413,33 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     setErrorMessage("")
     
     // Validation des champs obligatoires
-    if (!newEvent.title || !newEvent.location || !selectedDate) {
+    if (!newEvent.title || !newEvent.location) {
       setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
       return
     }
-
-    // Valider que selectedDate est une date valide
-    if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
-      setErrorMessage("❌ Date invalide. Veuillez sélectionner une date correcte.")
-      return
+    if (newEvent.is_multi_day) {
+      if (!newEvent.event_start_date || !newEvent.event_end_date) {
+        setErrorMessage("⚠️ Veuillez définir les dates de début et de fin de la période")
+        return
+      }
+      if (newEvent.event_end_date < newEvent.event_start_date) {
+        setErrorMessage("❌ La date de fin doit être après la date de début")
+        return
+      }
+    } else {
+      if (!selectedDate || !(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
+        setErrorMessage("❌ Date invalide. Veuillez sélectionner une date correcte.")
+        return
+      }
     }
 
     try {
       const userEmail = getUserEmail() || ""
       const userName = getUserName() || ""
       const userId = getUserId() || ""
-
+      const eventDate = newEvent.is_multi_day
+        ? newEvent.event_start_date
+        : toLocalDateOnly(selectedDate!.toISOString())
 
       const { error } = await supabase
         .from("calendar_events")
@@ -403,7 +447,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
-          event_date: toLocalDateOnly(selectedDate.toISOString()),
+          event_date: eventDate,
+          ...(newEvent.is_multi_day && newEvent.event_end_date ? { event_end_date: newEvent.event_end_date } : {}),
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
           created_by_email: userEmail,
@@ -417,8 +462,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       }
 
       // Accès manageur : si une restriction de validation est demandée, créer
-      // l'événement planifié correspondant (même mécanisme que côté admin).
-      if (isManager && newEvent.requires_validation) {
+      // l'événement planifié (uniquement pour les événements à jour unique).
+      if (isManager && newEvent.requires_validation && !newEvent.is_multi_day) {
         try {
           await fetch("/api/db/scheduled-events", {
             method: "POST",
@@ -426,7 +471,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
             body: JSON.stringify({
               title: newEvent.title,
               description: newEvent.description,
-              eventDate: toLocalDateOnly(selectedDate.toISOString()),
+              eventDate,
               startTime: newEvent.event_time || null,
               durationMinutes: newEvent.duration_minutes,
               requiresValidation: true,
@@ -452,6 +497,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         event_time: "",
         duration_minutes: 60,
         requires_validation: false,
+        is_multi_day: false,
+        event_start_date: "",
+        event_end_date: "",
       })
       setShowEventDialog(false)
       setSelectedDate(null)
@@ -480,6 +528,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
           title: newEvent.title,
           description: newEvent.description,
           location: newEvent.location,
+          ...(newEvent.is_multi_day && newEvent.event_end_date
+            ? { event_end_date: newEvent.event_end_date }
+            : { event_end_date: null }),
           event_time: newEvent.event_time || null,
           duration_minutes: newEvent.duration_minutes,
         })
@@ -498,7 +549,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
       setShowEditEventDialog(false)
       setEventToEdit(null)
-      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false })
+      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "" })
       setAttemptedSubmit(false)
       setErrorMessage("")
     } catch (error) {
@@ -543,14 +594,14 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   }
 
   const getEventsForMonth = (month: Date) => {
-    const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)
-    const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+    const monthStart = toLocalDateOnly(new Date(month.getFullYear(), month.getMonth(), 1).toISOString())
+    const monthEnd = toLocalDateOnly(new Date(month.getFullYear(), month.getMonth() + 1, 0).toISOString())
 
     return events.filter((event) => {
       try {
-        const eventDate = new Date(event.event_date)
-        if (isNaN(eventDate.getTime())) return false
-        return eventDate >= startOfMonth && eventDate <= endOfMonth
+        const evStart = normalizeDateOnly(event.event_date)
+        const evEnd = event.event_end_date ? normalizeDateOnly(event.event_end_date) : evStart
+        return evStart <= monthEnd && evEnd >= monthStart
       } catch {
         return false
       }
@@ -559,13 +610,13 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
   const getEventsForDate = (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) return []
-    
+
     const dateString = toLocalDateOnly(date.toISOString())
     return events.filter((event) => {
       try {
-        const eventDate = new Date(event.event_date)
-        if (isNaN(eventDate.getTime())) return false
-        return toLocalDateOnly(eventDate.toISOString()) === dateString
+        const evStart = normalizeDateOnly(event.event_date)
+        const evEnd = event.event_end_date ? normalizeDateOnly(event.event_end_date) : evStart
+        return dateString >= evStart && dateString <= evEnd
       } catch {
         return false
       }
@@ -590,8 +641,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   }
 
   const handleDateClick = (date: Date) => {
-    if (!hasCalendarAccess) return // Ignorer si pas de permission
+    if (!hasCalendarAccess) return
     setSelectedDate(date)
+    setNewEvent(prev => ({ ...prev, event_start_date: toLocalDateOnly(date.toISOString()) }))
     setShowEventDialog(true)
   }
 
@@ -890,9 +942,10 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(getEffectiveStatus(event))}`}
-                              title={`${event.title} - ${getStatusLabel(event)}`}
+                              className={`text-xs p-1 rounded text-white truncate ${event.event_end_date ? "bg-purple-500 dark:bg-purple-600" : getStatusColor(getEffectiveStatus(event))}`}
+                              title={`${event.title}${event.event_end_date ? " (période)" : ""} - ${getStatusLabel(event)}`}
                             >
+                              {event.event_end_date && <span className="mr-1 opacity-80">↔</span>}
                               {event.title}
                             </div>
                           ))}
@@ -1003,19 +1056,21 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                   <span>Nouvel Événement</span>
                 </DialogTitle>
                 <DialogDescription id="add-event-description" className="text-sm sm:text-lg text-gray-600">
-                  {selectedDate ? (
-                    <>
-                      Date sélectionnée :{" "}
-                      <strong>
-                        {selectedDate.toLocaleDateString("fr-FR", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </strong>
-                    </>
-                  ) : "Sélectionnez une date dans le calendrier"}
+                  {newEvent.is_multi_day
+                    ? "Définissez les dates de début et de fin de la période"
+                    : selectedDate ? (
+                      <>
+                        Date sélectionnée :{" "}
+                        <strong>
+                          {selectedDate.toLocaleDateString("fr-FR", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </strong>
+                      </>
+                    ) : "Sélectionnez une date dans le calendrier"}
                 </DialogDescription>
               </DialogHeader>
               
@@ -1060,6 +1115,53 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     rows={3}
                   />
                 </div>
+                {/* Type d'événement */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-sm font-medium text-gray-700 flex-shrink-0">Type :</span>
+                  <div className="flex bg-white border border-gray-300 rounded-lg p-0.5 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setNewEvent({ ...newEvent, is_multi_day: false, event_end_date: "" })}
+                      className={`px-3 py-1 text-xs rounded-md transition-all ${!newEvent.is_multi_day ? "bg-red-600 text-white font-medium shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Jour unique
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewEvent({ ...newEvent, is_multi_day: true })}
+                      className={`px-3 py-1 text-xs rounded-md transition-all ${newEvent.is_multi_day ? "bg-red-600 text-white font-medium shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Période
+                    </button>
+                  </div>
+                </div>
+                {newEvent.is_multi_day && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        Date de début <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="date"
+                        value={newEvent.event_start_date}
+                        onChange={(e) => setNewEvent({ ...newEvent, event_start_date: e.target.value })}
+                        className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.event_start_date ? "border-red-500" : ""}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        Date de fin <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="date"
+                        value={newEvent.event_end_date}
+                        min={newEvent.event_start_date}
+                        onChange={(e) => setNewEvent({ ...newEvent, event_end_date: e.target.value })}
+                        className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newEvent.event_end_date ? "border-red-500" : ""}`}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">Heure</label>
@@ -1222,6 +1324,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                                     event_time: event.event_time || "",
                                     duration_minutes: event.duration_minutes,
                                     requires_validation: false,
+                                    is_multi_day: !!event.event_end_date,
+                                    event_start_date: normalizeDateOnly(event.event_date),
+                                    event_end_date: event.event_end_date ? normalizeDateOnly(event.event_end_date) : "",
                                   })
                                   setShowDayEventsDialog(false)
                                   setShowEditEventDialog(true)
@@ -1287,7 +1392,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
             setShowEditEventDialog(open)
             if (!open) {
               setEventToEdit(null)
-              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false })
+              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "" })
               setAttemptedSubmit(false)
               setErrorMessage("")
             }
@@ -1352,6 +1457,29 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     className="border-2 rounded-xl bg-white text-gray-900 min-h-[80px]"
                   />
                 </div>
+                {newEvent.is_multi_day && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Date de début</label>
+                      <Input
+                        type="date"
+                        value={newEvent.event_start_date}
+                        onChange={(e) => setNewEvent({ ...newEvent, event_start_date: e.target.value })}
+                        className="border-2 rounded-xl bg-white text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Date de fin</label>
+                      <Input
+                        type="date"
+                        value={newEvent.event_end_date}
+                        min={newEvent.event_start_date}
+                        onChange={(e) => setNewEvent({ ...newEvent, event_end_date: e.target.value })}
+                        className="border-2 rounded-xl bg-white text-gray-900"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">

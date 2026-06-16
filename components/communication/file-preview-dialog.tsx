@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Loader2, X, Download, FileText, AlertTriangle } from "lucide-react"
 import type { FolderFile } from "./types"
 import { odtToHtml } from "./odf-utils"
+import { mergeInfo } from "./xlsx-style"
 
 interface FilePreviewDialogProps {
   file: FolderFile
@@ -34,7 +35,7 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
   const downloadUrl = `/api/communication/files/${file.id}`
 
   const [text, setText] = useState<string | null>(null)
-  const [sheets, setSheets] = useState<{ name: string; rows: string[][] }[] | null>(null)
+  const [sheets, setSheets] = useState<{ name: string; rows: string[][]; styles?: (React.CSSProperties | null)[][]; merges?: string[] }[] | null>(null)
   const [activeSheet, setActiveSheet] = useState(0)
   const [docHtml, setDocHtml] = useState<string | null>(null)
   const [loading, setLoading] = useState(kind === "text" || kind === "spreadsheet" || kind === "docx" || kind === "odt")
@@ -57,16 +58,25 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
           const t = await res.text()
           if (!cancelled) { setText(t); setLoading(false) }
         } else if (kind === "spreadsheet") {
-          const XLSX = await import("xlsx")
           const res = await fetch(inlineUrl, { credentials: "same-origin" })
           if (!res.ok) throw new Error()
           const buf = await res.arrayBuffer()
-          const wb = XLSX.read(buf, { type: "array" })
-          const parsed = wb.SheetNames.map((name) => {
-            const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" }) as any[][]
-            return { name, rows: aoa.map((r) => r.map((c) => (c == null ? "" : String(c)))) }
-          })
-          if (!cancelled) { setSheets(parsed); setLoading(false) }
+          if (ext(file.fileName) === "xlsx") {
+            // .xlsx : rendu fidèle (styles, formats, fusions) via ExcelJS.
+            const { loadXlsx } = await import("./xlsx-style")
+            const { sheets: loaded } = await loadXlsx(buf)
+            const parsed = loaded.map((s) => ({ name: s.name, rows: s.display, styles: s.styles, merges: s.merges }))
+            if (!cancelled) { setSheets(parsed); setLoading(false) }
+          } else {
+            // .ods / .xls / .csv : valeurs uniquement (SheetJS).
+            const XLSX = await import("xlsx")
+            const wb = XLSX.read(buf, { type: "array" })
+            const parsed = wb.SheetNames.map((name) => {
+              const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" }) as any[][]
+              return { name, rows: aoa.map((r) => r.map((c) => (c == null ? "" : String(c)))) }
+            })
+            if (!cancelled) { setSheets(parsed); setLoading(false) }
+          }
         } else if (kind === "docx") {
           const mammoth = await import("mammoth")
           const res = await fetch(inlineUrl, { credentials: "same-origin" })
@@ -161,18 +171,37 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
             <div className="flex-1 min-h-0 flex flex-col">
               <div className="flex-1 overflow-auto p-2">
                 {sheet && sheet.rows.length > 0 ? (
-                  <table className="border-collapse text-sm">
-                    <tbody>
-                      {sheet.rows.map((row, r) => (
-                        <tr key={r}>
-                          <td className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 text-center text-xs text-gray-400">{r + 1}</td>
-                          {row.map((cell, c) => (
-                            <td key={c} className="border border-gray-200 dark:border-gray-700 px-2 py-1 text-gray-800 dark:text-gray-200 whitespace-nowrap">{cell}</td>
+                  (() => {
+                    const mi = mergeInfo(sheet.merges || [])
+                    return (
+                      <table className="border-collapse text-sm">
+                        <tbody>
+                          {sheet.rows.map((row, r) => (
+                            <tr key={r}>
+                              <td className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 text-center text-xs text-gray-400">{r + 1}</td>
+                              {row.map((cell, c) => {
+                                const key = `${r},${c}`
+                                if (mi.slaves.has(key)) return null
+                                const span = mi.masters.get(key)
+                                const st = sheet.styles?.[r]?.[c] || undefined
+                                return (
+                                  <td
+                                    key={c}
+                                    rowSpan={span?.rowspan}
+                                    colSpan={span?.colspan}
+                                    style={st}
+                                    className="border border-gray-200 dark:border-gray-700 px-2 py-1 text-gray-800 dark:text-gray-200 whitespace-nowrap"
+                                  >
+                                    {cell}
+                                  </td>
+                                )
+                              })}
+                            </tr>
                           ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                        </tbody>
+                      </table>
+                    )
+                  })()
                 ) : (
                   <p className="text-sm text-gray-400 p-4 text-center">Feuille vide</p>
                 )}

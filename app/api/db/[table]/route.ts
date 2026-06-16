@@ -207,6 +207,10 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.event_date = mapped.eventDate
       delete mapped.eventDate
     }
+    if (mapped.eventEndDate !== undefined) {
+      mapped.event_end_date = mapped.eventEndDate
+      delete mapped.eventEndDate
+    }
     if (mapped.eventTime !== undefined) {
       mapped.event_time = mapped.eventTime
       delete mapped.eventTime
@@ -330,7 +334,7 @@ export async function GET(
           if (field === 'eventDate') field = 'eventDate'
           // Convertir les dates simples en ISO-8601 avec heure
           let filterValue = value
-          if (field === 'date' || field === 'eventDate') {
+          if (field === 'date' || field === 'eventDate' || field === 'eventEndDate') {
             filterValue = value.includes('T') ? value : `${value}T00:00:00.000Z`
           }
           const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
@@ -342,7 +346,7 @@ export async function GET(
           if (field === 'eventDate') field = 'eventDate'
           // Convertir les dates simples en ISO-8601 avec heure
           let filterValue = value
-          if (field === 'date' || field === 'eventDate') {
+          if (field === 'date' || field === 'eventDate' || field === 'eventEndDate') {
             filterValue = value.includes('T') ? value : `${value}T23:59:59.999Z`
           }
           const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
@@ -565,8 +569,13 @@ export async function POST(
       // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
       if (table === 'calendar_events' && converted.eventDate) {
         // Si la date ne contient pas d'heure, ajouter T00:00:00.000Z
-        if (!converted.eventDate.includes('T')) {
+        if (typeof converted.eventDate === 'string' && !converted.eventDate.includes('T')) {
           converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+        }
+      }
+      if (table === 'calendar_events' && converted.eventEndDate) {
+        if (typeof converted.eventEndDate === 'string' && !converted.eventEndDate.includes('T')) {
+          converted.eventEndDate = `${converted.eventEndDate}T00:00:00.000Z`
         }
       }
       
@@ -745,7 +754,7 @@ export async function PUT(
       if (camelKey === 'eventDate' && table === 'calendar_events') {
         camelKey = 'eventDate'
       }
-      
+
       // Ignorer les champs qui n'existent pas dans le schéma
       if (camelKey === 'description' && table === 'gyms') {
         continue // gyms n'a pas de champ description
@@ -756,10 +765,20 @@ export async function PUT(
       if (camelKey === 'isSuperAdmin') {
         continue // géré via role
       }
-      
+
       converted[camelKey] = value
     }
-    
+
+    // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
+    if (table === 'calendar_events') {
+      if (typeof converted.eventDate === 'string' && !converted.eventDate.includes('T')) {
+        converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+      }
+      if (typeof converted.eventEndDate === 'string' && !converted.eventEndDate.includes('T')) {
+        converted.eventEndDate = `${converted.eventEndDate}T00:00:00.000Z`
+      }
+    }
+
     // Ne pas permettre de changer le rôle via cette API pour employees/admins
     // Le rôle est fixe selon la table
     if (table === 'employees' || table === 'admins') {
@@ -865,7 +884,17 @@ export async function PATCH(
       
       converted[camelKey] = value
     }
-    
+
+    // Convertir les dates simples en DateTime ISO-8601 pour calendar_events
+    if (table === 'calendar_events') {
+      if (typeof converted.eventDate === 'string' && !converted.eventDate.includes('T')) {
+        converted.eventDate = `${converted.eventDate}T00:00:00.000Z`
+      }
+      if (typeof converted.eventEndDate === 'string' && !converted.eventEndDate.includes('T')) {
+        converted.eventEndDate = `${converted.eventEndDate}T00:00:00.000Z`
+      }
+    }
+
     // Hacher le mot de passe s'il est présent (pour les users)
     if ((table === 'users' || table === 'employees' || table === 'admins') && converted.password) {
       converted.password = await hashPassword(converted.password)
