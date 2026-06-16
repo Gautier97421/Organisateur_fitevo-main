@@ -61,14 +61,20 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
           const res = await fetch(inlineUrl, { credentials: "same-origin" })
           if (!res.ok) throw new Error()
           const buf = await res.arrayBuffer()
-          if (ext(file.fileName) === "xlsx") {
+          const e = ext(file.fileName)
+          if (e === "xlsx") {
             // .xlsx : rendu fidèle (styles, formats, fusions) via ExcelJS.
             const { loadXlsx } = await import("./xlsx-style")
             const { sheets: loaded } = await loadXlsx(buf)
             const parsed = loaded.map((s) => ({ name: s.name, rows: s.display, styles: s.styles, merges: s.merges }))
             if (!cancelled) { setSheets(parsed); setLoading(false) }
+          } else if (e === "ods") {
+            // .ods : rendu fidèle (styles, fusions) via parseur OpenDocument.
+            const { loadOds } = await import("./ods-style")
+            const parsed = await loadOds(buf)
+            if (!cancelled) { setSheets(parsed); setLoading(false) }
           } else {
-            // .ods / .xls / .csv : valeurs uniquement (SheetJS).
+            // .xls / .csv : valeurs uniquement (SheetJS).
             const XLSX = await import("xlsx")
             const wb = XLSX.read(buf, { type: "array" })
             const parsed = wb.SheetNames.map((name) => {
@@ -184,13 +190,17 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
                                 if (mi.slaves.has(key)) return null
                                 const span = mi.masters.get(key)
                                 const st = sheet.styles?.[r]?.[c] || undefined
+                                // Respecter les retours à la ligne ; sinon, pas de retour automatique.
+                                const wrapClass = cell.includes("\n")
+                                  ? "whitespace-pre-wrap break-words align-top"
+                                  : "whitespace-nowrap"
                                 return (
                                   <td
                                     key={c}
                                     rowSpan={span?.rowspan}
                                     colSpan={span?.colspan}
                                     style={st}
-                                    className="border border-gray-200 dark:border-gray-700 px-2 py-1 text-gray-800 dark:text-gray-200 whitespace-nowrap"
+                                    className={`border border-gray-200 dark:border-gray-700 px-2 py-1 text-gray-800 dark:text-gray-200 ${wrapClass}`}
                                   >
                                     {cell}
                                   </td>
