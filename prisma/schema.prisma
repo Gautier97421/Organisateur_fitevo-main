@@ -343,6 +343,25 @@ model CashRegisterField {
   @@map("cash_register_fields")
 }
 
+// Brouillard de caisse : mouvements enregistrés pendant une période de travail
+// (encaissements et "non rendu" — monnaie non rendue au client).
+model CashMovement {
+  id           String   @id @default(cuid())
+  userEmail    String   @map("user_email")
+  userName     String?  @map("user_name")
+  gymId        String?  @map("gym_id")
+  period       String   // matin, aprem, journee
+  movementDate DateTime @map("movement_date")
+  entryMonth   String   @map("entry_month") // Format YYYY-MM
+  type         String   // "encaissement" | "non_rendu"
+  amount       Float
+  label        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userEmail, movementDate])
+  @@map("cash_movements")
+}
+
 model CashRegisterEntry {
   id            String   @id @default(cuid())
   entryDate     DateTime @map("entry_date")

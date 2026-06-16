@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { stat, writeFile } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthWithRole } from '@/lib/auth-middleware'
-import { canAccessAttachment, getRequestUser, resolveStoredPath } from '@/lib/communication'
+import { canAccessAttachment, getRequestUser, resolveStoredPath, MAX_UPLOAD_SIZE } from '@/lib/communication'
 import logger from '@/lib/logger'
 
 export const runtime = 'nodejs'
+
+// Types de tableurs éditables en place (remplacement du contenu).
+const EDITABLE_SPREADSHEET_MIMES = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.oasis.opendocument.spreadsheet', // .ods
+  'text/csv', // .csv
+])
 
 /**
  * GET /api/communication/files/[id]
@@ -66,6 +74,59 @@ export async function GET(
     })
   } catch (error) {
     logger.error('Erreur download fichier', error)
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+/**
+ * PUT /api/communication/files/[id]  (multipart/form-data, champ "file")
+ *
+ * Remplace le contenu d'un tableur existant (xlsx/ods/xls/csv) après édition
+ * dans l'éditeur intégré. Conserve le nom et le type ; met à jour la taille.
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+
+  try {
+    const reqUser = await getRequestUser(auth.userId)
+    if (!reqUser) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 401 })
+
+    const { id } = await params
+    if (!(await canAccessAttachment(id, reqUser))) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+
+    const attachment = await prisma.attachment.findUnique({ where: { id } })
+    if (!attachment) return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
+
+    // Seuls les tableurs sont éditables en place via cet endpoint.
+    if (!EDITABLE_SPREADSHEET_MIMES.has(attachment.mimeType)) {
+      return NextResponse.json({ error: 'Type de fichier non éditable' }, { status: 400 })
+    }
+
+    const form = await request.formData()
+    const file = form.get('file')
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'Fichier manquant' }, { status: 400 })
+    }
+    if (file.size <= 0 || file.size > MAX_UPLOAD_SIZE) {
+      return NextResponse.json({ error: 'Fichier invalide ou trop volumineux' }, { status: 400 })
+    }
+
+    const filePath = resolveStoredPath(attachment.storedName)
+    if (!filePath) return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await writeFile(filePath, buffer)
+    await prisma.attachment.update({ where: { id }, data: { size: buffer.length } })
+
+    return NextResponse.json({ data: { size: buffer.length }, error: null })
+  } catch (error) {
+    logger.error('Erreur sauvegarde tableur', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

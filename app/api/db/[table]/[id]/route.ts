@@ -17,6 +17,7 @@ const tableMapping: { [key: string]: string } = {
   employees: 'user',
   new_member_instruction_items: 'newMemberInstructionItem',
   app_config: 'appConfig',
+  cash_movements: 'cashMovement',
 }
 
 // Mapper les champs du client vers le schéma Prisma

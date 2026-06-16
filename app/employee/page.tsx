@@ -10,11 +10,12 @@ import { CalendarView } from "@/components/employee/calendar-view"
 import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { TaskManager } from "@/components/admin/task-manager"
+import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -52,7 +53,7 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos" | "caisse">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
@@ -783,6 +784,16 @@ setHasCalendarAccess(data.has_calendar_access !== false)
         active: currentView === "calendar",
         onClick: () => { setCurrentView("calendar"); setMobileOpen(false) },
       },
+      // Caisse : accessible uniquement pendant une période de travail
+      ...(selectedPeriod
+        ? [{
+            id: "caisse" as const,
+            label: "Caisse",
+            icon: Banknote,
+            active: currentView === "caisse",
+            onClick: () => { setCurrentView("caisse"); setMobileOpen(false) },
+          }]
+        : []),
       // Accès manageur : gestion des tâches (To-Do List), comme côté admin
       ...(hasManagerAccess
         ? [{
@@ -1153,6 +1164,21 @@ setHasCalendarAccess(data.has_calendar_access !== false)
               <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
                   <TaskManager />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE CAISSE (brouillard de caisse, pendant une période) ─── */}
+            {currentView === "caisse" && selectedPeriod && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <CashRegisterBlotter
+                    period={selectedPeriod}
+                    gymId={selectedGym?.id}
+                    gymName={selectedGym?.name}
+                    userEmail={userEmail}
+                    userName={userName}
+                  />
                 </div>
               </div>
             )}

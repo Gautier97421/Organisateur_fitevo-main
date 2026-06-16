@@ -22,6 +22,7 @@ const tableMapping: { [key: string]: string } = {
   custom_pages: 'customPage',
   custom_page_items: 'customPageItem',
   roles: 'role',
+  cash_movements: 'cashMovement',
 }
 
 // Mapper les champs du schéma Prisma vers les noms attendus par le client

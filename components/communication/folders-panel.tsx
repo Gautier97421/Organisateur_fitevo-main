@@ -18,6 +18,7 @@ import {
 import type { Conversation, Folder, FolderFile, DirectoryUser } from "./types"
 import { CollabEditorDialog } from "./collab-editor-dialog"
 import { FilePreviewDialog } from "./file-preview-dialog"
+import { SpreadsheetEditorDialog } from "./spreadsheet-editor-dialog"
 
 // Type MIME interne des documents collaboratifs (éditeur Tiptap/Yjs).
 const COLLAB_DOC_MIME = "application/vnd.fitevo-doc"
@@ -31,6 +32,15 @@ function isCollabDoc(file: FolderFile): boolean {
 function isTextEditable(file: FolderFile): boolean {
   const ext = (file.fileName.split(".").pop() || "").toLowerCase()
   return file.mimeType === "text/plain" || ext === "txt"
+}
+
+// Tableur éditable (Excel / ods / csv) via l'éditeur intégré.
+function isSpreadsheet(file: FolderFile): boolean {
+  const ext = (file.fileName.split(".").pop() || "").toLowerCase()
+  return ["xlsx", "xls", "ods", "csv"].includes(ext)
+    || file.mimeType.includes("spreadsheet")
+    || file.mimeType === "application/vnd.ms-excel"
+    || file.mimeType === "text/csv"
 }
 
 interface Props {
@@ -79,6 +89,8 @@ export function FoldersPanel({ currentUser }: Props) {
   const [creatingDoc, setCreatingDoc] = useState(false)
   // Fichier affiché dans la modale d'aperçu
   const [previewTarget, setPreviewTarget] = useState<FolderFile | null>(null)
+  // Tableur ouvert dans l'éditeur intégré
+  const [sheetTarget, setSheetTarget] = useState<{ id: string; name: string } | null>(null)
   const newMenuRef = useRef<HTMLDivElement>(null)
 
   const inRoot = path.length === 0
@@ -456,6 +468,16 @@ export function FoldersPanel({ currentUser }: Props) {
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
+                        {/* Modifier le tableur (Excel / ods / csv) */}
+                        {isSpreadsheet(file) && (
+                          <button
+                            onClick={() => setSheetTarget({ id: file.id, name: file.fileName })}
+                            title="Modifier le tableur"
+                            className="text-gray-400 hover:text-green-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
                       </>
                     )}
                     {/* Télécharger */}
@@ -572,9 +594,18 @@ export function FoldersPanel({ currentUser }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* Aperçu d'un fichier (image, PDF, texte) sur le site */}
+      {/* Aperçu d'un fichier (image, PDF, texte, tableur, Word) sur le site */}
       {previewTarget && (
         <FilePreviewDialog file={previewTarget} onClose={() => setPreviewTarget(null)} />
+      )}
+
+      {/* Éditeur de tableur (Excel / ods / csv) */}
+      {sheetTarget && (
+        <SpreadsheetEditorDialog
+          fileId={sheetTarget.id}
+          fileName={sheetTarget.name}
+          onClose={() => { setSheetTarget(null); refreshCurrent() }}
+        />
       )}
 
       {/* Éditeur de document collaboratif (Tiptap + Yjs) */}
