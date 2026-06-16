@@ -34,6 +34,12 @@ function isTextEditable(file: FolderFile): boolean {
   return file.mimeType === "text/plain" || ext === "txt"
 }
 
+// Document OpenDocument texte .odt : éditable dans l'éditeur collaboratif (avec perte).
+function isOdt(file: FolderFile): boolean {
+  const ext = (file.fileName.split(".").pop() || "").toLowerCase()
+  return file.mimeType === "application/vnd.oasis.opendocument.text" || ext === "odt"
+}
+
 // Tableur éditable (Excel / ods / csv) via l'éditeur intégré.
 function isSpreadsheet(file: FolderFile): boolean {
   const ext = (file.fileName.split(".").pop() || "").toLowerCase()
@@ -84,13 +90,15 @@ export function FoldersPanel({ currentUser }: Props) {
   const [editFolder, setEditFolder] = useState<FolderWithMeta | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
-  // Document ouvert dans l'éditeur collaboratif (doc = HTML, text = .txt brut)
-  const [editorTarget, setEditorTarget] = useState<{ id: string; name: string; kind: "doc" | "text" } | null>(null)
+  // Document ouvert dans l'éditeur collaboratif (doc = HTML, text = .txt, odt = OpenDocument)
+  const [editorTarget, setEditorTarget] = useState<{ id: string; name: string; kind: "doc" | "text" | "odt" } | null>(null)
   const [creatingDoc, setCreatingDoc] = useState(false)
   // Fichier affiché dans la modale d'aperçu
   const [previewTarget, setPreviewTarget] = useState<FolderFile | null>(null)
   // Tableur ouvert dans l'éditeur intégré
   const [sheetTarget, setSheetTarget] = useState<{ id: string; name: string } | null>(null)
+  // Fichier en attente de confirmation de suppression
+  const [fileToDelete, setFileToDelete] = useState<FolderFile | null>(null)
   const newMenuRef = useRef<HTMLDivElement>(null)
 
   const inRoot = path.length === 0
@@ -154,6 +162,22 @@ export function FoldersPanel({ currentUser }: Props) {
   const previewFile = (file: FolderFile) => {
     setPreviewTarget(file)
   }
+
+  // Suppression d'un fichier (après confirmation).
+  const deleteFile = async () => {
+    if (!fileToDelete) return
+    const target = fileToDelete
+    setFileToDelete(null)
+    const res = await fetch(`/api/communication/files/${target.id}`, { method: "DELETE", credentials: "same-origin" })
+    if (res.ok) {
+      setFiles((prev) => prev.filter((f) => f.id !== target.id))
+    } else {
+      const e = await res.json().catch(() => ({}))
+      toast.error(e.error || "Suppression impossible")
+    }
+  }
+
+  const canDeleteFile = (file: FolderFile) => isAdmin || file.uploadedBy === currentUser.id
 
   // Crée un document collaboratif dans le dossier courant puis l'ouvre.
   const createDocument = async () => {
@@ -478,6 +502,16 @@ export function FoldersPanel({ currentUser }: Props) {
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
+                        {/* Modifier un document OpenDocument texte (.odt) dans l'éditeur collaboratif */}
+                        {isOdt(file) && (
+                          <button
+                            onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "odt" })}
+                            title="Modifier"
+                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
                       </>
                     )}
                     {/* Télécharger */}
@@ -490,6 +524,16 @@ export function FoldersPanel({ currentUser }: Props) {
                     >
                       <Download className="w-4 h-4" />
                     </a>
+                    {/* Supprimer (auteur du dépôt ou admin) */}
+                    {canDeleteFile(file) && (
+                      <button
+                        onClick={() => setFileToDelete(file)}
+                        title="Supprimer"
+                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -588,6 +632,31 @@ export function FoldersPanel({ currentUser }: Props) {
               <X className="mr-2 h-4 w-4" /> Annuler
             </Button>
             <Button onClick={executeDeleteFolder} className="bg-red-600 hover:bg-red-700 text-white">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation de suppression d'un fichier */}
+      <Dialog open={!!fileToDelete} onOpenChange={(v) => { if (!v) setFileToDelete(null) }}>
+        <DialogContent className="max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Supprimer le fichier
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Voulez-vous vraiment supprimer « {fileToDelete?.fileName} » ?
+              <br />
+              <span className="text-red-600 font-medium">Cette action est irréversible.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setFileToDelete(null)}>
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button onClick={deleteFile} className="bg-red-600 hover:bg-red-700 text-white">
               <Trash2 className="mr-2 h-4 w-4" /> Supprimer
             </Button>
           </DialogFooter>

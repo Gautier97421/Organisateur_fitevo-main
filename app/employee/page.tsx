@@ -11,11 +11,12 @@ import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { TaskManager } from "@/components/admin/task-manager"
 import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
+import { SettingsPanel } from "@/components/employee/settings-panel"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -53,7 +54,7 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos" | "caisse">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos" | "caisse" | "settings">("menu")
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
@@ -942,8 +943,26 @@ setHasCalendarAccess(data.has_calendar_access !== false)
               ))}
             </nav>
 
-            {/* Déconnexion */}
-            <div className="px-2.5 py-3 border-t border-gray-100 min-w-[236px]">
+            {/* Paramètres + Déconnexion */}
+            <div className="px-2.5 py-3 border-t border-gray-100 min-w-[236px] space-y-1">
+              <button
+                onClick={() => { setCurrentView("settings"); setMobileOpen(false) }}
+                className={[
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
+                  "transition-all duration-150 group whitespace-nowrap",
+                  currentView === "settings"
+                    ? "bg-red-50 text-red-600"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                ].join(" ")}
+              >
+                <Settings className={["w-4 h-4 flex-shrink-0", currentView === "settings" ? "text-red-500" : "text-gray-400 group-hover:text-gray-600"].join(" ")} />
+                <span className="flex-1 text-left">Paramètres</span>
+                {currentView === "settings" && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+              </button>
+
+              {/* Barre de séparation */}
+              <div className="border-t border-gray-100 my-1" />
+
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all group whitespace-nowrap"
@@ -1179,6 +1198,15 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                     userEmail={userEmail}
                     userName={userName}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE PARAMÈTRES ───────────────────────────────────── */}
+            {currentView === "settings" && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <SettingsPanel userId={getUserId() || ""} userName={userName} userEmail={userEmail} />
                 </div>
               </div>
             )}

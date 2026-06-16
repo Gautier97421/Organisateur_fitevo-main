@@ -66,3 +66,42 @@ export async function PUT(
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
+
+/**
+ * PATCH /api/communication/docs/[id]  { name }
+ * Renomme un document collaboratif (titre éditable dans l'éditeur).
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+
+  try {
+    const reqUser = await getRequestUser(auth.userId)
+    if (!reqUser) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 401 })
+
+    const { id } = await params
+    if (!(await canAccessAttachment(id, reqUser))) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+
+    const attachment = await prisma.attachment.findUnique({ where: { id } })
+    if (!attachment || attachment.mimeType !== COLLAB_DOC_MIME) {
+      return NextResponse.json({ error: 'Document introuvable' }, { status: 404 })
+    }
+
+    const body = await request.json()
+    const name = (typeof body?.name === 'string' ? body.name : '').replace(/[\r\n\t]/g, ' ').trim().slice(0, 200)
+    if (!name) {
+      return NextResponse.json({ error: 'Titre requis' }, { status: 400 })
+    }
+
+    await prisma.attachment.update({ where: { id }, data: { fileName: name } })
+    return NextResponse.json({ data: { fileName: name }, error: null })
+  } catch (error) {
+    logger.error('Erreur renommage document', error)
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}

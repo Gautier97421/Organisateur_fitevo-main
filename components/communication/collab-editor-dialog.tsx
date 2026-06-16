@@ -8,17 +8,21 @@ import StarterKit from "@tiptap/starter-kit"
 import Placeholder from "@tiptap/extension-placeholder"
 import Collaboration from "@tiptap/extension-collaboration"
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
+import TextAlign from "@tiptap/extension-text-align"
+import ImageExtension from "@tiptap/extension-image"
 import {
   Loader2, X, AlertTriangle, Bold, Italic, Strikethrough,
   Heading1, Heading2, List, ListOrdered, Quote, Code, Undo2, Redo2, Wifi, WifiOff,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Image as ImageIcon,
 } from "lucide-react"
+import { odtToHtml, tiptapJsonToOdt } from "./odf-utils"
 
 interface CollabEditorDialogProps {
   docId: string
   docName: string
   readOnly?: boolean
-  // "doc" = document collaboratif (export HTML) ; "text" = fichier .txt existant (texte brut)
-  kind?: "doc" | "text"
+  // "doc" = document collaboratif (export HTML) ; "text" = .txt (texte brut) ; "odt" = OpenDocument texte
+  kind?: "doc" | "text" | "odt"
   onClose: () => void
 }
 
@@ -101,13 +105,49 @@ function EditorInner({
   docId: string
   docName: string
   readOnly: boolean
-  kind: "doc" | "text"
+  kind: "doc" | "text" | "odt"
   onClose: () => void
 }) {
   const { ydoc, provider, user } = setup
   const [connected, setConnected] = useState(false)
   const [peerCount, setPeerCount] = useState(1)
+  const [title, setTitle] = useState(docName)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Insertion d'image (encodée en base64, intégrée au document).
+  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file || !editor) return
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Image trop volumineuse (max 3 Mo).")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const src = String(reader.result || "")
+      if (src) editor.chain().focus().setImage({ src }).run()
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Renomme le document (titre éditable, type Google Docs). Doc collaboratif uniquement.
+  const commitTitle = async () => {
+    const newName = title.trim()
+    if (!newName || newName === docName) { setTitle(docName); return }
+    try {
+      const res = await fetch(`/api/communication/docs/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ name: newName }),
+      })
+      if (!res.ok) setTitle(docName)
+    } catch {
+      setTitle(docName)
+    }
+  }
 
   const editor = useEditor(
     {
@@ -116,6 +156,8 @@ function EditorInner({
       extensions: [
         StarterKit.configure({ history: false }),
         Placeholder.configure({ placeholder: "Commencez à écrire…" }),
+        TextAlign.configure({ types: ["heading", "paragraph"], defaultAlignment: "left" }),
+        ImageExtension.configure({ inline: false, allowBase64: true }),
         Collaboration.configure({ document: ydoc }),
         CollaborationCursor.configure({
           provider,
@@ -145,10 +187,10 @@ function EditorInner({
     }
   }, [provider])
 
-  // Amorçage du contenu pour un .txt existant : à la première synchro, si le
-  // document collaboratif est vide, on y injecte le texte du fichier.
+  // Amorçage du contenu pour un fichier existant (.txt ou .odt) : à la première
+  // synchro, si le document collaboratif est encore vide, on injecte son contenu.
   useEffect(() => {
-    if (!editor || kind !== "text") return
+    if (!editor || (kind !== "text" && kind !== "odt")) return
     let done = false
     const seed = async (isSynced: boolean) => {
       if (done || !isSynced || !editor.isEmpty) return
@@ -156,10 +198,16 @@ function EditorInner({
       try {
         const res = await fetch(`/api/communication/files/${docId}?disposition=inline`, { credentials: "same-origin" })
         if (!res.ok) return
-        const txt = await res.text()
-        if (editor.isEmpty && txt) {
-          const html = txt.split("\n").map((l) => `<p>${escapeHtml(l)}</p>`).join("")
-          editor.commands.setContent(html)
+        if (kind === "odt") {
+          const buf = await res.arrayBuffer()
+          const html = await odtToHtml(buf)
+          if (editor.isEmpty && html) editor.commands.setContent(html)
+        } else {
+          const txt = await res.text()
+          if (editor.isEmpty && txt) {
+            const html = txt.split("\n").map((l) => `<p>${escapeHtml(l)}</p>`).join("")
+            editor.commands.setContent(html)
+          }
         }
       } catch { /* ignore */ }
     }
@@ -168,10 +216,20 @@ function EditorInner({
     return () => { setup.provider.off("sync", seed) }
   }, [editor, kind, docId, setup.provider])
 
-  // Sauvegarde (anti-rebond) : HTML pour un doc collaboratif, texte brut pour un .txt.
+  // Sauvegarde (anti-rebond) :
+  //  - doc collaboratif : export HTML  - .txt : texte brut  - .odt : fichier ODF régénéré.
   useEffect(() => {
     if (!editor || readOnly) return
-    const save = () => {
+    const save = async () => {
+      if (kind === "odt") {
+        try {
+          const odt = await tiptapJsonToOdt(editor.getJSON())
+          const fd = new FormData()
+          fd.append("file", new File([new Blob([odt as BlobPart])], "document.odt"))
+          await fetch(`/api/communication/files/${docId}`, { method: "PUT", body: fd, credentials: "same-origin" })
+        } catch { /* best-effort */ }
+        return
+      }
       const body = kind === "text" ? { text: editor.getText() } : { html: editor.getHTML() }
       fetch(`/api/communication/docs/${docId}`, {
         method: "PUT",
@@ -195,8 +253,20 @@ function EditorInner({
     <>
       {/* Barre supérieure */}
       <div className="flex items-center justify-between gap-3 px-4 h-12 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{docName}</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {kind === "doc" && !readOnly ? (
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
+              placeholder="Sans titre"
+              title="Cliquez pour renommer"
+              className="text-sm font-semibold text-gray-900 dark:text-white bg-transparent rounded px-1.5 py-0.5 min-w-0 max-w-full border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-red-500 focus:outline-none"
+            />
+          ) : (
+            <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{docName}</span>
+          )}
           {readOnly && <span className="text-xs text-gray-400 flex-shrink-0">Lecture seule</span>}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -228,6 +298,14 @@ function EditorInner({
           <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Liste numérotée"><ListOrdered className="w-4 h-4" /></ToolbarButton>
           <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} title="Citation"><Quote className="w-4 h-4" /></ToolbarButton>
           <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} title="Bloc de code"><Code className="w-4 h-4" /></ToolbarButton>
+          <Divider />
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} title="Aligner à gauche"><AlignLeft className="w-4 h-4" /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} title="Centrer"><AlignCenter className="w-4 h-4" /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} title="Aligner à droite"><AlignRight className="w-4 h-4" /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("justify").run()} active={editor.isActive({ textAlign: "justify" })} title="Justifier"><AlignJustify className="w-4 h-4" /></ToolbarButton>
+          <Divider />
+          <ToolbarButton onClick={() => imageInputRef.current?.click()} title="Insérer une image"><ImageIcon className="w-4 h-4" /></ToolbarButton>
+          <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
           <Divider />
           <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Annuler"><Undo2 className="w-4 h-4" /></ToolbarButton>
           <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Rétablir"><Redo2 className="w-4 h-4" /></ToolbarButton>

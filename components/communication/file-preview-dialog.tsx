@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Loader2, X, Download, FileText, AlertTriangle } from "lucide-react"
 import type { FolderFile } from "./types"
+import { odtToHtml } from "./odf-utils"
 
 interface FilePreviewDialogProps {
   file: FolderFile
@@ -25,51 +26,6 @@ function previewKind(file: FolderFile): PreviewKind {
   if (e === "odt" || mt === "application/vnd.oasis.opendocument.text") return "odt"
   if (mt === "text/plain" || e === "txt") return "text"
   return "unsupported"
-}
-
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-
-// Convertit un document OpenDocument Text (.odt) en HTML basique pour l'aperçu :
-// décompresse l'archive, lit content.xml et reconstruit titres/paragraphes/listes.
-async function odtToHtml(buf: ArrayBuffer): Promise<string> {
-  const { unzipSync, strFromU8 } = await import("fflate")
-  const files = unzipSync(new Uint8Array(buf))
-  const contentBytes = files["content.xml"]
-  if (!contentBytes) return ""
-  const xml = strFromU8(contentBytes)
-  const dom = new DOMParser().parseFromString(xml, "application/xml")
-  const body = dom.getElementsByTagName("office:body")[0] || dom.documentElement
-
-  const render = (node: Node): string => {
-    let html = ""
-    node.childNodes.forEach((child) => {
-      if (child.nodeType === 3) {
-        html += esc(child.nodeValue || "")
-      } else if (child.nodeType === 1) {
-        const el = child as Element
-        const tag = el.tagName
-        if (tag === "text:h") {
-          const lvl = Math.min(3, Math.max(1, parseInt(el.getAttribute("text:outline-level") || "2", 10) || 2))
-          html += `<h${lvl}>${render(el)}</h${lvl}>`
-        } else if (tag === "text:p") {
-          html += `<p>${render(el) || "&nbsp;"}</p>`
-        } else if (tag === "text:list") {
-          html += `<ul>${render(el)}</ul>`
-        } else if (tag === "text:list-item") {
-          html += `<li>${render(el)}</li>`
-        } else if (tag === "text:line-break") {
-          html += "<br/>"
-        } else if (tag === "text:tab" || tag === "text:s") {
-          html += " "
-        } else {
-          html += render(el)
-        }
-      }
-    })
-    return html
-  }
-
-  return render(body)
 }
 
 export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {

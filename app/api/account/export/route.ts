@@ -15,13 +15,15 @@ export async function GET(request: NextRequest) {
   if (!auth) {
     return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
   }
-  if (auth.role !== 'admin' && auth.role !== 'superadmin') {
-    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-  }
-
   const userId = request.nextUrl.searchParams.get('userId')
   if (!userId) {
     return NextResponse.json({ error: 'userId requis' }, { status: 400 })
+  }
+
+  // Un admin peut exporter les données de n'importe qui ; un employé uniquement les siennes.
+  const isAdmin = auth.role === 'admin' || auth.role === 'superadmin'
+  if (!isAdmin && auth.userId !== userId) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
   try {
