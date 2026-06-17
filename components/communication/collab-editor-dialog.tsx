@@ -16,13 +16,15 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Image as ImageIcon,
 } from "lucide-react"
 import { odtToHtml, tiptapJsonToOdt } from "./odf-utils"
+import { tiptapJsonToDocx } from "./docx-utils"
 
 interface CollabEditorDialogProps {
   docId: string
   docName: string
   readOnly?: boolean
-  // "doc" = document collaboratif (export HTML) ; "text" = .txt (texte brut) ; "odt" = OpenDocument texte
-  kind?: "doc" | "text" | "odt"
+  // "doc" = document collaboratif (export HTML) ; "text" = .txt (texte brut)
+  // "odt" = OpenDocument texte ; "docx" = Word
+  kind?: "doc" | "text" | "odt" | "docx"
   onClose: () => void
 }
 
@@ -105,7 +107,7 @@ function EditorInner({
   docId: string
   docName: string
   readOnly: boolean
-  kind: "doc" | "text" | "odt"
+  kind: "doc" | "text" | "odt" | "docx"
   onClose: () => void
 }) {
   const { ydoc, provider, user } = setup
@@ -190,7 +192,7 @@ function EditorInner({
   // Amorçage du contenu pour un fichier existant (.txt ou .odt) : à la première
   // synchro, si le document collaboratif est encore vide, on injecte son contenu.
   useEffect(() => {
-    if (!editor || (kind !== "text" && kind !== "odt")) return
+    if (!editor || (kind !== "text" && kind !== "odt" && kind !== "docx")) return
     let done = false
     const seed = async (isSynced: boolean) => {
       if (done || !isSynced || !editor.isEmpty) return
@@ -202,6 +204,11 @@ function EditorInner({
           const buf = await res.arrayBuffer()
           const html = await odtToHtml(buf)
           if (editor.isEmpty && html) editor.commands.setContent(html)
+        } else if (kind === "docx") {
+          const buf = await res.arrayBuffer()
+          const mammoth = await import("mammoth")
+          const result = await mammoth.convertToHtml({ arrayBuffer: buf })
+          if (editor.isEmpty && result.value) editor.commands.setContent(result.value)
         } else {
           const txt = await res.text()
           if (editor.isEmpty && txt) {
@@ -221,11 +228,14 @@ function EditorInner({
   useEffect(() => {
     if (!editor || readOnly) return
     const save = async () => {
-      if (kind === "odt") {
+      if (kind === "odt" || kind === "docx") {
         try {
-          const odt = await tiptapJsonToOdt(editor.getJSON())
+          const blob = kind === "docx"
+            ? await tiptapJsonToDocx(editor.getJSON())
+            : await tiptapJsonToOdt(editor.getJSON())
+          const ext = kind === "docx" ? "docx" : "odt"
           const fd = new FormData()
-          fd.append("file", new File([new Blob([odt as BlobPart])], "document.odt"))
+          fd.append("file", new File([new Blob([blob as BlobPart])], `document.${ext}`))
           await fetch(`/api/communication/files/${docId}`, { method: "PUT", body: fd, credentials: "same-origin" })
         } catch { /* best-effort */ }
         return

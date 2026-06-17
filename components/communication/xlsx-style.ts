@@ -153,11 +153,49 @@ function isNumeric(v: string): boolean {
   return v.trim() !== "" && !isNaN(Number(v)) && /^-?\d*\.?\d+$/.test(v.trim())
 }
 
+// #rrggbb -> ARGB ExcelJS (FFrrggbb)
+function hexToArgb(hex?: string): string | undefined {
+  if (!hex) return undefined
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim())
+  return m ? `FF${m[1].toUpperCase()}` : undefined
+}
+
+// Applique un style CSS (issu de l'éditeur) à une cellule ExcelJS.
+function applyCssToCell(cell: any, css: CSSProperties) {
+  const font: any = { ...(cell.font || {}) }
+  if (css.fontWeight === "bold") font.bold = true
+  if (css.fontStyle === "italic") font.italic = true
+  if (typeof css.textDecoration === "string" && css.textDecoration.includes("underline")) font.underline = true
+  const color = hexToArgb(css.color as string)
+  if (color) font.color = { argb: color }
+  if (css.fontFamily) font.name = String(css.fontFamily)
+  if (css.fontSize) {
+    const n = parseFloat(String(css.fontSize))
+    if (!isNaN(n)) font.size = n
+  }
+  if (Object.keys(font).length) cell.font = font
+
+  const bg = hexToArgb(css.backgroundColor as string)
+  if (bg) {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } }
+  }
+
+  const alignment: any = { ...(cell.alignment || {}) }
+  if (css.textAlign) alignment.horizontal = css.textAlign as string
+  if (css.verticalAlign) alignment.vertical = css.verticalAlign === "middle" ? "middle" : (css.verticalAlign as string)
+  if (css.whiteSpace === "pre-wrap" || css.whiteSpace === "pre-line") alignment.wrapText = true
+  if (Object.keys(alignment).length) cell.alignment = alignment
+}
+
 /**
  * Réécrit les valeurs du classeur ExcelJS d'origine (styles/fusions conservés)
- * puis renvoie le buffer .xlsx.
+ * puis renvoie le buffer .xlsx. Si `styles` est fourni, applique aussi la mise
+ * en forme éditée (couleurs, gras, alignement…) aux cellules correspondantes.
  */
-export async function saveXlsx(wb: any, sheets: { name: string; rows: string[][] }[]): Promise<Uint8Array> {
+export async function saveXlsx(
+  wb: any,
+  sheets: { name: string; rows: string[][]; styles?: (CSSProperties | null)[][] }[],
+): Promise<Uint8Array> {
   sheets.forEach((sheet) => {
     const ws = wb.getWorksheet(sheet.name)
     if (!ws) return
@@ -177,6 +215,8 @@ export async function saveXlsx(wb: any, sheets: { name: string; rows: string[][]
         } else {
           cell.value = v
         }
+        const css = sheet.styles?.[r]?.[c]
+        if (css) applyCssToCell(cell, css)
       })
     })
   })

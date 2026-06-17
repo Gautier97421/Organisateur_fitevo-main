@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createReadStream } from 'node:fs'
 import { stat, writeFile, unlink } from 'node:fs/promises'
+import path from 'node:path'
 import { Readable } from 'node:stream'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthWithRole } from '@/lib/auth-middleware'
@@ -128,6 +129,55 @@ export async function PUT(
     return NextResponse.json({ data: { size: buffer.length }, error: null })
   } catch (error) {
     logger.error('Erreur sauvegarde tableur', error)
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+/**
+ * PATCH /api/communication/files/[id]
+ * Renomme un fichier (champ fileName). L'extension d'origine est conservée
+ * pour ne pas casser la détection du type (tableur, ODF…).
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+
+  try {
+    const reqUser = await getRequestUser(auth.userId)
+    if (!reqUser) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 401 })
+
+    const { id } = await params
+    if (!(await canAccessAttachment(id, reqUser))) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+
+    const attachment = await prisma.attachment.findUnique({ where: { id } })
+    if (!attachment) return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
+
+    const body = await request.json().catch(() => ({}))
+    let name = String(body?.name ?? '').trim()
+    if (!name) return NextResponse.json({ error: 'Nom requis' }, { status: 400 })
+
+    // Assainir : jamais utilisé comme chemin
+    name = path.basename(name).slice(0, 255)
+
+    // Conserver l'extension d'origine si l'utilisateur l'a retirée/modifiée.
+    const origExt = path.extname(attachment.fileName)
+    if (origExt) {
+      const typedExt = path.extname(name)
+      if (typedExt.toLowerCase() !== origExt.toLowerCase()) {
+        name = name.replace(/\.[^.]*$/, '') + origExt
+      }
+    }
+    if (!name || name === origExt) name = `fichier${origExt}`
+
+    const updated = await prisma.attachment.update({ where: { id }, data: { fileName: name } })
+    return NextResponse.json({ data: { fileName: updated.fileName }, error: null })
+  } catch (error) {
+    logger.error('Erreur renommage fichier', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

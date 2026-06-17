@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties } from "react"
-import { Loader2, X, AlertTriangle, Save, Plus, Minus, Undo2, Redo2 } from "lucide-react"
+import {
+  Loader2, X, AlertTriangle, Save, Plus, Minus, Undo2, Redo2,
+  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, PaintBucket, Baseline, Eraser,
+} from "lucide-react"
 import { loadXlsx, saveXlsx, mergeInfo } from "./xlsx-style"
 
 interface SpreadsheetEditorDialogProps {
@@ -119,6 +122,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [title, setTitle] = useState(fileName)
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null)
   const [selection, setSelection] = useState<CellRange | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null)
@@ -147,7 +151,9 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
 
   useEffect(() => {
     let cancelled = false
-    const isXlsx = (fileName.split(".").pop() || "").toLowerCase() === "xlsx"
+    const ext = (fileName.split(".").pop() || "").toLowerCase()
+    const isXlsx = ext === "xlsx"
+    const isOds = ext === "ods"
     const load = async () => {
       try {
         const [XLSX, fp] = await Promise.all([import("xlsx"), import("fast-formula-parser")])
@@ -164,6 +170,14 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           if (cancelled) return
           wbRef.current = wb
           const parsed: SheetData[] = sheets.map((s) => ({ name: s.name, rows: s.rows, styles: s.styles, merges: s.merges }))
+          setSheets(parsed.length ? parsed : [{ name: "Feuille1", rows: Array.from({ length: 12 }, () => Array.from({ length: 6 }, () => "")) }])
+        } else if (isOds) {
+          // .ods : lecture fidèle (styles, fusions, formules) via parseur OpenDocument.
+          engineRef.current = "sheetjs"
+          const { loadOds } = await import("./ods-style")
+          const loaded = await loadOds(buf)
+          if (cancelled) return
+          const parsed: SheetData[] = loaded.map((s) => ({ name: s.name, rows: s.raw, styles: s.styles, merges: s.merges }))
           setSheets(parsed.length ? parsed : [{ name: "Feuille1", rows: Array.from({ length: 12 }, () => Array.from({ length: 6 }, () => "")) }])
         } else {
           engineRef.current = "sheetjs"
@@ -329,6 +343,53 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
       return next
     })
   }
+
+  // ── Mise en forme (couleurs, gras, alignement) ──────────────────
+  const applyStyleToSelection = (patch: (cur: CSSProperties | null) => CSSProperties) => {
+    if (!selection) return
+    const n = norm(selection)
+    mutate((prev) => {
+      const next = cloneSheets(prev)
+      const sheet = next[active]
+      if (!sheet.styles) sheet.styles = sheet.rows.map((row) => row.map(() => null))
+      for (let r = n.top; r <= n.bottom; r++) {
+        if (!sheet.styles[r]) sheet.styles[r] = sheet.rows[r].map(() => null)
+        for (let c = n.left; c <= n.right; c++) {
+          const cur = sheet.styles[r][c] || null
+          const merged: any = { ...(cur || {}), ...patch(cur) }
+          for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
+          sheet.styles[r][c] = Object.keys(merged).length ? merged : null
+        }
+      }
+      return next
+    })
+  }
+
+  const clearFormatting = () => {
+    if (!selection) return
+    const n = norm(selection)
+    mutate((prev) => {
+      const next = cloneSheets(prev)
+      const sheet = next[active]
+      if (!sheet.styles) return next
+      for (let r = n.top; r <= n.bottom; r++) {
+        for (let c = n.left; c <= n.right; c++) {
+          if (sheet.styles[r]) sheet.styles[r][c] = null
+        }
+      }
+      return next
+    })
+  }
+
+  const activeStyle: CSSProperties = (selection && current?.styles?.[selection.r1]?.[selection.c1]) || {}
+  const setFill = (color: string) => applyStyleToSelection(() => ({ backgroundColor: color }))
+  const setTextColor = (color: string) => applyStyleToSelection(() => ({ color }))
+  const toggleBold = () => applyStyleToSelection((cur) => ({ fontWeight: cur?.fontWeight === "bold" ? undefined : "bold" }))
+  const toggleItalic = () => applyStyleToSelection((cur) => ({ fontStyle: cur?.fontStyle === "italic" ? undefined : "italic" }))
+  const toggleUnderline = () => applyStyleToSelection((cur) => ({
+    textDecoration: (typeof cur?.textDecoration === "string" && cur.textDecoration.includes("underline")) ? undefined : "underline",
+  }))
+  const setAlign = (a: "left" | "center" | "right") => applyStyleToSelection(() => ({ textAlign: a }))
 
   // ── Insertion / suppression de lignes et colonnes ───────────────
   const insertRowAbove = (r: number) => {
@@ -571,13 +632,16 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     })
   }
 
+  const fileExt = (fileName.split(".").pop() || "").toLowerCase()
+
   const save = async () => {
     const XLSX = xlsxRef.current
     if (!XLSX) return
     setSaving(true)
     try {
+      // .xlsx : réécriture fidèle via ExcelJS (styles édités inclus).
       if (engineRef.current === "excel" && wbRef.current) {
-        const out = await saveXlsx(wbRef.current, sheets.map((s) => ({ name: s.name, rows: s.rows })))
+        const out = await saveXlsx(wbRef.current, sheets.map((s) => ({ name: s.name, rows: s.rows, styles: s.styles })))
         const fd = new FormData()
         fd.append("file", new File([new Blob([out as BlobPart])], fileName))
         const res = await fetch(`/api/communication/files/${fileId}`, { method: "PUT", body: fd, credentials: "same-origin" })
@@ -590,6 +654,29 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
         return
       }
 
+      // .ods : générateur OpenDocument avec styles + fusions.
+      if (fileExt === "ods") {
+        const { saveOds } = await import("./ods-style")
+        const out = await saveOds(sheets.map((s) => ({
+          name: s.name,
+          rows: s.rows,
+          styles: s.styles,
+          merges: s.merges,
+          display: FormulaParser ? computeDisplay(s.rows, FormulaParser) : undefined,
+        })))
+        const fd = new FormData()
+        fd.append("file", new File([new Blob([out as BlobPart])], fileName))
+        const res = await fetch(`/api/communication/files/${fileId}`, { method: "PUT", body: fd, credentials: "same-origin" })
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.error || "Échec de l'enregistrement")
+        }
+        setDirty(false)
+        setSaving(false)
+        return
+      }
+
+      // .csv / .xls : valeurs uniquement (le CSV ne peut pas stocker de styles).
       const wb = XLSX.utils.book_new()
       for (const sheet of sheets) {
         const ws: any = {}
@@ -643,12 +730,39 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   const canUndo = pastRef.current.length > 0
   const canRedo = futureRef.current.length > 0
 
+  // Renomme le fichier (l'extension d'origine est conservée côté serveur).
+  const commitTitle = async () => {
+    const newName = title.trim()
+    if (!newName || newName === fileName) { setTitle(fileName); return }
+    try {
+      const res = await fetch(`/api/communication/files/${fileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ name: newName }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json.data?.fileName) setTitle(json.data.fileName)
+      else setTitle(fileName)
+    } catch {
+      setTitle(fileName)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-white dark:bg-gray-900" onClick={() => setContextMenu(null)}>
       {/* En-tête */}
       <div className="flex items-center justify-between gap-3 px-4 h-12 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{fileName}</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
+            disabled={loading}
+            title="Cliquez pour renommer"
+            className="text-sm font-semibold text-gray-900 dark:text-white bg-transparent rounded px-1.5 py-0.5 min-w-0 max-w-[50vw] border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-red-500 focus:outline-none"
+          />
           {dirty && <span className="text-xs text-amber-500 flex-shrink-0">• non enregistré</span>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -670,6 +784,38 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           </button>
         </div>
       </div>
+
+      {/* Barre de mise en forme */}
+      {!loading && !error && (
+        <div className="flex items-center flex-wrap gap-0.5 px-3 py-1 border-b border-gray-100 dark:border-gray-800 flex-shrink-0 bg-white dark:bg-gray-900">
+          <FmtButton onClick={toggleBold} active={activeStyle.fontWeight === "bold"} title="Gras"><Bold className="w-4 h-4" /></FmtButton>
+          <FmtButton onClick={toggleItalic} active={activeStyle.fontStyle === "italic"} title="Italique"><Italic className="w-4 h-4" /></FmtButton>
+          <FmtButton onClick={toggleUnderline} active={typeof activeStyle.textDecoration === "string" && activeStyle.textDecoration.includes("underline")} title="Souligné"><Underline className="w-4 h-4" /></FmtButton>
+          <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <FmtButton onClick={() => setAlign("left")} active={activeStyle.textAlign === "left"} title="Aligner à gauche"><AlignLeft className="w-4 h-4" /></FmtButton>
+          <FmtButton onClick={() => setAlign("center")} active={activeStyle.textAlign === "center"} title="Centrer"><AlignCenter className="w-4 h-4" /></FmtButton>
+          <FmtButton onClick={() => setAlign("right")} active={activeStyle.textAlign === "right"} title="Aligner à droite"><AlignRight className="w-4 h-4" /></FmtButton>
+          <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <label title="Couleur de remplissage" className="relative p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white cursor-pointer flex items-center">
+            <PaintBucket className="w-4 h-4" />
+            <span className="absolute bottom-0.5 left-1.5 right-1.5 h-1 rounded" style={{ backgroundColor: (activeStyle.backgroundColor as string) || "transparent" }} />
+            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              value={(activeStyle.backgroundColor as string) || "#ffffff"}
+              onChange={(e) => setFill(e.target.value)} />
+          </label>
+          <label title="Couleur du texte" className="relative p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white cursor-pointer flex items-center">
+            <Baseline className="w-4 h-4" />
+            <span className="absolute bottom-0.5 left-1.5 right-1.5 h-1 rounded" style={{ backgroundColor: (activeStyle.color as string) || "transparent" }} />
+            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              value={(activeStyle.color as string) || "#000000"}
+              onChange={(e) => setTextColor(e.target.value)} />
+          </label>
+          <FmtButton onClick={clearFormatting} title="Effacer la mise en forme"><Eraser className="w-4 h-4" /></FmtButton>
+          {fileExt === "csv" && (
+            <span className="ml-2 text-xs text-amber-500">Le format .csv ne conserve pas les couleurs — utilisez .xlsx ou .ods.</span>
+          )}
+        </div>
+      )}
 
       {/* Barre de formule */}
       {!loading && !error && (
@@ -742,15 +888,26 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                           const shown = isEditing ? raw : (display?.[r]?.[c] ?? raw)
                           const st = current.styles?.[r]?.[c] || undefined
 
+                          // La couleur de fond est posée sur le <td> pour remplir toute la cellule.
+                          const tdStyle: CSSProperties = {}
+                          if (st?.backgroundColor) tdStyle.backgroundColor = st.backgroundColor as string
+                          if (selectedHere && !isActive) {
+                            if (st?.backgroundColor) tdStyle.boxShadow = "inset 0 0 0 2px rgba(59,130,246,0.45)"
+                            else tdStyle.backgroundColor = "rgba(59,130,246,0.10)"
+                          }
+                          if (isFilling) {
+                            if (st?.backgroundColor) tdStyle.boxShadow = "inset 0 0 0 2px rgba(37,99,235,0.6)"
+                            else tdStyle.backgroundColor = "rgba(37,99,235,0.18)"
+                          }
+
                           return (
                             <td
                               key={c}
                               rowSpan={span?.rowspan}
                               colSpan={span?.colspan}
+                              style={tdStyle}
                               className={[
                                 "border border-gray-200 dark:border-gray-700 p-0 relative min-w-[7rem] max-w-[20rem] align-top",
-                                isFilling ? "bg-blue-100 dark:bg-blue-900/30" : "",
-                                selectedHere && !isActive && !isFilling ? "bg-blue-50 dark:bg-blue-900/20" : "",
                                 isActive ? "outline outline-2 outline-red-500 -outline-offset-1 z-[5]" : "",
                                 isEditing ? "z-[6]" : "",
                               ].join(" ")}
@@ -870,5 +1027,30 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
         </div>
       )}
     </div>
+  )
+}
+
+function FmtButton({
+  onClick, active, title, children,
+}: {
+  onClick: () => void
+  active?: boolean
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={[
+        "p-1.5 rounded-md transition-colors",
+        active
+          ? "bg-red-50 text-red-600 dark:bg-red-900/30"
+          : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white",
+      ].join(" ")}
+    >
+      {children}
+    </button>
   )
 }

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import {
   FolderClosed, FolderPlus, Upload, Download, FileText, ChevronRight,
-  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X, Eye,
+  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X, Eye, Table,
 } from "lucide-react"
 import type { Conversation, Folder, FolderFile, DirectoryUser } from "./types"
 import { CollabEditorDialog } from "./collab-editor-dialog"
@@ -38,6 +38,12 @@ function isTextEditable(file: FolderFile): boolean {
 function isOdt(file: FolderFile): boolean {
   const ext = (file.fileName.split(".").pop() || "").toLowerCase()
   return file.mimeType === "application/vnd.oasis.opendocument.text" || ext === "odt"
+}
+
+// Document Word .docx : éditable dans l'éditeur collaboratif (avec perte de mise en forme avancée).
+function isDocx(file: FolderFile): boolean {
+  const ext = (file.fileName.split(".").pop() || "").toLowerCase()
+  return file.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === "docx"
 }
 
 // Tableur éditable (Excel / ods / csv) via l'éditeur intégré.
@@ -91,8 +97,9 @@ export function FoldersPanel({ currentUser }: Props) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
   // Document ouvert dans l'éditeur collaboratif (doc = HTML, text = .txt, odt = OpenDocument)
-  const [editorTarget, setEditorTarget] = useState<{ id: string; name: string; kind: "doc" | "text" | "odt" } | null>(null)
+  const [editorTarget, setEditorTarget] = useState<{ id: string; name: string; kind: "doc" | "text" | "odt" | "docx" } | null>(null)
   const [creatingDoc, setCreatingDoc] = useState(false)
+  const [creatingSheet, setCreatingSheet] = useState(false)
   // Fichier affiché dans la modale d'aperçu
   const [previewTarget, setPreviewTarget] = useState<FolderFile | null>(null)
   // Tableur ouvert dans l'éditeur intégré
@@ -204,6 +211,37 @@ export function FoldersPanel({ currentUser }: Props) {
     }
   }
 
+  // Crée un nouveau tableur (.xlsx vide) dans le dossier courant puis l'ouvre.
+  const createSpreadsheet = async () => {
+    if (!currentFolderId || creatingSheet) return
+    setShowNewMenu(false)
+    setCreatingSheet(true)
+    try {
+      const XLSX = await import("xlsx")
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.aoa_to_sheet([["", "", "", "", "", ""]])
+      XLSX.utils.book_append_sheet(wb, ws, "Feuille1")
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+      const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      const file = new File([new Blob([out], { type: mime })], "Nouveau tableur.xlsx", { type: mime })
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("folderId", currentFolderId)
+      const res = await fetch("/api/communication/upload", { method: "POST", body: fd })
+      const json = await res.json()
+      if (res.ok && json.data) {
+        await refreshCurrent()
+        setSheetTarget({ id: json.data.id, name: json.data.fileName })
+      } else {
+        toast.error(json.error || "Création impossible")
+      }
+    } catch {
+      toast.error("Création impossible")
+    } finally {
+      setCreatingSheet(false)
+    }
+  }
+
   const goToCrumb = async (index: number) => {
     if (index < 0) { loadRoot(); return }
     const target = path[index]
@@ -312,6 +350,16 @@ export function FoldersPanel({ currentUser }: Props) {
                 >
                   {creatingDoc ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <Pencil className="w-4 h-4 text-red-500" />}
                   Nouveau document texte
+                </button>
+              )}
+              {!inRoot && (
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 text-left disabled:opacity-50"
+                  onClick={createSpreadsheet}
+                  disabled={creatingSheet}
+                >
+                  {creatingSheet ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <Table className="w-4 h-4 text-green-600" />}
+                  Nouveau document tableur
                 </button>
               )}
               {!inRoot && (
@@ -506,6 +554,16 @@ export function FoldersPanel({ currentUser }: Props) {
                         {isOdt(file) && (
                           <button
                             onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "odt" })}
+                            title="Modifier"
+                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Modifier un document Word (.docx) dans l'éditeur collaboratif */}
+                        {isDocx(file) && (
+                          <button
+                            onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "docx" })}
                             title="Modifier"
                             className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                           >

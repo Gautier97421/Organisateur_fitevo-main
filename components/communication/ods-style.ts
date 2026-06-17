@@ -4,12 +4,22 @@
 // le content.xml / styles.xml directement, comme pour l'ODT.
 
 import type { CSSProperties } from "react"
+import { mergeInfo } from "./xlsx-style"
 
 export interface LoadedOdsSheet {
   name: string
-  rows: string[][]      // valeurs affichées
+  rows: string[][]      // valeurs affichées (pour l'aperçu)
+  raw: string[][]       // valeurs éditables ("=formule" ou texte) pour l'éditeur
   styles: (CSSProperties | null)[][]
   merges: string[]      // ex. "A3:C3"
+}
+
+// Convertit une formule ODF ([.A1], [.A1:.B2]) vers la notation A1 éditable.
+function odsFormulaToA1(f: string): string {
+  let s = f.replace(/^of:/, "").replace(/^=/, "")
+  s = s.replace(/\[\.([A-Za-z]+\d+):\.([A-Za-z]+\d+)\]/g, "$1:$2")
+  s = s.replace(/\[\.([A-Za-z]+\d+)\]/g, "$1")
+  return "=" + s
 }
 
 const MAX_COLS = 64
@@ -126,6 +136,7 @@ function buildStyleMap(docs: Document[]): Map<string, CSSProperties> {
 function parseTable(table: Element, styleMap: Map<string, CSSProperties>): LoadedOdsSheet {
   const name = table.getAttribute("table:name") || "Feuille"
   const rows: string[][] = []
+  const raw: string[][] = []
   const styles: (CSSProperties | null)[][] = []
   const merges: string[] = []
   let rowIndex = 0
@@ -137,6 +148,7 @@ function parseTable(table: Element, styleMap: Map<string, CSSProperties>): Loade
 
     const cellEls = directChildren(rowEl, "table:table-cell", "table:covered-table-cell")
     const rowCells: string[] = []
+    const rowRaw: string[] = []
     const rowStyles: (CSSProperties | null)[] = []
     let colIndex = 0
     let hasContent = false
@@ -146,6 +158,8 @@ function parseTable(table: Element, styleMap: Map<string, CSSProperties>): Loade
       const covered = cellEl.tagName === "table:covered-table-cell"
       let repeat = parseInt(cellEl.getAttribute("table:number-columns-repeated") || "1", 10) || 1
       const text = covered ? "" : getCellText(cellEl)
+      const formula = covered ? null : cellEl.getAttribute("table:formula")
+      const rawText = formula ? odsFormulaToA1(formula) : text
       const styleName = cellEl.getAttribute("table:style-name")
       const css = (styleName && styleMap.get(styleName)) || null
 
@@ -164,6 +178,7 @@ function parseTable(table: Element, styleMap: Map<string, CSSProperties>): Loade
 
       for (let k = 0; k < repeat && colIndex < MAX_COLS; k++) {
         rowCells.push(text)
+        rowRaw.push(rawText)
         rowStyles.push(css)
         if (text || css) hasContent = true
         colIndex++
@@ -174,6 +189,7 @@ function parseTable(table: Element, styleMap: Map<string, CSSProperties>): Loade
     const effRepeat = !hasContent && rowRepeat > 50 ? 1 : Math.min(rowRepeat, MAX_ROWS - rows.length)
     for (let k = 0; k < effRepeat && rows.length < MAX_ROWS; k++) {
       rows.push([...rowCells])
+      raw.push([...rowRaw])
       styles.push([...rowStyles])
       rowIndex++
     }
@@ -182,20 +198,22 @@ function parseTable(table: Element, styleMap: Map<string, CSSProperties>): Loade
   // Retirer les lignes finales entièrement vides
   while (rows.length > 1 && rows[rows.length - 1].every((v) => !v)) {
     rows.pop()
+    raw.pop()
     styles.pop()
   }
 
   // Largeur uniforme (au moins 6 colonnes pour un rendu agréable)
   const width = Math.max(6, ...rows.map((r) => r.length), 1)
   for (let i = 0; i < rows.length; i++) {
-    while (rows[i].length < width) { rows[i].push(""); styles[i].push(null) }
+    while (rows[i].length < width) { rows[i].push(""); raw[i].push(""); styles[i].push(null) }
   }
   if (rows.length === 0) {
     rows.push(Array.from({ length: width }, () => ""))
+    raw.push(Array.from({ length: width }, () => ""))
     styles.push(Array.from({ length: width }, () => null))
   }
 
-  return { name, rows, styles, merges }
+  return { name, rows, raw, styles, merges }
 }
 
 export async function loadOds(buf: ArrayBuffer): Promise<LoadedOdsSheet[]> {
@@ -218,4 +236,150 @@ export async function loadOds(buf: ArrayBuffer): Promise<LoadedOdsSheet[]> {
     sheets.push(parseTable(tables[i], styleMap))
   }
   return sheets
+}
+
+// ── Écriture (.ods avec styles + fusions) ───────────────────────────
+
+const escXml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+const escAttr = (s: string) =>
+  escXml(s).replace(/"/g, "&quot;")
+
+function isNumericVal(v: string): boolean {
+  return v.trim() !== "" && !isNaN(Number(v)) && /^-?\d*\.?\d+$/.test(v.trim())
+}
+
+// Convertit une formule en notation A1 vers la notation ODF ([.A1], plages [.A1:.B2]).
+function convertFormula(f: string): string {
+  let body = f.slice(1)
+  body = body.replace(/([A-Za-z]+\d+):([A-Za-z]+\d+)/g, "[.$1:.$2]")
+  body = body.replace(/(^|[^.\[A-Za-z0-9])([A-Za-z]{1,3}\d+)(?![\]\w])/g, (_m, pre, ref) => `${pre}[.${ref}]`)
+  return "of:=" + body
+}
+
+// CSS éditeur -> propriétés de style ODF (regroupées par type d'élément).
+function cssToOdsProps(css: CSSProperties): { cell: string; text: string; par: string } {
+  let cell = "", text = "", par = ""
+  if (css.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(String(css.backgroundColor)))
+    cell += ` fo:background-color="${css.backgroundColor}"`
+  if (css.whiteSpace === "pre-wrap" || css.whiteSpace === "pre-line")
+    cell += ' fo:wrap-option="wrap"'
+  if (css.verticalAlign)
+    cell += ` style:vertical-align="${css.verticalAlign === "middle" ? "middle" : css.verticalAlign}"`
+
+  if (css.fontWeight === "bold") text += ' fo:font-weight="bold"'
+  if (css.fontStyle === "italic") text += ' fo:font-style="italic"'
+  if (typeof css.textDecoration === "string" && css.textDecoration.includes("underline"))
+    text += ' style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"'
+  if (css.color && /^#[0-9a-fA-F]{6}$/.test(String(css.color))) text += ` fo:color="${css.color}"`
+  if (css.fontSize) text += ` fo:font-size="${css.fontSize}"`
+
+  if (css.textAlign) par += ` fo:text-align="${css.textAlign}"`
+  return { cell, text, par }
+}
+
+interface SaveOdsSheet {
+  name: string
+  rows: string[][]
+  styles?: (CSSProperties | null)[][]
+  merges?: string[]
+  display?: string[][]   // valeurs calculées (pour les formules)
+}
+
+/** Construit un fichier .ods à partir des feuilles éditées (valeurs + styles + fusions). */
+export async function saveOds(sheets: SaveOdsSheet[]): Promise<Uint8Array> {
+  const { zipSync, strToU8 } = await import("fflate")
+
+  // Dédoublonnage des styles
+  const styleDefs: string[] = []
+  const styleKeyToName = new Map<string, string>()
+  const styleNameFor = (css: CSSProperties | null | undefined): string => {
+    if (!css || Object.keys(css).length === 0) return ""
+    const key = JSON.stringify(css)
+    const existing = styleKeyToName.get(key)
+    if (existing) return existing
+    const name = `ce${styleKeyToName.size + 1}`
+    styleKeyToName.set(key, name)
+    const { cell, text, par } = cssToOdsProps(css)
+    styleDefs.push(
+      `<style:style style:name="${name}" style:family="table-cell">` +
+        (cell ? `<style:table-cell-properties${cell}/>` : "") +
+        (par ? `<style:paragraph-properties${par}/>` : "") +
+        (text ? `<style:text-properties${text}/>` : "") +
+        "</style:style>",
+    )
+    return name
+  }
+
+  const tablesXml = sheets
+    .map((sheet) => {
+      const mi = mergeInfo(sheet.merges || [])
+      const ncols = Math.max(1, ...sheet.rows.map((r) => r.length))
+      const rowsXml = sheet.rows
+        .map((row, r) => {
+          let cells = ""
+          for (let c = 0; c < ncols; c++) {
+            const key = `${r},${c}`
+            if (mi.slaves.has(key)) { cells += "<table:covered-table-cell/>"; continue }
+            const raw = row[c] ?? ""
+            const css = sheet.styles?.[r]?.[c]
+            const styleName = styleNameFor(css)
+            const styleAttr = styleName ? ` table:style-name="${styleName}"` : ""
+            const span = mi.masters.get(key)
+            const spanAttr = span
+              ? ` table:number-columns-spanned="${span.colspan}" table:number-rows-spanned="${span.rowspan}"`
+              : ""
+
+            if (raw === "") {
+              cells += `<table:table-cell${styleAttr}${spanAttr}/>`
+            } else if (raw.startsWith("=")) {
+              const disp = sheet.display?.[r]?.[c] ?? ""
+              const valAttr = isNumericVal(disp) ? ` office:value-type="float" office:value="${escAttr(disp)}"` : ' office:value-type="string"'
+              cells += `<table:table-cell${styleAttr}${spanAttr} table:formula="${escAttr(convertFormula(raw))}"${valAttr}><text:p>${escXml(disp)}</text:p></table:table-cell>`
+            } else if (isNumericVal(raw)) {
+              cells += `<table:table-cell${styleAttr}${spanAttr} office:value-type="float" office:value="${escAttr(raw)}"><text:p>${escXml(raw)}</text:p></table:table-cell>`
+            } else {
+              const inner = escXml(raw).split("\n").join("<text:line-break/>")
+              cells += `<table:table-cell${styleAttr}${spanAttr} office:value-type="string"><text:p>${inner}</text:p></table:table-cell>`
+            }
+          }
+          return `<table:table-row>${cells}</table:table-row>`
+        })
+        .join("")
+      return (
+        `<table:table table:name="${escAttr(sheet.name || "Feuille")}">` +
+        `<table:table-column table:number-columns-repeated="${ncols}"/>` +
+        rowsXml +
+        "</table:table>"
+      )
+    })
+    .join("")
+
+  const NS =
+    'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ' +
+    'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" ' +
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" ' +
+    'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" ' +
+    'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"'
+
+  const contentXml =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    `<office:document-content ${NS} office:version="1.2">` +
+    `<office:automatic-styles>${styleDefs.join("")}</office:automatic-styles>` +
+    "<office:body><office:spreadsheet>" +
+    tablesXml +
+    "</office:spreadsheet></office:body></office:document-content>"
+
+  const manifestXml =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">' +
+    '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>' +
+    '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>' +
+    "</manifest:manifest>"
+
+  return zipSync({
+    mimetype: [strToU8("application/vnd.oasis.opendocument.spreadsheet"), { level: 0 }],
+    "content.xml": strToU8(contentXml),
+    "META-INF/manifest.xml": strToU8(manifestXml),
+  })
 }
