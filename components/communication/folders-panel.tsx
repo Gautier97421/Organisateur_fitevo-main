@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import {
   FolderClosed, FolderPlus, Upload, Download, FileText, ChevronRight,
-  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X, Eye, Table,
+  Trash2, Loader2, Home, Search, Check, ArrowUpDown, Plus, Users, Info, Pencil, AlertTriangle, X, Table,
 } from "lucide-react"
 import type { Conversation, Folder, FolderFile, DirectoryUser } from "./types"
 import { CollabEditorDialog } from "./collab-editor-dialog"
@@ -462,7 +462,7 @@ export function FoldersPanel({ currentUser }: Props) {
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); openFolderInfo(f) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 p-1 transition-opacity"
+                  className="text-gray-400 hover:text-blue-500 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                   title="Informations"
                 >
                   <Info className="w-4 h-4" />
@@ -470,7 +470,7 @@ export function FoldersPanel({ currentUser }: Props) {
                 {(isAdmin || f.createdBy === currentUser.id) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditFolder(f) }}
-                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-green-600 p-1 transition-opacity"
+                    className="text-gray-400 hover:text-green-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                     title="Modifier"
                   >
                     <Pencil className="w-4 h-4" />
@@ -479,7 +479,7 @@ export function FoldersPanel({ currentUser }: Props) {
                 {(isAdmin || f.createdBy === currentUser.id) && (
                   <button
                     onClick={() => deleteFolder(f.id)}
-                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 p-1 transition-opacity"
+                    className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                     title="Supprimer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -494,7 +494,7 @@ export function FoldersPanel({ currentUser }: Props) {
               return (
                 <div
                   key={file.id}
-                  className="flex items-center gap-2 px-2 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg group"
+                  className="flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg group min-w-0"
                 >
                   {collab
                     ? <Pencil className="w-5 h-5 text-red-500 flex-shrink-0" />
@@ -502,40 +502,32 @@ export function FoldersPanel({ currentUser }: Props) {
                   <button
                     type="button"
                     onClick={() => collab ? setEditorTarget({ id: file.id, name: file.fileName, kind: "doc" }) : previewFile(file)}
-                    className="flex-1 min-w-0 text-left"
+                    className="flex-1 min-w-0 text-left overflow-hidden"
                     title={collab ? "Ouvrir le document" : "Prévisualiser"}
                   >
                     <div className="truncate text-sm text-gray-900 dark:text-white">{file.fileName}</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="truncate text-[11px] sm:text-xs text-gray-400">
                       {collab ? "Document collaboratif" : `${file.uploaderName} · ${formatSize(file.size)}`} · {new Date(file.uploadedAt).toLocaleDateString("fr-FR")}
                     </div>
                   </button>
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <div className="flex items-center gap-0 sm:gap-0.5 flex-shrink-0">
                     {collab ? (
                       /* Ouvrir l'éditeur collaboratif (document) */
                       <button
                         onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "doc" })}
                         title="Ouvrir / Modifier"
-                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="text-gray-400 hover:text-red-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                     ) : (
                       <>
-                        {/* Prévisualiser */}
-                        <button
-                          onClick={() => previewFile(file)}
-                          title="Prévisualiser"
-                          className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                         {/* Modifier en collaboratif (fichiers .txt) */}
                         {txtEdit && (
                           <button
                             onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "text" })}
                             title="Modifier"
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="text-gray-400 hover:text-blue-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -545,7 +537,7 @@ export function FoldersPanel({ currentUser }: Props) {
                           <button
                             onClick={() => setSheetTarget({ id: file.id, name: file.fileName })}
                             title="Modifier le tableur"
-                            className="text-gray-400 hover:text-green-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="text-gray-400 hover:text-green-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -555,7 +547,7 @@ export function FoldersPanel({ currentUser }: Props) {
                           <button
                             onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "odt" })}
                             title="Modifier"
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="text-gray-400 hover:text-blue-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -565,7 +557,7 @@ export function FoldersPanel({ currentUser }: Props) {
                           <button
                             onClick={() => setEditorTarget({ id: file.id, name: file.fileName, kind: "docx" })}
                             title="Modifier"
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            className="text-gray-400 hover:text-blue-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -578,7 +570,7 @@ export function FoldersPanel({ currentUser }: Props) {
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Télécharger"
-                      className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                       <Download className="w-4 h-4" />
                     </a>
@@ -587,7 +579,7 @@ export function FoldersPanel({ currentUser }: Props) {
                       <button
                         onClick={() => setFileToDelete(file)}
                         title="Supprimer"
-                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="text-gray-400 hover:text-red-600 p-0.5 sm:p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

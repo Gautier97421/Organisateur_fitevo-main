@@ -9,14 +9,15 @@ import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
 import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
-import { TaskManager } from "@/components/admin/task-manager"
 import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
+import { ExtraInfoPanel } from "@/components/employee/extra-info-panel"
+import { EndPeriodDialog } from "@/components/employee/end-period-dialog"
 import { SettingsPanel } from "@/components/employee/settings-panel"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -54,7 +55,8 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "todos" | "caisse" | "settings">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "settings">("menu")
+  const [endPeriodDialogOpen, setEndPeriodDialogOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
   const [isOnBreak, setIsOnBreak] = useState(false)
@@ -795,14 +797,24 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             onClick: () => { setCurrentView("caisse"); setMobileOpen(false) },
           }]
         : []),
-      // Accès manageur : gestion des tâches (To-Do List), comme côté admin
-      ...(hasManagerAccess
+      // Informations supplémentaires : accessibles pendant une période de travail
+      ...(selectedPeriod
         ? [{
-            id: "todos" as const,
-            label: "To-Do List",
+            id: "infos" as const,
+            label: "Informations",
             icon: ClipboardList,
-            active: currentView === "todos",
-            onClick: () => { setCurrentView("todos"); setMobileOpen(false) },
+            active: currentView === "infos",
+            onClick: () => { setCurrentView("infos"); setMobileOpen(false) },
+          }]
+        : []),
+      // Fin de période : finalise la session de travail (uniquement pendant une période)
+      ...(selectedPeriod
+        ? [{
+            id: "endperiod" as const,
+            label: "Fin de période",
+            icon: Power,
+            active: false,
+            onClick: () => { setEndPeriodDialogOpen(true); setMobileOpen(false) },
           }]
         : []),
     ]
@@ -1178,20 +1190,26 @@ setHasCalendarAccess(data.has_calendar_access !== false)
               </div>
             )}
 
-            {/* ── VUE TO-DO LIST (accès manageur : gestion des tâches) ─── */}
-            {currentView === "todos" && hasManagerAccess && (
-              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
-                  <TaskManager />
-                </div>
-              </div>
-            )}
-
-            {/* ── VUE CAISSE (brouillard de caisse, pendant une période) ─── */}
+            {/* ── VUE CAISSE (comptage de caisse, pendant une période) ─── */}
             {currentView === "caisse" && selectedPeriod && (
               <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
                   <CashRegisterBlotter
+                    period={selectedPeriod}
+                    gymId={selectedGym?.id}
+                    gymName={selectedGym?.name}
+                    userEmail={userEmail}
+                    userName={userName}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE INFORMATIONS SUPPLÉMENTAIRES ─────────────── */}
+            {currentView === "infos" && selectedPeriod && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <ExtraInfoPanel
                     period={selectedPeriod}
                     gymId={selectedGym?.id}
                     gymName={selectedGym?.name}
@@ -1368,7 +1386,7 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             </DialogHeader>
             <div className="py-4 space-y-2 text-sm text-gray-600">
               <p>Vous avez une période de travail en cours qui n'est pas terminée.</p>
-              <p className="text-gray-500">Terminez toutes les tâches obligatoires et validez la caisse avant de vous déconnecter.</p>
+              <p className="text-gray-500">Cliquez sur « Fin de période » dans le menu latéral pour clôturer votre session avant de vous déconnecter.</p>
             </div>
             <DialogFooter>
               <Button onClick={() => setShowLogoutBlockedDialog(false)} className="bg-red-600 hover:bg-red-700 flex-1">Retour aux tâches</Button>
@@ -1412,6 +1430,19 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             items={selectedCustomPage.items}
             open={showCustomPageDialog}
             onOpenChange={setShowCustomPageDialog}
+          />
+        )}
+
+        {/* Fin de période de travail */}
+        {selectedPeriod && (
+          <EndPeriodDialog
+            isOpen={endPeriodDialogOpen}
+            onClose={() => setEndPeriodDialogOpen(false)}
+            period={selectedPeriod}
+            subPeriod={selectedSubPeriod}
+            gymId={selectedGym?.id ?? null}
+            roleId={userRoleId}
+            onConfirmed={handleSessionEnd}
           />
         )}
       </div>

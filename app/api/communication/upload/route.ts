@@ -12,6 +12,7 @@ import {
   getRequestUser,
   isMember,
 } from '@/lib/communication'
+import { compressImageIfPossible } from '@/lib/image-compression'
 import logger from '@/lib/logger'
 
 export const runtime = 'nodejs'
@@ -60,19 +61,31 @@ export async function POST(request: NextRequest) {
 
     // Nom de fichier d'affichage assaini (jamais utilisé comme chemin)
     const displayName = path.basename(String(file.name || 'fichier')).slice(0, 255)
-    const ext = path.extname(displayName).slice(0, 12)
-    const storedName = `${randomUUID()}${ext}`
+    let ext = path.extname(displayName).slice(0, 12)
 
     const dir = await ensureUploadDir()
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(path.join(dir, storedName), buffer)
+    const rawBuffer = Buffer.from(await file.arrayBuffer())
+
+    // Compression image (JPEG/PNG/WebP). Sans effet pour les autres types.
+    const compressed = await compressImageIfPossible(rawBuffer, file.type)
+    const finalBuffer = compressed.buffer
+    const finalMime = compressed.mimeType
+    const finalSize = compressed.size
+
+    // Si on a converti en JPEG (cas PNG opaque par ex.), on force l'extension .jpg
+    if (compressed.compressed && finalMime === 'image/jpeg' && ext.toLowerCase() !== '.jpg' && ext.toLowerCase() !== '.jpeg') {
+      ext = '.jpg'
+    }
+
+    const storedName = `${randomUUID()}${ext}`
+    await fs.writeFile(path.join(dir, storedName), finalBuffer)
 
     const attachment = await prisma.attachment.create({
       data: {
         fileName: displayName,
         storedName,
-        mimeType: file.type,
-        size: file.size,
+        mimeType: finalMime,
+        size: finalSize,
         folderId: typeof folderId === 'string' && folderId ? folderId : null,
         uploadedBy: auth.userId,
       },

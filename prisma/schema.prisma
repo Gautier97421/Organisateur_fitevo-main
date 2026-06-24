@@ -334,6 +334,8 @@ model CashRegisterField {
   orderIndex  Int      @default(0) @map("order_index")
   gymId       String?  @map("gym_id") // Si null, appliqué à tous les salles
   period      String?  // matin, aprem, journee (si spécifié)
+  allowPhoto  Boolean  @default(false) @map("allow_photo") // Autorise l'employé à joindre une photo
+  reportIncident Boolean @default(false) @map("report_incident") // Les saisies sur ce champ apparaissent dans la page Incidents
   isActive    Boolean  @default(true) @map("is_active")
   createdBy   String   @map("created_by")
   createdAt   DateTime @default(now()) @map("created_at")

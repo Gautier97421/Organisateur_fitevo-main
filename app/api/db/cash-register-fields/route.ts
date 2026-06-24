@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { label, fieldType, isRequired, period, gymId, createdBy } = body
+    const { label, fieldType, isRequired, period, gymId, createdBy, allowPhoto, reportIncident } = body
 
     if (!label || !createdBy) {
       return NextResponse.json(
@@ -80,6 +80,8 @@ export async function POST(request: NextRequest) {
         isRequired: isRequired || false,
         period: period || null,
         gymId: gymId || null,
+        allowPhoto: !!allowPhoto,
+        reportIncident: !!reportIncident,
         orderIndex: nextOrder,
         createdBy
       }
@@ -103,20 +105,25 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, label, fieldType, isRequired, orderIndex } = body
+    const { id, label, fieldType, isRequired, orderIndex, allowPhoto, reportIncident, period } = body
 
     if (!id) {
       return NextResponse.json({ error: "ID est obligatoire" }, { status: 400 })
     }
 
+    const updateData: any = {
+      label,
+      fieldType,
+      isRequired,
+      orderIndex,
+    }
+    if (allowPhoto !== undefined) updateData.allowPhoto = !!allowPhoto
+    if (reportIncident !== undefined) updateData.reportIncident = !!reportIncident
+    if (period !== undefined) updateData.period = period || null
+
     const field = await prisma.cashRegisterField.update({
       where: { id },
-      data: {
-        label,
-        fieldType,
-        isRequired,
-        orderIndex
-      }
+      data: updateData,
     })
 
     return NextResponse.json({ data: field }, { status: 200 })

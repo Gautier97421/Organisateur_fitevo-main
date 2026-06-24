@@ -39,10 +39,15 @@ interface CashRegisterFormProps {
   onSubmit: (data: CashRegisterData) => void
   period: "matin" | "aprem" | "journee"
   gymId?: string
-  mode?: "start" | "end"
+  mode?: "start" | "end" | "during"
+  initialData?: {
+    coinCounts?: Record<string, number>
+    customFieldValues?: Record<string, any>
+    notes?: string
+  } | null
 }
 
-export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mode = "end" }: CashRegisterFormProps) {
+export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mode = "end", initialData = null }: CashRegisterFormProps) {
   const [formData, setFormData] = useState<CashRegisterData>({
     cash_amount: 0,
     total_register: 0,
@@ -85,11 +90,16 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
           const data = await response.json()
           const fields = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
           setCustomFields(fields)
-          
+
           // Initialiser les valeurs des champs personnalisés
           const initialValues: Record<string, any> = {}
           fields.forEach((field: CashRegisterField) => {
-            initialValues[field.id] = field.fieldType === "checkbox" ? false : ""
+            const preset = initialData?.customFieldValues?.[field.id]
+            if (preset !== undefined) {
+              initialValues[field.id] = preset
+            } else {
+              initialValues[field.id] = field.fieldType === "checkbox" ? false : ""
+            }
           })
           setCustomFieldValues(initialValues)
         }
@@ -98,11 +108,18 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
         setIsLoadingFields(false)
       }
     }
-    
+
     if (isOpen) {
       loadCustomFields()
+      // Préremplir coins et notes depuis initialData (mode "during")
+      if (initialData?.coinCounts) {
+        setCoinCounts((prev) => ({ ...prev, ...initialData.coinCounts }))
+      }
+      if (initialData?.notes !== undefined) {
+        setFormData((prev) => ({ ...prev, notes: initialData.notes || "" }))
+      }
     }
-  }, [isOpen, period, gymId])
+  }, [isOpen, period, gymId, initialData])
 
   const coinLabels = {
     "0.01": "1 centime",
@@ -160,7 +177,9 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
         .filter(([_, count]) => count > 0)
         .map(([value, count]) => `${coinLabels[value as keyof typeof coinLabels]}: ${count}`)
         .join(", "),
-      ...(isStartMode ? {} : sanitizedCustomValues),
+      // Conserve aussi les coinCounts bruts pour permettre la modification ultérieure
+      _coinCounts: { ...coinCounts },
+      ...(isStartMode || isDuringMode ? {} : sanitizedCustomValues),
       notes: isStartMode ? "" : formData.notes,
     }
     onSubmit(finalData)
@@ -179,6 +198,25 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
 
   const total = calculateTotal()
   const isStartMode = mode === "start"
+  const isDuringMode = mode === "during"
+
+  const dialogTitle = isStartMode
+    ? "Comptage de caisse d'ouverture"
+    : isDuringMode
+      ? "Comptage de caisse - " + getPeriodText()
+      : "Fiche de Caisse - " + getPeriodText()
+
+  const dialogDescription = isStartMode
+    ? "Première connexion du jour: veuillez compter la caisse d'ouverture avant de commencer."
+    : isDuringMode
+      ? "Comptage de caisse pendant votre période de travail. Vous pouvez le modifier à tout moment."
+      : "Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list."
+
+  const submitLabel = isStartMode
+    ? "Valider l'ouverture"
+    : isDuringMode
+      ? "Enregistrer"
+      : "Valider et Envoyer"
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -186,12 +224,10 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
         <DialogHeader>
           <DialogTitle className="text-lg md:text-2xl flex items-center gap-2 text-gray-900">
             <span className="text-2xl md:text-3xl flex-shrink-0">💰</span>
-            <span className="break-words">{isStartMode ? "Comptage de caisse d'ouverture" : "Fiche de Caisse - " + getPeriodText()}</span>
+            <span className="break-words">{dialogTitle}</span>
           </DialogTitle>
           <DialogDescription className="text-sm md:text-lg text-gray-600">
-            {isStartMode
-              ? "Première connexion du jour: veuillez compter la caisse d'ouverture avant de commencer."
-              : "Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list."}
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -228,8 +264,8 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
             </CardContent>
           </Card>
 
-          {/* Champs personnalisés de caisse */}
-          {!isStartMode && !isLoadingFields && customFields.length > 0 && (
+          {/* Champs personnalisés de caisse (uniquement en validation fin de période) */}
+          {!isStartMode && !isDuringMode && !isLoadingFields && customFields.length > 0 && (
             <Card className="bg-blue-50 border-blue-200">
               <CardHeader>
                 <CardTitle className="text-lg text-gray-900">📋 Informations supplémentaires</CardTitle>
@@ -318,7 +354,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
             disabled={total <= 0}
             className="bg-green-600 hover:bg-green-700 text-base md:text-lg px-4 md:px-6 flex items-center justify-center gap-2 w-full sm:w-auto"
           >
-            <CheckCircle className="h-5 w-5" /> {isStartMode ? "Valider l'ouverture" : "Valider et Envoyer"}
+            <CheckCircle className="h-5 w-5" /> {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

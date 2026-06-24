@@ -13,6 +13,10 @@ function getTransporter() {
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    tls: {
+      rejectUnauthorized: false,
+      minVersion: "TLSv1",
+    },
   })
 }
 
@@ -32,9 +36,8 @@ async function dispatch(to: string | string[], subject: string, html: string): P
     await transporter.sendMail({ from, to: recipients, subject, html })
   } catch (smtpError) {
     logger.error("Échec envoi email SMTP", smtpError)
-    logger.info(`=== EMAIL (fallback SMTP) — ${subject} ===`)
-    logger.info(`To: ${recipients}`)
-    logger.info("===========================================")
+    logger.error(`Host: ${process.env.SMTP_HOST}  Port: ${process.env.SMTP_PORT}  To: ${recipients}`)
+    throw smtpError
   }
 }
 

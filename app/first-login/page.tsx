@@ -151,7 +151,7 @@ function FirstLoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Choisissez un mot de passe"
                   required
-                  minLength={6}
+                  minLength={9}
                   className="pr-10 dark:bg-gray-700 dark:text-white [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <button
@@ -162,7 +162,7 @@ function FirstLoginForm() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Minimum 6 caractères</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Minimum 9 caractères</p>
             </div>
 
             <div className="space-y-2">
@@ -177,7 +177,7 @@ function FirstLoginForm() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmez votre mot de passe"
                   required
-                  minLength={6}
+                  minLength={9}
                   className="pr-10 dark:bg-gray-700 dark:text-white [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-contacts-auto-fill-button]:hidden"
                 />
                 <button

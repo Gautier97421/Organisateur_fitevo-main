@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Trash2, UserCheck, UserX, Shield, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil, Camera } from "lucide-react"
+import { Plus, Trash2, UserCheck, UserX, Shield, ShieldOff, Users, User, Building2, Loader2, AlertCircle, X, Check, MessageCircle, Save, QrCode, CheckCircle, XCircle, Pencil, Camera, ArrowUp, ArrowDown } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabase, type Employee, type Admin, type Gym } from "@/lib/api-client"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
@@ -108,6 +108,14 @@ export function EmployeeManager() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
+  const [showRoleDialog, setShowRoleDialog] = useState(false)
+  const [roleChange, setRoleChange] = useState<{
+    id: string
+    name: string
+    fromRole: "employee" | "admin"
+    toRole: "employee" | "admin"
+  } | null>(null)
+  const [isChangingRole, setIsChangingRole] = useState(false)
   const [selectedUser, setSelectedUser] = useState<{
     id: string
     name: string
@@ -502,6 +510,54 @@ export function EmployeeManager() {
       setShowStatusDialog(false)
       setSelectedUser(null)
     } catch (error) {
+    }
+  }
+
+  const confirmRoleChange = (
+    id: string,
+    name: string,
+    fromRole: "employee" | "admin",
+    toRole: "employee" | "admin",
+  ) => {
+    if (id === getUserId()) return
+    setRoleChange({ id, name, fromRole, toRole })
+    setShowRoleDialog(true)
+  }
+
+  const executeRoleChange = async () => {
+    if (!roleChange) return
+    setIsChangingRole(true)
+    try {
+      const response = await fetch(`/api/db/users/${roleChange.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: roleChange.toRole }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err?.error || "Échec du changement de rôle")
+      }
+
+      toast({
+        title: roleChange.toRole === "admin" ? "Promotion réussie" : "Rétrogradation effectuée",
+        description:
+          roleChange.toRole === "admin"
+            ? `${roleChange.name} est désormais administrateur.`
+            : `${roleChange.name} est désormais employé.`,
+      })
+
+      setShowRoleDialog(false)
+      setRoleChange(null)
+      await loadData()
+      setActiveTab(roleChange.toRole === "admin" ? "admins" : "employees")
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Impossible de modifier le rôle.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsChangingRole(false)
     }
   }
 
@@ -1269,6 +1325,17 @@ export function EmployeeManager() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        {isSuperAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmRoleChange(employee.id, employee.name, "employee", "admin")}
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            title="Promouvoir en admin"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1486,6 +1553,17 @@ export function EmployeeManager() {
                         </div>
                       </div>
                       <div className="flex space-x-1">
+                        {isSuperAdmin && !admin.is_super_admin && admin.id !== getUserId() && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmRoleChange(admin.id, admin.name, "admin", "employee")}
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            title="Rétrograder en employé"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1586,6 +1664,62 @@ export function EmployeeManager() {
             </Button>
             <Button onClick={executeStatusChange} className="bg-red-600 hover:bg-red-700">
               <Check className="mr-2 h-4 w-4" />
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de promotion / rétrogradation */}
+      <Dialog open={showRoleDialog} onOpenChange={(open) => { if (!open) { setShowRoleDialog(false); setRoleChange(null) } }}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2 text-gray-900">
+              {roleChange?.toRole === "admin" ? (
+                <Shield className="h-6 w-6 text-purple-600" />
+              ) : (
+                <ShieldOff className="h-6 w-6 text-amber-600" />
+              )}
+              <span>
+                {roleChange?.toRole === "admin" ? "Promouvoir en administrateur" : "Rétrograder en employé"}
+              </span>
+            </DialogTitle>
+            <DialogDescription className="text-base text-gray-600">
+              {roleChange && (
+                <>
+                  Voulez-vous {roleChange.toRole === "admin" ? "promouvoir" : "rétrograder"}{" "}
+                  <strong>{roleChange.name}</strong> au rôle{" "}
+                  <strong>{roleChange.toRole === "admin" ? "administrateur" : "employé"}</strong> ?
+                  <br />
+                  <span className="text-amber-600 font-medium text-sm">
+                    {roleChange.toRole === "admin"
+                      ? "L'utilisateur aura accès aux fonctionnalités d'administration."
+                      : "L'utilisateur perdra ses droits d'administration."}
+                  </span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowRoleDialog(false); setRoleChange(null) }}
+              disabled={isChangingRole}
+              className="border border-gray-300 hover:bg-gray-50"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Annuler
+            </Button>
+            <Button
+              onClick={executeRoleChange}
+              disabled={isChangingRole}
+              className={roleChange?.toRole === "admin" ? "bg-purple-600 hover:bg-purple-700" : "bg-amber-600 hover:bg-amber-700"}
+            >
+              {isChangingRole ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
               Confirmer
             </Button>
           </DialogFooter>

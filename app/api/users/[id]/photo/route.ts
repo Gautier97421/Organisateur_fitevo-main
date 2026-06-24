@@ -4,6 +4,7 @@ import path from 'node:path'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthWithRole } from '@/lib/auth-middleware'
 import { isAppAdmin } from '@/lib/communication'
+import { compressImageIfPossible } from '@/lib/image-compression'
 import logger from '@/lib/logger'
 
 export const runtime = 'nodejs'
@@ -61,9 +62,17 @@ export async function POST(
       await fs.unlink(oldFile).catch(() => {})
     }
 
-    const filename = `${id}${ext}`
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(path.join(dir, filename), buffer)
+    const rawBuffer = Buffer.from(await file.arrayBuffer())
+    // Compression (sauf GIF animé qui n'est pas dans les mimes compressibles)
+    const compressed = await compressImageIfPossible(rawBuffer, file.type)
+    // Si la compression a changé le mime (ex: PNG -> JPEG), reflet sur l'extension stockée
+    let finalExt = ext
+    if (compressed.compressed && compressed.mimeType === 'image/jpeg') finalExt = '.jpg'
+    else if (compressed.compressed && compressed.mimeType === 'image/webp') finalExt = '.webp'
+    else if (compressed.compressed && compressed.mimeType === 'image/png') finalExt = '.png'
+
+    const filename = `${id}${finalExt}`
+    await fs.writeFile(path.join(dir, filename), compressed.buffer)
 
     const photoUrl = `/api/users/${id}/photo`
     await prisma.user.update({ where: { id }, data: { profilePhoto: filename } })

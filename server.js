@@ -43,7 +43,9 @@ function extractSessionCookie(cookieHeader) {
   if (!cookieHeader) return null
   for (const part of cookieHeader.split(';')) {
     const [name, ...rest] = part.trim().split('=')
-    if (name === 'fitevo_session') return rest.join('=')
+    if (name === 'fitevo_session') {
+      try { return decodeURIComponent(rest.join('=')) } catch { return rest.join('=') }
+    }
   }
   return null
 }
@@ -149,6 +151,8 @@ app.prepare().then(async () => {
     const parsed = parse(req.url || '', true)
     const pathname = parsed.pathname
 
+    console.log(`[WS] upgrade request: ${pathname} | cookie: ${req.headers.cookie ? 'présent' : 'absent'}`)
+
     // ── Collaboration documents (Yjs) ──────────────────────────────
     // Le client y-websocket place le nom de salle dans le chemin : /api/collab/<docId>
     if (pathname && pathname.startsWith('/api/collab/')) {
@@ -183,6 +187,7 @@ app.prepare().then(async () => {
 
     const session = verifySession(extractSessionCookie(req.headers.cookie))
     if (!session) {
+      console.log(`[WS] rejeté: session invalide (secret configuré: ${!!getSessionSecret()})`)
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
       return

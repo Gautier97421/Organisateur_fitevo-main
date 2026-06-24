@@ -1020,44 +1020,6 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         ))}
       </div>
 
-      {/* Bouton d'envoi */}
-      {allRequiredTasksValidated && !isBlocked && (
-        <Card className="border-2 border-green-300 bg-green-50">
-          <CardContent className="p-6 text-center">
-            <div className="space-y-4">
-              {cashSaveError && (
-                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-                  {cashSaveError}
-                </div>
-              )}
-              <div className="text-green-700">
-                <PartyPopper className="h-12 w-12 mx-auto text-green-600" />
-                <p className="text-xl font-bold mt-2">Félicitations !</p>
-                <p className="text-lg">Toutes les tâches obligatoires sont validées</p>
-                {isCheckingCashStatus ? (
-                  <p className="text-sm mt-2 text-gray-600 flex items-center justify-center gap-1">
-                    <Hourglass className="h-4 w-4" /> Vérification de la caisse du jour...
-                  </p>
-                ) : (
-                  <p className="text-sm mt-2 text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
-                    <DollarSign className="h-4 w-4" /> Vous devez remplir la fiche de caisse pour terminer votre période.
-                  </p>
-                )}
-              </div>
-              <Button
-                onClick={submitTodoList}
-                disabled={isCheckingCashStatus}
-                className="bg-green-600 hover:bg-green-700 text-white text-base md:text-xl px-5 md:px-8 py-3 md:py-4 h-auto flex items-center justify-center gap-2 w-full sm:w-auto mx-auto"
-              >
-                <>
-                  <DollarSign className="h-5 w-5 md:h-6 md:w-6 flex-shrink-0" /> Remplir la fiche de caisse
-                </>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Dialog de confirmation de validation */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
         <DialogContent className="sm:max-w-md bg-white" aria-describedby="validation-description">

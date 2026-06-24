@@ -35,6 +35,8 @@ interface CashRegisterField {
   period?: string
   gymId?: string
   isActive: boolean
+  allowPhoto?: boolean
+  reportIncident?: boolean
 }
 
 interface CashRegisterFieldManagerProps {
@@ -55,6 +57,8 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
     fieldType: "number",
     isRequired: false,
     period: "all",
+    allowPhoto: false,
+    reportIncident: false,
   })
 
   // Charger les champs
@@ -83,6 +87,8 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         fieldType: field.fieldType,
         isRequired: field.isRequired,
         period: field.period || "all",
+        allowPhoto: !!field.allowPhoto,
+        reportIncident: !!field.reportIncident,
       })
       setIsEditing(true)
     } else {
@@ -92,6 +98,8 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
         fieldType: "number",
         isRequired: false,
         period: "all",
+        allowPhoto: false,
+        reportIncident: false,
       })
       setIsEditing(false)
     }
@@ -222,11 +230,17 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
                   <GripVertical className="h-5 w-5 text-gray-400" />
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">{field.label}</h3>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 mt-2 flex-wrap">
                       <Badge variant="outline">{getFieldTypeLabel(field.fieldType)}</Badge>
                       <Badge variant="outline">Période: {getPeriodLabel(field.period)}</Badge>
                       {field.isRequired && (
                         <Badge className="bg-red-100 text-red-800">Obligatoire</Badge>
+                      )}
+                      {field.allowPhoto && (
+                        <Badge className="bg-indigo-100 text-indigo-800">Photo</Badge>
+                      )}
+                      {field.reportIncident && (
+                        <Badge className="bg-amber-100 text-amber-800">Incident</Badge>
                       )}
                       {!field.isActive && (
                         <Badge className="bg-gray-100 text-gray-800">Inactif</Badge>
@@ -330,6 +344,28 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
                   <SelectItem value="journee">Journée</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="allow-photo"
+                checked={formData.allowPhoto}
+                onCheckedChange={(checked) => setFormData({ ...formData, allowPhoto: !!checked })}
+              />
+              <Label htmlFor="allow-photo" className="text-sm font-medium cursor-pointer">
+                Autoriser une photo (ex&nbsp;: machine en panne)
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="report-incident"
+                checked={formData.reportIncident}
+                onCheckedChange={(checked) => setFormData({ ...formData, reportIncident: !!checked })}
+              />
+              <Label htmlFor="report-incident" className="text-sm font-medium cursor-pointer">
+                Informer dans Incidents (les saisies apparaîtront dans la page Incidents)
+              </Label>
             </div>
 
             <div className="flex items-center gap-2">

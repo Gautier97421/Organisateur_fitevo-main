@@ -69,7 +69,8 @@ export function extractSessionCookie(cookieHeader: string | undefined | null): s
   for (const cookie of cookies) {
     const [name, ...rest] = cookie.trim().split('=')
     if (name === 'fitevo_session') {
-      return rest.join('=')
+      const raw = rest.join('=')
+      try { return decodeURIComponent(raw) } catch { return raw }
     }
   }
   return null
