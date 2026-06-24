@@ -529,3 +529,41 @@ model PasswordResetToken {
 
   @@map("password_reset_tokens")
 }
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  price       Float
+  category    String?
+  stock       Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  gymId       String?  @map("gym_id")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sales Sale[]
+
+  @@map("products")
+}
+
+model Sale {
+  id          String   @id @default(cuid())
+  productId   String   @map("product_id")
+  productName String   @map("product_name")
+  quantity    Int      @default(1)
+  unitPrice   Float    @map("unit_price")
+  total       Float
+  userEmail   String   @map("user_email")
+  userName    String   @map("user_name")
+  gymId       String?  @map("gym_id")
+  period      String?
+  saleDate    DateTime @default(now()) @map("sale_date")
+  saleMonth   String   @map("sale_month")
+  notes       String?  @db.Text
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sales")
+}

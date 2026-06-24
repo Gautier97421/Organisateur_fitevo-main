@@ -11,13 +11,14 @@ import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
 import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
 import { ExtraInfoPanel } from "@/components/employee/extra-info-panel"
+import { VentePanel } from "@/components/employee/vente-panel"
 import { EndPeriodDialog } from "@/components/employee/end-period-dialog"
 import { SettingsPanel } from "@/components/employee/settings-panel"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power, ShoppingBag } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -55,7 +56,7 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "settings">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings">("menu")
   const [endPeriodDialogOpen, setEndPeriodDialogOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
@@ -807,6 +808,16 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             onClick: () => { setCurrentView("infos"); setMobileOpen(false) },
           }]
         : []),
+      // Ventes : enregistrer une vente pendant une période de travail
+      ...(selectedPeriod
+        ? [{
+            id: "vente" as const,
+            label: "Vente",
+            icon: ShoppingBag,
+            active: currentView === "vente",
+            onClick: () => { setCurrentView("vente"); setMobileOpen(false) },
+          }]
+        : []),
       // Fin de période : finalise la session de travail (uniquement pendant une période)
       ...(selectedPeriod
         ? [{
@@ -1210,6 +1221,21 @@ setHasCalendarAccess(data.has_calendar_access !== false)
               <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
                   <ExtraInfoPanel
+                    period={selectedPeriod}
+                    gymId={selectedGym?.id}
+                    gymName={selectedGym?.name}
+                    userEmail={userEmail}
+                    userName={userName}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE VENTES ───────────────────────────────────────── */}
+            {currentView === "vente" && selectedPeriod && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <VentePanel
                     period={selectedPeriod}
                     gymId={selectedGym?.id}
                     gymName={selectedGym?.name}

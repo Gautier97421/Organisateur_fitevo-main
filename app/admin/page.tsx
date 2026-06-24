@@ -13,13 +13,14 @@ import { CashRegisterFieldManager } from "@/components/admin/cash-register-field
 import { CashRecapManager } from "@/components/admin/cash-recap-manager"
 import { IncidentsManager } from "@/components/admin/incidents-manager"
 import { SettingsManager } from "@/components/admin/settings-manager"
+import { VentesStockManager } from "@/components/admin/ventes-stock-manager"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import {
   ClipboardList, Building2, Users, Calendar, CalendarDays,
   Activity, Shield, LogOut, LayoutDashboard, Banknote, BarChart3,
-  Menu, X, ChevronRight, UserCheck, PanelLeftClose, PanelLeftOpen, Settings, AlertTriangle,
+  Menu, X, ChevronRight, UserCheck, PanelLeftClose, PanelLeftOpen, Settings, AlertTriangle, ShoppingBag,
 } from "lucide-react"
 import * as LucideIcons from "lucide-react"
 import { fetchCurrentUser, clearCurrentUser } from "@/lib/current-user"
@@ -131,8 +132,9 @@ export default function AdminPage() {
     { id: "calendar",    label: "Événements",    icon: CalendarDays,  component: <CalendarManager /> },
     { id: "cash-fields", label: "Champs Caisse", icon: Banknote,      component: <CashRegisterFieldManager /> },
     { id: "cash-recap",  label: "Tableau de bord",  icon: BarChart3,     component: <CashRecapManager /> },
-    { id: "incidents",   label: "Incidents",       icon: AlertTriangle, component: <IncidentsManager /> },
-    { id: "monitor",     label: "Suivi",          icon: Activity,      component: <RealTimeMonitor /> },
+    { id: "incidents",   label: "Incidents",       icon: AlertTriangle,  component: <IncidentsManager /> },
+    { id: "monitor",     label: "Suivi",           icon: Activity,       component: <RealTimeMonitor /> },
+    { id: "ventes",      label: "Ventes & Stock",  icon: ShoppingBag,    component: <VentesStockManager /> },
   ]
 
   const managementTabs = (userRole === "superadmin")
