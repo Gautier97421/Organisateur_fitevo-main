@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, ArrowLeft, CheckCircle, XCircle, CalendarDays, Edit2, Trash2, MapPin, Bell } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import {
@@ -94,7 +95,11 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     is_multi_day: false,
     event_start_date: "",
     event_end_date: "",
+    assigned_employee_emails: [] as string[],
+    assigned_role_ids: [] as string[],
   })
+  const [assignmentEmployees, setAssignmentEmployees] = useState<{id: string; name: string; email: string}[]>([])
+  const [assignmentRoles, setAssignmentRoles] = useState<{id: string; name: string}[]>([])
   // Rappels (accès manageur uniquement)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
   const [reminderEventId, setReminderEventId] = useState<string | null>(null)
@@ -150,6 +155,14 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
     if (userId) headers["x-user-id"] = userId
     if (userEmail) headers["x-user-email"] = userEmail
     return headers
+  }
+
+  const toggleArraySelection = (current: string[], value: string, checked: boolean): string[] => {
+    if (checked) {
+      if (current.includes(value)) return current
+      return [...current, value]
+    }
+    return current.filter((item) => item !== value)
   }
 
   const normalizeDateOnly = (value: string): string => {
@@ -387,6 +400,21 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
   }
 
   useEffect(() => {
+    if (!isManager) return
+    const loadAssignmentOptions = async () => {
+      try {
+        const [employeesResult, rolesResult] = await Promise.all([
+          supabase.from("employees").select("id,name,email").eq("is_active", true).order("name", { ascending: true }),
+          supabase.from("roles").select("id,name").order("name", { ascending: true }),
+        ])
+        if (!employeesResult.error) setAssignmentEmployees(Array.isArray(employeesResult.data) ? employeesResult.data : [])
+        if (!rolesResult.error) setAssignmentRoles(Array.isArray(rolesResult.data) ? rolesResult.data : [])
+      } catch {}
+    }
+    loadAssignmentOptions()
+  }, [isManager])
+
+  useEffect(() => {
     if (activeView === "events") {
       if (calendarView === "year") {
         loadEvents()
@@ -461,9 +489,12 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         return
       }
 
-      // Accès manageur : si une restriction de validation est demandée, créer
-      // l'événement planifié (uniquement pour les événements à jour unique).
-      if (isManager && newEvent.requires_validation && !newEvent.is_multi_day) {
+      // Accès manageur : créer l'événement planifié si assignations ou validation.
+      if (
+        isManager &&
+        !newEvent.is_multi_day &&
+        (newEvent.assigned_employee_emails.length > 0 || newEvent.assigned_role_ids.length > 0 || newEvent.requires_validation)
+      ) {
         try {
           await fetch("/api/db/scheduled-events", {
             method: "POST",
@@ -474,7 +505,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
               eventDate,
               startTime: newEvent.event_time || null,
               durationMinutes: newEvent.duration_minutes,
-              requiresValidation: true,
+              assignedEmployeeEmails: newEvent.assigned_employee_emails,
+              assignedRoleIds: newEvent.assigned_role_ids,
+              requiresValidation: newEvent.requires_validation,
               createdByEmail: userEmail,
             }),
           })
@@ -500,6 +533,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
         is_multi_day: false,
         event_start_date: "",
         event_end_date: "",
+        assigned_employee_emails: [],
+        assigned_role_ids: [],
       })
       setShowEventDialog(false)
       setSelectedDate(null)
@@ -549,7 +584,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
 
       setShowEditEventDialog(false)
       setEventToEdit(null)
-      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "" })
+      setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "", assigned_employee_emails: [], assigned_role_ids: [] })
       setAttemptedSubmit(false)
       setErrorMessage("")
     } catch (error) {
@@ -1047,6 +1082,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
               setAttemptedSubmit(false)
               setErrorMessage("")
               setSelectedDate(null)
+              setNewEvent(prev => ({ ...prev, assigned_employee_emails: [], assigned_role_ids: [], requires_validation: false }))
             }
           }}>
             <DialogContent className="sm:max-w-md bg-white max-h-[90vh] overflow-y-auto" aria-describedby="add-event-description">
@@ -1188,23 +1224,83 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     />
                   </div>
                 </div>
-                {/* Restriction de validation — réservé aux accès manageur, comme les admins */}
+                {/* Assignation (optionnelle) — réservé aux accès manageur */}
                 {isManager && (
-                  <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-                    <input
-                      type="checkbox"
-                      id="employee-requires-validation"
-                      checked={newEvent.requires_validation}
-                      onChange={(e) => setNewEvent({ ...newEvent, requires_validation: e.target.checked })}
-                      className="mt-1 h-4 w-4 accent-red-600 cursor-pointer"
-                    />
+                  <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+                    <p className="text-sm font-semibold text-gray-800">Assignation (optionnelle)</p>
+
                     <div>
-                      <label htmlFor="employee-requires-validation" className="text-sm font-medium text-gray-800 cursor-pointer">
-                        Restriction de validation
-                      </label>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Si activé, l'événement passe au lendemain tant qu'il n'est pas validé.
-                      </p>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Employe(s) assigne(s)</label>
+                      <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                        {assignmentEmployees.length === 0 ? (
+                          <p className="text-xs text-gray-500">Aucun employe actif.</p>
+                        ) : (
+                          assignmentEmployees.map((employee) => (
+                            <label key={employee.id} className="flex items-center gap-2 text-sm text-gray-700">
+                              <Checkbox
+                                checked={newEvent.assigned_employee_emails.includes(employee.email)}
+                                onCheckedChange={(checked) =>
+                                  setNewEvent({
+                                    ...newEvent,
+                                    assigned_employee_emails: toggleArraySelection(
+                                      newEvent.assigned_employee_emails,
+                                      employee.email,
+                                      Boolean(checked),
+                                    ),
+                                  })
+                                }
+                              />
+                              <span>{employee.name} ({employee.email})</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">Role(s) assigne(s)</label>
+                      <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                        {assignmentRoles.length === 0 ? (
+                          <p className="text-xs text-gray-500">Aucun role disponible.</p>
+                        ) : (
+                          assignmentRoles.map((role) => (
+                            <label key={role.id} className="flex items-center gap-2 text-sm text-gray-700">
+                              <Checkbox
+                                checked={newEvent.assigned_role_ids.includes(role.id)}
+                                onCheckedChange={(checked) =>
+                                  setNewEvent({
+                                    ...newEvent,
+                                    assigned_role_ids: toggleArraySelection(
+                                      newEvent.assigned_role_ids,
+                                      role.id,
+                                      Boolean(checked),
+                                    ),
+                                  })
+                                }
+                              />
+                              <span>{role.name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
+                      <Checkbox
+                        id="employee-requires-validation"
+                        checked={newEvent.requires_validation}
+                        onCheckedChange={(checked) =>
+                          setNewEvent({ ...newEvent, requires_validation: Boolean(checked) })
+                        }
+                      />
+                      <div>
+                        <label htmlFor="employee-requires-validation" className="text-sm font-medium text-gray-800 cursor-pointer">
+                          Restriction de validation
+                        </label>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Si activé, l'événement passe au lendemain tant qu'il n'est pas validé.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1217,6 +1313,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                     setSelectedDate(null)
                     setAttemptedSubmit(false)
                     setErrorMessage("")
+                    setNewEvent(prev => ({ ...prev, assigned_employee_emails: [], assigned_role_ids: [], requires_validation: false }))
                   }}
                   className="text-sm sm:text-lg px-4 sm:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
                 >
@@ -1327,6 +1424,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                                     is_multi_day: !!event.event_end_date,
                                     event_start_date: normalizeDateOnly(event.event_date),
                                     event_end_date: event.event_end_date ? normalizeDateOnly(event.event_end_date) : "",
+                                    assigned_employee_emails: [],
+                                    assigned_role_ids: [],
                                   })
                                   setShowDayEventsDialog(false)
                                   setShowEditEventDialog(true)
@@ -1392,7 +1491,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
             setShowEditEventDialog(open)
             if (!open) {
               setEventToEdit(null)
-              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "" })
+              setNewEvent({ title: "", description: "", location: "", event_time: "", duration_minutes: 60, requires_validation: false, is_multi_day: false, event_start_date: "", event_end_date: "", assigned_employee_emails: [], assigned_role_ids: [] })
               setAttemptedSubmit(false)
               setErrorMessage("")
             }

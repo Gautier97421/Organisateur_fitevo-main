@@ -129,8 +129,12 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.profile_photo = mapped.profilePhoto
       delete mapped.profilePhoto
     }
+    if (mapped.roleId !== undefined) {
+      mapped.role_id = mapped.roleId
+      delete mapped.roleId
+    }
   }
-  
+
   // Mapper date -> work_date pour work_schedules
   if (table === 'work_schedules' && mapped.date !== undefined) {
     mapped.work_date = mapped.date

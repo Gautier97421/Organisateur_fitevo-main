@@ -13,6 +13,7 @@ import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 import { toast } from "sonner"
 import { CashRegisterForm } from "./cash-register-form"
+import { RecurringTodoList } from "./recurring-todo-list"
 import {
   Dialog,
   DialogContent,
@@ -1019,6 +1020,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
           </Card>
         ))}
       </div>
+
+      {/* Tâches récurrentes du jour */}
+      <RecurringTodoList gymId={gymId} roleId={roleId} />
 
       {/* Dialog de confirmation de validation */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>

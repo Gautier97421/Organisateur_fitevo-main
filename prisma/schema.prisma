@@ -168,11 +168,12 @@ model Gym {
   updatedAt         DateTime   @updatedAt @map("updated_at")
   
   tasks              Task[]
+  recurringTasks     RecurringTask[]
   timeEntries        TimeEntry[]
   userGyms           UserGym[]
   workSchedules      WorkSchedule[]
   cashRegisterFields CashRegisterField[]
-  
+
   @@map("gyms")
 }
 
@@ -201,6 +202,42 @@ model Task {
   gym  Gym?  @relation(fields: [gymId], references: [id])
   
   @@map("tasks")
+}
+
+model RecurringTask {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String?
+  recurrenceType       String   @map("recurrence_type") // "daily", "weekly", "monthly"
+  recurrenceInterval   Int      @default(1) @map("recurrence_interval") // Every N days/weeks/months
+  startDate            String   @map("start_date") // YYYY-MM-DD, first occurrence date
+  assignedRoleIds      Json?    @map("assigned_role_ids") // String[] of role IDs
+  assignedUserEmails   Json?    @map("assigned_user_emails") // String[] of user emails
+  excludeWeekends      Boolean  @default(false) @map("exclude_weekends")
+  gymId                String?  @map("gym_id")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdBy            String   @map("created_by")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  completions RecurringTaskCompletion[]
+  gym         Gym? @relation(fields: [gymId], references: [id])
+
+  @@map("recurring_tasks")
+}
+
+model RecurringTaskCompletion {
+  id              String   @id @default(cuid())
+  recurringTaskId String   @map("recurring_task_id")
+  completedBy     String   @map("completed_by") // user email
+  completedByName String?  @map("completed_by_name")
+  dueDate         String   @map("due_date") // YYYY-MM-DD, the date this occurrence was due
+  completedAt     DateTime @default(now()) @map("completed_at")
+
+  recurringTask RecurringTask @relation(fields: [recurringTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringTaskId, dueDate, completedBy])
+  @@map("recurring_task_completions")
 }
 
 model WorkSchedule {

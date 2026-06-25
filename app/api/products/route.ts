@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuth, verifyAuthWithRole } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await verifyAuthWithRole(request)
-  if (!auth || !["admin", "superadmin"].includes(auth.role)) {
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
   }
 

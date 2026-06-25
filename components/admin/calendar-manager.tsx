@@ -1001,44 +1001,44 @@ export function CalendarManager() {
       </div>
 
       {/* Navigation entre vues */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
         <Button
           variant={activeView === "calendar" ? "default" : "outline"}
           onClick={() => setActiveView("calendar")}
-          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+          className={`flex items-center justify-center gap-2 text-sm lg:text-base px-3 py-3 h-auto rounded-xl transition-all duration-200 ${
             activeView === "calendar"
               ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Calendar className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Vue Calendrier
+          <Calendar className="h-4 w-4 flex-shrink-0" />
+          <span>Vue Calendrier</span>
         </Button>
         <Button
           variant={activeView === "list" ? "default" : "outline"}
           onClick={() => setActiveView("list")}
-          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 w-full sm:w-auto whitespace-nowrap ${
+          className={`flex items-center justify-center gap-2 text-sm lg:text-base px-3 py-3 h-auto rounded-xl transition-all duration-200 ${
             activeView === "list"
               ? "bg-red-600 text-white shadow-lg hover:bg-red-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Liste des Événements
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span>Liste des Événements</span>
         </Button>
         <Button
           variant={activeView === "pending" ? "default" : "outline"}
           onClick={() => setActiveView("pending")}
-          className={`text-sm md:text-lg px-4 md:px-8 py-3 md:py-4 h-auto rounded-xl transition-all duration-200 relative w-full sm:w-auto whitespace-nowrap ${
+          className={`flex items-center justify-center gap-2 text-sm lg:text-base px-3 py-3 h-auto rounded-xl transition-all duration-200 ${
             activeView === "pending"
               ? "bg-orange-600 text-white shadow-lg hover:bg-orange-700"
               : "border-2 hover:bg-gray-50 bg-white border-gray-300"
           }`}
         >
-          <Bell className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          Événements en attente
+          <Bell className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">Événements en attente</span>
           {pendingCount > 0 && (
-            <Badge className="ml-2 bg-orange-500 text-white">
+            <Badge className="ml-1.5 bg-orange-500 text-white text-xs px-1.5 flex-shrink-0">
               {pendingCount}
             </Badge>
           )}

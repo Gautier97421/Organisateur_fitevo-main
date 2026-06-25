@@ -49,6 +49,36 @@ export async function requireAuth(
 }
 
 /**
+ * Vérifie si l'utilisateur est admin/superadmin OU un employé avec hasManagerAccess
+ * Utilisé pour les routes accessibles aux managers employés (ex: products, ventes)
+ */
+export async function verifyManagerOrAdmin(request: NextRequest): Promise<{ userId: string; role: string } | null> {
+  const sessionCookie = request.cookies.get('fitevo_session')
+  const payload = verifySessionCookie(sessionCookie?.value)
+  if (!payload) return null
+
+  if (['admin', 'superadmin'].includes(payload.role)) {
+    return { userId: payload.id, role: payload.role }
+  }
+
+  if (payload.role === 'employee') {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: payload.id },
+        select: { hasManagerAccess: true },
+      })
+      if (user?.hasManagerAccess) {
+        return { userId: payload.id, role: 'employee' }
+      }
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+/**
  * Vérifie si l'utilisateur a le rôle requis
  */
 export async function hasRole(userId: string, requiredRoles: string[]): Promise<boolean> {

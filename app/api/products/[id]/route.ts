@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuthWithRole } from "@/lib/auth-middleware"
+import { verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyAuthWithRole(request)
-  if (!auth || !["admin", "superadmin"].includes(auth.role)) {
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
   }
 
@@ -35,8 +35,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyAuthWithRole(request)
-  if (!auth || !["admin", "superadmin"].includes(auth.role)) {
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
   }
 

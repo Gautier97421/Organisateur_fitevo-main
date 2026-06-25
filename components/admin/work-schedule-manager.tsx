@@ -66,8 +66,10 @@ export function WorkScheduleManager() {
   const [employeeGyms, setEmployeeGyms] = useState<Gym[]>([])
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [newSchedule, setNewSchedule] = useState({
+    label: "travail" as "travail" | "conges",
     start_time: "",
     end_time: "",
+    end_date: "",
     break_duration: 0,
     break_start_time: ""
   })
@@ -338,8 +340,10 @@ export function WorkScheduleManager() {
     setEmployeeGyms([])
     setAddDialogGymId("all") // Réinitialiser la salle du dialog
     setNewSchedule({
+      label: "travail",
       start_time: "",
       end_time: "",
+      end_date: "",
       break_duration: 0,
       break_start_time: ""
     })
@@ -396,13 +400,25 @@ export function WorkScheduleManager() {
     setAttemptedSubmit(true)
     setErrorMessage("")
 
-    if (!selectedDate || !selectedEmployeeEmail || !newSchedule.start_time || !newSchedule.end_time) {
+    if (!selectedDate || !selectedEmployeeEmail) {
       setErrorMessage("⚠️ Saisie incomplète : veuillez remplir tous les champs obligatoires")
       return
     }
+    if (newSchedule.label === "travail" && (!newSchedule.start_time || !newSchedule.end_time)) {
+      setErrorMessage("⚠️ Pour un jour de travail, les heures de début et de fin sont obligatoires")
+      return
+    }
+    if (newSchedule.label === "conges" && !newSchedule.end_date) {
+      setErrorMessage("⚠️ Pour des congés, la date de fin est obligatoire")
+      return
+    }
+    if (newSchedule.label === "conges" && newSchedule.end_date < selectedDate.toISOString().split("T")[0]) {
+      setErrorMessage("⚠️ La date de fin des congés doit être égale ou postérieure à la date de début")
+      return
+    }
 
-    // Validation de la salle obligatoire
-    if (addDialogGymId === "all") {
+    // Validation de la salle obligatoire (uniquement pour les jours de travail)
+    if (newSchedule.label === "travail" && addDialogGymId === "all") {
       setErrorMessage("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
       return
     }
@@ -465,12 +481,14 @@ export function WorkScheduleManager() {
         employee_email: selectedEmployeeEmail,
         employee_name: selectedEmployee.name,
         work_date: selectedDate.toISOString().split("T")[0],
-        start_time: newSchedule.start_time,
-        end_time: newSchedule.end_time,
-        break_duration: newSchedule.break_duration || 0,
-        break_start_time: newSchedule.break_start_time || null,
+        label: newSchedule.label,
+        start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
+        end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
+        end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
+        break_duration: newSchedule.label === "travail" ? (newSchedule.break_duration || 0) : 0,
+        break_start_time: newSchedule.label === "travail" ? (newSchedule.break_start_time || null) : null,
         status: "scheduled",
-        gym_id: addDialogGymId // Toujours ajouter la salle sélectionnée dans le dialog
+        gym_id: newSchedule.label === "travail" ? addDialogGymId : null,
       }
 
       const response = await fetch("/api/db/work_schedules", {
@@ -493,8 +511,10 @@ export function WorkScheduleManager() {
       setAttemptedSubmit(false)
       setErrorMessage("")
       setNewSchedule({
+        label: "travail",
         start_time: "",
         end_time: "",
+        end_date: "",
         break_duration: 0,
         break_start_time: ""
       })
@@ -744,13 +764,15 @@ export function WorkScheduleManager() {
                       const endTime = scheduleData.end_time || ''
                       const employeeEmail = scheduleData.employee_email || ''
                       
+                      const isConges = (scheduleData.label || "travail") === "conges"
                       return (
                         <div
                           key={schedule.id}
-                          className={`text-[10px] sm:text-xs p-1 rounded text-white truncate ${getEmployeeColor(employeeEmail)}`}
-                          title={`${employeeName}: ${startTime} - ${endTime} (${schedule.status})`}
+                          className={`text-[10px] sm:text-xs p-1 rounded text-white truncate ${isConges ? "bg-green-600" : getEmployeeColor(employeeEmail)}`}
+                          title={`${employeeName}: ${isConges ? "Congés" : `${startTime} - ${endTime}`} (${schedule.status})`}
                         >
-                          <span className="hidden sm:inline">{employeeName.split(" ")[0]} </span>{startTime}-{endTime}
+                          <span className="hidden sm:inline">{employeeName.split(" ")[0]} </span>
+                          {isConges ? "🏖️" : `${startTime}-${endTime}`}
                         </div>
                       )
                     })}
@@ -903,6 +925,25 @@ export function WorkScheduleManager() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Type <span className="text-red-500">*</span></label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "travail" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "travail" ? "bg-red-600 border-red-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-red-400 dark:bg-gray-700 dark:text-gray-300"}`}
+                >
+                  Travail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "conges" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "conges" ? "bg-green-600 border-green-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-green-400 dark:bg-gray-700 dark:text-gray-300"}`}
+                >
+                  Congés
+                </button>
+              </div>
+            </div>
+            <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                 Employé <span className="text-red-500">*</span>
               </label>
@@ -930,87 +971,107 @@ export function WorkScheduleManager() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                Salle <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={addDialogGymId}
-                onChange={(e) => setAddDialogGymId(e.target.value)}
-                disabled={!selectedEmployeeEmail || employeeGyms.length === 0}
-                className={`w-full border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2 ${
-                  attemptedSubmit && addDialogGymId === "all" ? "border-red-500 focus:border-red-600" : "border-gray-300 dark:border-gray-600"
-                } ${!selectedEmployeeEmail || employeeGyms.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <option value="all" disabled>Sélectionner une salle</option>
-                {employeeGyms.length === 0 && selectedEmployeeEmail && (
-                  <option value="" disabled>Aucune salle accessible</option>
+            {newSchedule.label === "travail" && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                  Salle <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={addDialogGymId}
+                  onChange={(e) => setAddDialogGymId(e.target.value)}
+                  disabled={!selectedEmployeeEmail || employeeGyms.length === 0}
+                  className={`w-full border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2 ${
+                    attemptedSubmit && addDialogGymId === "all" ? "border-red-500 focus:border-red-600" : "border-gray-300 dark:border-gray-600"
+                  } ${!selectedEmployeeEmail || employeeGyms.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <option value="all" disabled>Sélectionner une salle</option>
+                  {employeeGyms.length === 0 && selectedEmployeeEmail && (
+                    <option value="" disabled>Aucune salle accessible</option>
+                  )}
+                  {employeeGyms.map((gym) => (
+                    <option key={gym.id} value={gym.id}>
+                      {gym.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedEmployeeEmail && employeeGyms.length === 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Cet employé n'a accès à aucune salle
+                  </p>
                 )}
-                {employeeGyms.map((gym) => (
-                  <option key={gym.id} value={gym.id}>
-                    {gym.name}
-                  </option>
-                ))}
-              </select>
-              {selectedEmployeeEmail && employeeGyms.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Cet employé n'a accès à aucune salle
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+              </div>
+            )}
+            {newSchedule.label === "travail" ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Heure de début <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.start_time}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                      className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                        attemptedSubmit && !newSchedule.start_time ? "border-red-500 focus:border-red-600" : ""
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Heure de fin <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.end_time}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                      className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                        attemptedSubmit && !newSchedule.end_time ? "border-red-500 focus:border-red-600" : ""
+                      }`}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Pause (minutes)
+                    </label>
+                    <Input
+                      type="number"
+                      value={newSchedule.break_duration || ""}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
+                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Début de pause
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.break_start_time || ""}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
+                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
               <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                  Heure de début <span className="text-red-500">*</span>
-                </label>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">La date de début est la date sélectionnée sur le calendrier.</p>
                 <Input
-                  type="time"
-                  value={newSchedule.start_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                  type="date"
+                  value={newSchedule.end_date}
+                  min={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
                   className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                    attemptedSubmit && !newSchedule.start_time ? "border-red-500 focus:border-red-600" : ""
+                    attemptedSubmit && !newSchedule.end_date ? "border-red-500" : ""
                   }`}
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                  Heure de fin <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.end_time}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                  className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                    attemptedSubmit && !newSchedule.end_time ? "border-red-500 focus:border-red-600" : ""
-                  }`}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                  Pause (minutes)
-                </label>
-                <Input
-                  type="number"
-                  value={newSchedule.break_duration || ""}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                  Début de pause
-                </label>
-                <Input
-                  type="time"
-                  value={newSchedule.break_start_time || ""}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
-                  className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-              </div>
-            </div>
+            )}
           </div>
           {errorMessage && (
             <div className="flex items-center gap-2 p-3 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-lg text-sm">

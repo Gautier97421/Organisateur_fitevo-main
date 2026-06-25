@@ -239,32 +239,10 @@ export function IncidentsManager() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
-          </div>
-          <div>
-            <h2 className="font-bold text-gray-900 text-base">Incidents</h2>
-            <p className="text-xs text-gray-500">Écarts de caisse et signalements terrain</p>
-          </div>
+          <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Incidents</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-[180px]"
-          />
-          <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as any)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes périodes</SelectItem>
-              <SelectItem value="matin">Matin</SelectItem>
-              <SelectItem value="aprem">Après-midi</SelectItem>
-              <SelectItem value="journee">Journée</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={gymFilter} onValueChange={setGymFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Salle" />
@@ -276,9 +254,12 @@ export function IncidentsManager() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={loadData} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          </Button>
+          <Input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-[180px]"
+          />
         </div>
       </div>
 

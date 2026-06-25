@@ -130,7 +130,7 @@ export default function AdminPage() {
     { id: "employees",   label: "Utilisateurs",  icon: Users,         component: <EmployeeManager /> },
     { id: "schedule",    label: "Planning",       icon: Calendar,      component: <WorkScheduleManager /> },
     { id: "calendar",    label: "Événements",    icon: CalendarDays,  component: <CalendarManager /> },
-    { id: "cash-fields", label: "Champs Caisse", icon: Banknote,      component: <CashRegisterFieldManager /> },
+    { id: "cash-fields", label: "Config Caisse", icon: Banknote,      component: <CashRegisterFieldManager /> },
     { id: "cash-recap",  label: "Tableau de bord",  icon: BarChart3,     component: <CashRecapManager /> },
     { id: "incidents",   label: "Incidents",       icon: AlertTriangle,  component: <IncidentsManager /> },
     { id: "monitor",     label: "Suivi",           icon: Activity,       component: <RealTimeMonitor /> },

@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil, AlertTriangle, X } from "lucide-react"
+import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil, AlertTriangle, X, RefreshCw } from "lucide-react"
+import { RecurringTodoManager } from "./recurring-todo-manager"
 import {
   Dialog,
   DialogContent,
@@ -179,6 +180,7 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
 }
 
 export function TaskManager() {
+  const [activeTab, setActiveTab] = useState<"general" | "recurrentes">("general")
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [roles, setRoles] = useState<Role[]>([])
@@ -706,22 +708,46 @@ export function TaskManager() {
             <ListTodo className="w-6 h-6 text-red-600 flex-shrink-0" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des To-Do Lists</h2>
           </div>
-        <Button
-          onClick={() => {
-            if (showEditForm) {
-              setShowCreateConflict(true)
-              setTimeout(() => setShowCreateConflict(false), 5000)
-              return
-            }
-            setShowEditConflict(false)
-            setShowForm(!showForm)
-          }}
-          className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 w-full sm:w-auto whitespace-nowrap"
-        >
-          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-          Nouvelle Tâche
-        </Button>
+        {activeTab === "general" && (
+          <Button
+            onClick={() => {
+              if (showEditForm) {
+                setShowCreateConflict(true)
+                setTimeout(() => setShowCreateConflict(false), 5000)
+                return
+              }
+              setShowEditConflict(false)
+              setShowForm(!showForm)
+            }}
+            className="bg-red-600 hover:bg-red-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 sm:py-4 h-auto rounded-xl shadow-lg transition-all duration-200 flex items-center gap-2 w-full sm:w-auto whitespace-nowrap"
+          >
+            <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+            Nouvelle Tâche
+          </Button>
+        )}
       </div>
+
+      {/* Onglets Général / Récurrentes */}
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab("general")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "general" ? "bg-white dark:bg-gray-800 text-red-600 shadow-sm" : "text-gray-600 dark:text-gray-300 hover:bg-white/50"}`}
+        >
+          <ListTodo className="h-4 w-4" /> Général
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("recurrentes")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "recurrentes" ? "bg-white dark:bg-gray-800 text-red-600 shadow-sm" : "text-gray-600 dark:text-gray-300 hover:bg-white/50"}`}
+        >
+          <RefreshCw className="h-4 w-4" /> Récurrentes
+        </button>
+      </div>
+
+      {activeTab === "recurrentes" && <RecurringTodoManager />}
+
+      {activeTab === "general" && <>
 
       {/* Sélecteur de salle et de rôle */}
       <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
@@ -1284,6 +1310,8 @@ export function TaskManager() {
           </div>
         </>
       )}
+
+      </> /* end activeTab === "general" */}
 
       <Dialog open={showDeleteTaskConfirm} onOpenChange={setShowDeleteTaskConfirm}>
         <DialogContent className="sm:max-w-md bg-white rounded-2xl overflow-hidden">

@@ -437,9 +437,6 @@ export function CashRecapManager() {
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="w-[180px]"
           />
-          <Button variant="outline" onClick={loadData}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Rafraîchir
-          </Button>
           <Button variant="outline" onClick={() => void exportPDF()} disabled={filteredEntries.length === 0}>
             <Download className="h-4 w-4 mr-2" /> Exporter
           </Button>

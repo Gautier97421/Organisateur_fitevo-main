@@ -12,13 +12,17 @@ import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calend
 import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
 import { ExtraInfoPanel } from "@/components/employee/extra-info-panel"
 import { VentePanel } from "@/components/employee/vente-panel"
+import { VentesStockManager } from "@/components/admin/ventes-stock-manager"
+import { CashRecapManager } from "@/components/admin/cash-recap-manager"
+import { CashRegisterFieldManager } from "@/components/admin/cash-register-field-manager"
+import { TaskManager } from "@/components/admin/task-manager"
 import { EndPeriodDialog } from "@/components/employee/end-period-dialog"
 import { SettingsPanel } from "@/components/employee/settings-panel"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power, ShoppingBag } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power, ShoppingBag, BarChart3 } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -56,7 +60,7 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings" | "ventes-stock" | "tableau-bord" | "champs-caisse" | "taches-manager">("menu")
   const [endPeriodDialogOpen, setEndPeriodDialogOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
@@ -123,19 +127,19 @@ export default function EmployeePage() {
     const checkExistingSession = async () => {
       const userId = getUserId()
       const today = new Date().toISOString().split('T')[0]
-      
+      let hasSession = false
+
       try {
         // Essayer de charger depuis la base de données d'abord
         const response = await fetch(`/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`)
         if (response.ok) {
           const data = await response.json()
           const schedules = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-          
-          // Trouver une session avec une période définie (sans end_time)
-          const activeSchedule = schedules.find((s: any) => 
+
+          const activeSchedule = schedules.find((s: any) =>
             s.notes?.includes('Période:') && !s.end_time
           )
-          
+
           if (activeSchedule && activeSchedule.notes?.includes('Période:')) {
             const periodMatch = activeSchedule.notes.match(/Période:\s*(matin|aprem|journee)/)
             const subPeriodMatch = activeSchedule.notes.match(/Sous-créneau:\s*(debut|milieu|fin)/)
@@ -145,33 +149,47 @@ export default function EmployeePage() {
               if (subPeriodMatch) {
                 setSelectedSubPeriod(subPeriodMatch[1] as 'debut' | 'milieu' | 'fin')
               }
-              setCurrentView('tasks')
-              
-              // Restaurer aussi la salle depuis la note ou le localStorage
+              hasSession = true
+
               const gymIdMatch = activeSchedule.notes?.match(/GymId:\s*([a-zA-Z0-9-]+)/)
               if (gymIdMatch && gymIdMatch[1]) {
-                // La salle sera chargée par loadAssignedGyms qui restaure depuis localStorage
                 localStorage.setItem(`employee_${email}_selectedGym`, gymIdMatch[1])
               }
-              return
             }
           }
         }
-        
-        // Fallback sur localStorage si pas de session dans la base
-        const storedPeriod = localStorage.getItem(`employee_${userId}_period`)
-        const storedDate = localStorage.getItem(`employee_${userId}_sessionDate`)
-        
-        if (storedPeriod && storedDate === today) {
-          setSelectedPeriod(storedPeriod as 'matin' | 'aprem' | 'journee')
-          const storedSubPeriod = localStorage.getItem(`employee_${userId}_subPeriod`)
-          if (storedSubPeriod === 'debut' || storedSubPeriod === 'milieu' || storedSubPeriod === 'fin') {
-            setSelectedSubPeriod(storedSubPeriod)
+
+        if (!hasSession) {
+          // Fallback sur localStorage si pas de session dans la base
+          const storedPeriod = localStorage.getItem(`employee_${userId}_period`)
+          const storedDate = localStorage.getItem(`employee_${userId}_sessionDate`)
+
+          if (storedPeriod && storedDate === today) {
+            setSelectedPeriod(storedPeriod as 'matin' | 'aprem' | 'journee')
+            const storedSubPeriod = localStorage.getItem(`employee_${userId}_subPeriod`)
+            if (storedSubPeriod === 'debut' || storedSubPeriod === 'milieu' || storedSubPeriod === 'fin') {
+              setSelectedSubPeriod(storedSubPeriod)
+            }
+            hasSession = true
           }
-          setCurrentView('tasks')
         }
       } catch (error) {
         // Erreur silencieuse
+      }
+
+      // Toujours restaurer la dernière vue depuis localStorage
+      const savedView = localStorage.getItem("employeeCurrentView")
+      const sessionOnlyViews = ["tasks", "caisse", "infos", "vente"]
+      const allRestorableViews = [...sessionOnlyViews, "calendar", "schedule", "ventes-stock", "tableau-bord", "champs-caisse", "taches-manager"]
+
+      if (savedView && allRestorableViews.includes(savedView)) {
+        if (!hasSession && sessionOnlyViews.includes(savedView)) {
+          setCurrentView("menu")
+        } else {
+          setCurrentView(savedView as any)
+        }
+      } else {
+        setCurrentView(hasSession ? "tasks" : "menu")
       }
     }
 
@@ -762,72 +780,19 @@ setHasCalendarAccess(data.has_calendar_access !== false)
       weekday: "long", day: "numeric", month: "long",
     })
 
+    // navItems : uniquement pour le calcul du label actif dans le header mobile
     const navItems = [
-      {
-        id: "home" as const,
-        label: "Accueil",
-        icon: Home,
-        active: currentView === "menu" || currentView === "tasks",
-        onClick: () => {
-          setMobileOpen(false)
-          if (selectedPeriod) setCurrentView("tasks")
-          else setCurrentView("menu")
-        },
-      },
-      {
-        id: "schedule" as const,
-        label: "Planning",
-        icon: ClipboardList,
-        active: currentView === "schedule",
-        onClick: () => { setCurrentView("schedule"); setMobileOpen(false) },
-      },
-      {
-        id: "calendar" as const,
-        label: "Calendrier",
-        icon: CalendarDays,
-        active: currentView === "calendar",
-        onClick: () => { setCurrentView("calendar"); setMobileOpen(false) },
-      },
-      // Caisse : accessible uniquement pendant une période de travail
-      ...(selectedPeriod
-        ? [{
-            id: "caisse" as const,
-            label: "Caisse",
-            icon: Banknote,
-            active: currentView === "caisse",
-            onClick: () => { setCurrentView("caisse"); setMobileOpen(false) },
-          }]
-        : []),
-      // Informations supplémentaires : accessibles pendant une période de travail
-      ...(selectedPeriod
-        ? [{
-            id: "infos" as const,
-            label: "Informations",
-            icon: ClipboardList,
-            active: currentView === "infos",
-            onClick: () => { setCurrentView("infos"); setMobileOpen(false) },
-          }]
-        : []),
-      // Ventes : enregistrer une vente pendant une période de travail
-      ...(selectedPeriod
-        ? [{
-            id: "vente" as const,
-            label: "Vente",
-            icon: ShoppingBag,
-            active: currentView === "vente",
-            onClick: () => { setCurrentView("vente"); setMobileOpen(false) },
-          }]
-        : []),
-      // Fin de période : finalise la session de travail (uniquement pendant une période)
-      ...(selectedPeriod
-        ? [{
-            id: "endperiod" as const,
-            label: "Fin de période",
-            icon: Power,
-            active: false,
-            onClick: () => { setEndPeriodDialogOpen(true); setMobileOpen(false) },
-          }]
-        : []),
+      { id: "home",         label: "Accueil",         active: currentView === "menu" || currentView === "tasks" },
+      { id: "schedule",     label: "Planning",         active: currentView === "schedule" },
+      { id: "calendar",     label: "Calendrier",       active: currentView === "calendar" },
+      { id: "taches-manager", label: "Tâches",         active: currentView === "taches-manager" },
+      { id: "ventes-stock", label: "Ventes & Stock",   active: currentView === "ventes-stock" },
+      { id: "tableau-bord", label: "Tableau de bord",  active: currentView === "tableau-bord" },
+      { id: "champs-caisse",label: "Config Caisse",    active: currentView === "champs-caisse" },
+      { id: "caisse",       label: "Caisse",           active: currentView === "caisse" },
+      { id: "infos",        label: "Informations",     active: currentView === "infos" },
+      { id: "vente",        label: "Vente",            active: currentView === "vente" },
+      { id: "settings",     label: "Paramètres",       active: currentView === "settings" },
     ]
 
     const activeLabel = navItems.find((n) => n.active)?.label ?? "Accueil"
@@ -940,30 +905,82 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5 min-w-[236px]">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 whitespace-nowrap">
-                Espace Employé
-              </p>
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={item.onClick}
-                  className={[
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
-                    "transition-all duration-150 group whitespace-nowrap",
-                    item.active
-                      ? "bg-red-50 text-red-600"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                  ].join(" ")}
-                >
-                  <item.icon className={[
-                    "w-4 h-4 flex-shrink-0",
-                    item.active ? "text-red-500" : "text-gray-400 group-hover:text-gray-600",
-                  ].join(" ")} />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.active && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
-                </button>
-              ))}
+            <nav className="flex-1 overflow-y-auto px-2.5 py-3 min-w-[236px]">
+              {(() => {
+                const navBtn = (item: { id: string; label: string; icon: React.ElementType; active: boolean; onClick: () => void }) => (
+                  <button
+                    key={item.id}
+                    onClick={item.onClick}
+                    className={[
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
+                      "transition-all duration-150 group whitespace-nowrap",
+                      item.active ? "bg-red-50 text-red-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ].join(" ")}
+                  >
+                    <item.icon className={["w-4 h-4 flex-shrink-0", item.active ? "text-red-500" : "text-gray-400 group-hover:text-gray-600"].join(" ")} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.active && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+                  </button>
+                )
+
+                const workItems = [
+                  { id: "home", label: "Accueil", icon: Home, active: currentView === "menu" || currentView === "tasks", onClick: () => { setMobileOpen(false); if (selectedPeriod) setCurrentView("tasks"); else setCurrentView("menu") } },
+                  ...(selectedPeriod ? [
+                    { id: "caisse", label: "Caisse", icon: Banknote, active: currentView === "caisse", onClick: () => { setCurrentView("caisse"); setMobileOpen(false) } },
+                    { id: "infos", label: "Informations", icon: ClipboardList, active: currentView === "infos", onClick: () => { setCurrentView("infos"); setMobileOpen(false) } },
+                    { id: "vente", label: "Vente", icon: ShoppingBag, active: currentView === "vente", onClick: () => { setCurrentView("vente"); setMobileOpen(false) } },
+                  ] : []),
+                ]
+
+                const nonManagerItems = [
+                  { id: "schedule", label: "Planning", icon: ClipboardList, active: currentView === "schedule", onClick: () => { setCurrentView("schedule"); setMobileOpen(false) } },
+                  { id: "calendar", label: "Calendrier", icon: CalendarDays, active: currentView === "calendar", onClick: () => { setCurrentView("calendar"); setMobileOpen(false) } },
+                ]
+
+                const managerItems = [
+                  { id: "schedule", label: "Planning", icon: ClipboardList, active: currentView === "schedule", onClick: () => { setCurrentView("schedule"); setMobileOpen(false) } },
+                  { id: "calendar", label: "Calendrier", icon: CalendarDays, active: currentView === "calendar", onClick: () => { setCurrentView("calendar"); setMobileOpen(false) } },
+                  { id: "taches-manager", label: "Tâches", icon: ClipboardList, active: currentView === "taches-manager", onClick: () => { setCurrentView("taches-manager"); setMobileOpen(false) } },
+                  { id: "ventes-stock", label: "Ventes & Stock", icon: ShoppingBag, active: currentView === "ventes-stock", onClick: () => { setCurrentView("ventes-stock"); setMobileOpen(false) } },
+                  { id: "tableau-bord", label: "Tableau de bord", icon: BarChart3, active: currentView === "tableau-bord", onClick: () => { setCurrentView("tableau-bord"); setMobileOpen(false) } },
+                  { id: "champs-caisse", label: "Config Caisse", icon: Banknote, active: currentView === "champs-caisse", onClick: () => { setCurrentView("champs-caisse"); setMobileOpen(false) } },
+                ]
+
+                return (
+                  <>
+                    {/* Section Travail */}
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 whitespace-nowrap">
+                      Travail
+                    </p>
+                    <div className="space-y-0.5">
+                      {workItems.map(navBtn)}
+                      {!hasManagerAccess && nonManagerItems.map(navBtn)}
+                      {selectedPeriod && (
+                        <button
+                          onClick={() => { setEndPeriodDialogOpen(true); setMobileOpen(false) }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group whitespace-nowrap text-orange-600 hover:bg-orange-50"
+                        >
+                          <Power className="w-4 h-4 flex-shrink-0 text-orange-500" />
+                          <span className="flex-1 text-left">Fin de période</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Section Manager */}
+                    {hasManagerAccess && (
+                      <>
+                        <div className="border-t border-gray-100 my-3" />
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 whitespace-nowrap">
+                          Manager
+                        </p>
+                        <div className="space-y-0.5">
+                          {managerItems.map(navBtn)}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )
+              })()}
             </nav>
 
             {/* Paramètres + Déconnexion */}
@@ -1173,6 +1190,7 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                           />
                         )}
                       </div>
+
                     </>
                   )}
                 </div>
@@ -1242,6 +1260,42 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                     userEmail={userEmail}
                     userName={userName}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE TÂCHES (manager) ─────────────────────────── */}
+            {currentView === "taches-manager" && hasManagerAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <TaskManager />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE VENTES & STOCK (manager) ─────────────────── */}
+            {currentView === "ventes-stock" && hasManagerAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <VentesStockManager />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE TABLEAU DE BORD (manager) ────────────────── */}
+            {currentView === "tableau-bord" && hasManagerAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <CashRecapManager />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE CONFIG CAISSE (manager) ───────────────────── */}
+            {currentView === "champs-caisse" && hasManagerAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <CashRegisterFieldManager />
                 </div>
               </div>
             )}
