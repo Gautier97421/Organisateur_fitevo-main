@@ -8,10 +8,8 @@ services:
     container_name: fitevo-postgres
     restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: Ft3vo-Pg-K7mWq2Rx9LbN4
-      #      POSTGRES_USER: fitevo_user
-      #      POSTGRES_PASSWORD: admin123!
+      POSTGRES_USER: fitevo_user
+      POSTGRES_PASSWORD: admin123!
       POSTGRES_DB: fitevo
     ports:
       # Accessible uniquement en local sur le serveur (pas exposé à Internet)
@@ -36,13 +34,13 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     ports:
-      # Port hôte 3000 (Docker Desktop WSL2 gère le forwarding IPv4+IPv6)
-      - "3000:3000"
+      # Port hôte fixe (3001) pour éviter qu'il change à chaque démarrage.
+      # 3000 est déjà utilisé par un autre projet local.
+      - "3000"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://admin:Ft3vo-Pg-K7mWq2Rx9LbN4@postgres:5432/fitevo
-      # DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - DB_HOST=postgres
@@ -68,8 +66,7 @@ services:
       # Prisma Studio accessible uniquement en local (tunnel SSH requis pour y accéder)
       - "127.0.0.1:5557:5555"
     environment:
-      - DATABASE_URL=postgresql://admin:Ft3vo-Pg-K7mWq2Rx9LbN4@postgres:5432/fitevo
-      # DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
+      - DATABASE_URL=postgresql://fitevo_user:admin123!@postgres:5432/fitevo
     depends_on:
       postgres:
         condition: service_healthy
