@@ -86,9 +86,13 @@ function rawValue(cell: any): string {
   const v = cell.value
   if (v == null) return ""
   if (typeof v === "object") {
-    if (typeof v.formula === "string") return "=" + v.formula
     if (Array.isArray(v.richText)) return v.richText.map((r: any) => r.text).join("")
     if (typeof v.text === "string") return v.text
+    // cell.formula résout aussi les "formules partagées" (shared formula) :
+    // Google Sheets/Excel les utilisent dès qu'une formule est copiée/étirée
+    // sur plusieurs cellules ; v.formula seul n'est renseigné que sur la
+    // cellule maîtresse, les autres n'ont que v.sharedFormula.
+    if (typeof cell.formula === "string") return "=" + cell.formula
     if (v instanceof Date) return v.toLocaleDateString("fr-FR")
     if (v.result != null) return String(v.result)
     return ""
@@ -103,7 +107,9 @@ function displayValue(cell: any, SSF: any): string {
   if (typeof v === "object") {
     if (Array.isArray(v.richText)) return v.richText.map((r: any) => r.text).join("")
     if (typeof v.text === "string") return v.text
-    if ("formula" in v) v = v.result // valeur calculée de la formule
+    // "formula" (maîtresse) ou "sharedFormula" (cellule dépendante) : les deux
+    // sont des résultats de formule, on affiche la valeur calculée.
+    if ("formula" in v || "sharedFormula" in v) v = v.result
   }
   if (v == null) return ""
   if (v instanceof Date) return v.toLocaleDateString("fr-FR")

@@ -263,8 +263,21 @@ export function FoldersPanel({ currentUser }: Props) {
     fd.append("folderId", currentFolderId)
     const res = await fetch("/api/communication/upload", { method: "POST", body: fd })
     setUploading(false)
-    if (res.ok) refreshCurrent()
-    else {
+    if (res.ok) {
+      refreshCurrent()
+      const ext = (f.name.split(".").pop() || "").toLowerCase()
+      if (["xlsx", "xls", "ods", "csv"].includes(ext)) {
+        if (ext === "xlsx" || ext === "ods") {
+          toast.info(`Tableur importé au format .${ext} : formules et mise en forme conservées.`)
+        } else {
+          toast.info(
+            `Tableur importé au format .${ext} : seules les valeurs sont conservées (pas les formules). ` +
+            `Exportez plutôt en .xlsx ou .ods (ex. depuis Google Sheets : Fichier → Télécharger → Microsoft Excel) pour garder les formules.`,
+            { duration: 8000 },
+          )
+        }
+      }
+    } else {
       const err = await res.json().catch(() => ({}))
       toast.error(err.error || "Échec de l'envoi")
     }
