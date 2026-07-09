@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   ShieldCheck, Scale, FileText, Download, Trash2, ExternalLink,
-  AlertTriangle, Loader2, CheckCircle2,
+  AlertTriangle, Loader2, CheckCircle2, HardDrive, Save,
 } from "lucide-react"
+import { toast } from "sonner"
 
 interface SimpleUser {
   id: string
@@ -15,7 +16,156 @@ interface SimpleUser {
   role: string
 }
 
-export function SettingsManager() {
+interface SettingsManagerProps {
+  userRole?: string
+}
+
+function fmtBytes(bytes: number): string {
+  if (bytes <= 0) return "0 Mo"
+  const mb = bytes / (1024 * 1024)
+  if (mb < 1024) return `${mb.toFixed(1)} Mo`
+  return `${(mb / 1024).toFixed(2)} Go`
+}
+
+function StorageQuotaCard({ readOnly }: { readOnly: boolean }) {
+  const [quotaMb, setQuotaMb] = useState<number | null>(null)
+  const [usedBytes, setUsedBytes] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [unlimited, setUnlimited] = useState(true)
+  const [value, setValue] = useState("")
+  const [unit, setUnit] = useState<"Mo" | "Go">("Go")
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/settings/storage")
+        if (!res.ok) return
+        const json = await res.json()
+        setQuotaMb(json.data?.quotaMb ?? null)
+        setUsedBytes(json.data?.usedBytes ?? 0)
+        if (json.data?.quotaMb) {
+          setUnlimited(false)
+          if (json.data.quotaMb >= 1024) {
+            setUnit("Go")
+            setValue(String(json.data.quotaMb / 1024))
+          } else {
+            setUnit("Mo")
+            setValue(String(json.data.quotaMb))
+          }
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const newQuotaMb = unlimited ? null : Math.round(Number(value) * (unit === "Go" ? 1024 : 1))
+      if (!unlimited && (!newQuotaMb || newQuotaMb <= 0)) {
+        toast.error("Limite invalide")
+        setSaving(false)
+        return
+      }
+      const res = await fetch("/api/settings/storage", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quotaMb: newQuotaMb }),
+      })
+      if (!res.ok) throw new Error()
+      setQuotaMb(newQuotaMb)
+      toast.success("Quota de stockage mis à jour")
+    } catch {
+      toast.error("Erreur lors de la mise à jour du quota")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const quotaBytes = quotaMb ? quotaMb * 1024 * 1024 : null
+  const usagePct = quotaBytes ? Math.min(100, (usedBytes / quotaBytes) * 100) : 0
+
+  return (
+    <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
+          <HardDrive className="w-5 h-5 text-gray-400" />
+          Stockage des documents
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : (
+          <>
+            <div>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                <span>Utilisé : {fmtBytes(usedBytes)}</span>
+                <span>{quotaMb ? `Limite : ${fmtBytes(quotaMb * 1024 * 1024)}` : "Illimité"}</span>
+              </div>
+              {quotaMb && (
+                <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${usagePct >= 90 ? "bg-red-500" : "bg-red-600"}`}
+                    style={{ width: `${usagePct}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {readOnly ? null : (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="unlimited-toggle"
+                    type="checkbox"
+                    checked={unlimited}
+                    onChange={(e) => setUnlimited(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="unlimited-toggle" className="text-sm text-gray-700 dark:text-gray-300">
+                    Stockage illimité
+                  </label>
+                </div>
+
+                {!unlimited && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder="ex : 20"
+                      className="h-10 w-28 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white outline-none"
+                    />
+                    <select
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value as "Mo" | "Go")}
+                      className="h-10 px-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white outline-none"
+                    >
+                      <option value="Mo">Mo</option>
+                      <option value="Go">Go</option>
+                    </select>
+                  </div>
+                )}
+
+                <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Enregistrer
+                </Button>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function SettingsManager({ userRole }: SettingsManagerProps) {
   const [users, setUsers] = useState<SimpleUser[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
   const [confirmErase, setConfirmErase] = useState(false)
@@ -90,50 +240,56 @@ export function SettingsManager() {
     }
   }
 
+  const canSeeStorage = userRole === "admin" || userRole === "superadmin"
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-2.5">
         <ShieldCheck className="w-6 h-6 text-red-600 flex-shrink-0" />
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Paramètres & confidentialité</h2>
       </div>
 
-      {/* Documents légaux */}
-      <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
-            <FileText className="w-5 h-5 text-gray-400" />
-            Documents légaux
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid sm:grid-cols-2 gap-3">
-          <a
-            href="/confidentialite"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors group"
-          >
-            <ShieldCheck className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Politique de confidentialité</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Données, finalités, durées, droits</p>
-            </div>
-            <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-red-400" />
-          </a>
-          <a
-            href="/mentions-legales"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors group"
-          >
-            <Scale className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Mentions légales</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Éditeur, hébergeur, cookies</p>
-            </div>
-            <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-red-400" />
-          </a>
-        </CardContent>
-      </Card>
+      {/* Documents légaux + Stockage */}
+      <div className={canSeeStorage ? "grid lg:grid-cols-2 gap-6 items-start" : ""}>
+        <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
+              <FileText className="w-5 h-5 text-gray-400" />
+              Documents légaux
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid sm:grid-cols-2 gap-3">
+            <a
+              href="/confidentialite"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors group"
+            >
+              <ShieldCheck className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Politique de confidentialité</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Données, finalités, durées, droits</p>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-red-400" />
+            </a>
+            <a
+              href="/mentions-legales"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-900/10 transition-colors group"
+            >
+              <Scale className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Mentions légales</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Éditeur, hébergeur, cookies</p>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-red-400" />
+            </a>
+          </CardContent>
+        </Card>
+
+        {canSeeStorage && <StorageQuotaCard readOnly={userRole !== "superadmin"} />}
+      </div>
 
       {/* Droits RGPD */}
       <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">

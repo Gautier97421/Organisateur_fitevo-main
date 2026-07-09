@@ -580,9 +580,51 @@ model Product {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  sales Sale[]
+  sales               Sale[]
+  promosAsBuyProduct    Promotion[] @relation("PromoBuyProduct")
+  promosAsGetProduct    Promotion[] @relation("PromoGetProduct")
+  promosAsTargetProduct Promotion[] @relation("PromoTargetProduct")
 
   @@map("products")
+}
+
+model Promotion {
+  id       String  @id @default(cuid())
+  name     String
+  type     String // "buy_x_get_y" | "percentage"
+  isActive Boolean @default(true) @map("is_active")
+  gymId    String? @map("gym_id") // null = toutes les salles
+
+  // type = "buy_x_get_y"
+  buyProductId String? @map("buy_product_id")
+  buyQuantity  Int?    @map("buy_quantity")
+  getProductId String? @map("get_product_id")
+  getQuantity  Int?    @map("get_quantity")
+
+  // type = "percentage"
+  percentage      Float?
+  targetProductId String? @map("target_product_id")
+  targetCategory  String? @map("target_category")
+
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  buyProduct    Product? @relation("PromoBuyProduct", fields: [buyProductId], references: [id])
+  getProduct    Product? @relation("PromoGetProduct", fields: [getProductId], references: [id])
+  targetProduct Product? @relation("PromoTargetProduct", fields: [targetProductId], references: [id])
+  sales         Sale[]
+
+  @@map("promotions")
+}
+
+model SystemSetting {
+  id             String   @id @default("singleton")
+  storageQuotaMb Int?     @map("storage_quota_mb")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedBy      String?  @map("updated_by")
+
+  @@map("system_settings")
 }
 
 model Sale {
@@ -600,7 +642,12 @@ model Sale {
   saleMonth   String   @map("sale_month")
   notes       String?  @db.Text
 
-  product Product @relation(fields: [productId], references: [id])
+  promotionId String?  @map("promotion_id")
+  isGift      Boolean  @default(false) @map("is_gift")
+  discount    Float    @default(0)
+
+  product   Product    @relation(fields: [productId], references: [id])
+  promotion Promotion? @relation(fields: [promotionId], references: [id])
 
   @@map("sales")
 }

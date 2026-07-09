@@ -156,7 +156,7 @@ export default function AdminPage() {
     id: "settings",
     label: "Paramètres",
     icon: Settings,
-    component: <SettingsManager />,
+    component: <SettingsManager userRole={userRole} />,
   }
 
   const navTabs = [...fixedTabs, ...dynamicTabs, ...managementTabs]

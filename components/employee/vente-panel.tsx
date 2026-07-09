@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
   ShoppingCart, Plus, Minus, Trash2, CheckCircle, Package, Search,
-  AlertTriangle, Loader2, ShoppingBag,
+  AlertTriangle, Loader2, ShoppingBag, Gift, Tag,
 } from "lucide-react"
 import { toast } from "sonner"
+import { applyPromotions, type PromotionRule } from "@/lib/promotions"
 
 interface Product {
   id: string
@@ -38,6 +39,7 @@ function fmt(n: number) {
 
 export function VentePanel({ period, gymId, gymName, userEmail, userName }: VentePanelProps) {
   const [products, setProducts] = useState<Product[]>([])
+  const [promotions, setPromotions] = useState<PromotionRule[]>([])
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -53,6 +55,12 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
         const res = await fetch(url, { credentials: "same-origin" })
         const json = res.ok ? await res.json() : { data: [] }
         setProducts(Array.isArray(json.data) ? json.data : [])
+
+        let promoUrl = "/api/promotions"
+        if (gymId) promoUrl += `?gym_id=${gymId}`
+        const promoRes = await fetch(promoUrl, { credentials: "same-origin" })
+        const promoJson = promoRes.ok ? await promoRes.json() : { data: [] }
+        setPromotions(Array.isArray(promoJson.data) ? promoJson.data : [])
       } finally {
         setLoading(false)
       }
@@ -83,7 +91,16 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
   }, [filtered])
 
-  const cartTotal = cart.reduce((a, item) => a + item.product.price * item.quantity, 0)
+  const promoResult = useMemo(
+    () => applyPromotions(
+      cart.map((item) => ({ product: item.product, quantity: item.quantity })),
+      promotions,
+      products,
+      gymId || null
+    ),
+    [cart, promotions, products, gymId]
+  )
+  const cartTotal = promoResult.total
   const cartCount = cart.reduce((a, item) => a + item.quantity, 0)
 
   const addToCart = (product: Product) => {
@@ -113,41 +130,34 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
   const handleSubmit = async () => {
     if (cart.length === 0) return
     setSubmitting(true)
-    let ok = 0
-    let failed = 0
 
-    for (const item of cart) {
-      try {
-        const res = await fetch("/api/sales", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId: item.product.id,
-            quantity: item.quantity,
-            userEmail,
-            userName,
-            gymId: gymId || null,
-            period,
-          }),
-        })
-        if (res.ok) ok++
-        else failed++
-      } catch {
-        failed++
-      }
-    }
-
-    setSubmitting(false)
-    if (ok > 0) {
+    try {
+      const res = await fetch("/api/sales/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+          userEmail,
+          userName,
+          gymId: gymId || null,
+          period,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      const count = Array.isArray(json?.data?.sales) ? json.data.sales.length : cart.length
       setCart([])
-      setSuccessCount((c) => c + ok)
-      toast.success(`${ok} vente(s) enregistrée(s) avec succès`)
+      setSuccessCount((c) => c + count)
+      toast.success(`Vente enregistrée avec succès (${count} ligne(s))`)
       // Rafraîchir le stock
-      const res = await fetch(gymId ? `/api/products?gym_id=${gymId}` : "/api/products", { credentials: "same-origin" })
-      const json = res.ok ? await res.json() : { data: [] }
-      setProducts(Array.isArray(json.data) ? json.data : [])
+      const stockRes = await fetch(gymId ? `/api/products?gym_id=${gymId}` : "/api/products", { credentials: "same-origin" })
+      const stockJson = stockRes.ok ? await stockRes.json() : { data: [] }
+      setProducts(Array.isArray(stockJson.data) ? stockJson.data : [])
+    } catch {
+      toast.error("La vente n'a pas pu être enregistrée")
+    } finally {
+      setSubmitting(false)
     }
-    if (failed > 0) toast.error(`${failed} vente(s) n'ont pas pu être enregistrée(s)`)
   }
 
   return (
@@ -310,9 +320,29 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
             ))}
           </ul>
 
+          {promoResult.appliedPromotions.length > 0 && (
+            <div className="rounded-lg border border-green-200 bg-green-50/60 p-2.5 space-y-1.5">
+              {promoResult.lines.filter((l) => l.isGift).map((l) => (
+                <div key={`gift-${l.productId}`} className="flex items-center gap-2 text-xs text-green-700">
+                  <Gift className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{l.quantity} × {l.productName} offert{l.quantity > 1 ? "s" : ""}</span>
+                </div>
+              ))}
+              {promoResult.totalDiscount > 0 && (
+                <div className="flex items-center gap-2 text-xs text-green-700">
+                  <Tag className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Remise appliquée : -{fmt(promoResult.totalDiscount)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="border-t border-red-200 pt-3 flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">Total</p>
+              {promoResult.totalDiscount > 0 && (
+                <p className="text-xs text-gray-400 line-through">{fmt(promoResult.subtotal)}</p>
+              )}
               <p className="text-lg font-bold text-red-600">{fmt(cartTotal)}</p>
             </div>
             <Button

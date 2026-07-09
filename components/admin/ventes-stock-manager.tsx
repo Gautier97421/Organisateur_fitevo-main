@@ -22,9 +22,10 @@ import {
 } from "@/components/ui/select"
 import {
   ShoppingBag, Plus, Edit2, Trash2, TrendingUp, Package,
-  Euro, AlertTriangle, CalendarDays, User, Building2, X, History,
+  Euro, AlertTriangle, CalendarDays, User, Building2, X, History, Gift,
 } from "lucide-react"
 import { toast } from "sonner"
+import { PromotionsManager } from "@/components/admin/promotions-manager"
 
 interface Product {
   id: string
@@ -51,6 +52,7 @@ interface Sale {
   saleDate: string
   saleMonth: string
   notes?: string | null
+  isGift?: boolean
 }
 
 interface Gym {
@@ -58,7 +60,7 @@ interface Gym {
   name: string
 }
 
-type Tab = "articles" | "dashboard" | "historique"
+type Tab = "articles" | "promotions" | "dashboard" | "historique"
 
 const periodLabel: Record<string, string> = {
   matin: "Matin",
@@ -280,10 +282,11 @@ export function VentesStockManager() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {(["articles", "dashboard", "historique"] as Tab[]).map((t) => {
-          const labels: Record<Tab, string> = { articles: "Articles", dashboard: "Tableau de bord", historique: "Historique" }
+        {(["articles", "promotions", "dashboard", "historique"] as Tab[]).map((t) => {
+          const labels: Record<Tab, string> = { articles: "Articles", promotions: "Promotions", dashboard: "Tableau de bord", historique: "Historique" }
           const icons: Record<Tab, React.ReactNode> = {
             articles: <Package className="w-4 h-4" />,
+            promotions: <Gift className="w-4 h-4" />,
             dashboard: <TrendingUp className="w-4 h-4" />,
             historique: <History className="w-4 h-4" />,
           }
@@ -344,6 +347,14 @@ export function VentesStockManager() {
                       </div>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        onClick={() => handleToggleActive(p)}
+                        variant="outline"
+                        size="sm"
+                        className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
+                      >
+                        Désactiver
+                      </Button>
                       <Button onClick={() => openEdit(p)} variant="outline" size="sm">
                         <Edit2 className="h-4 w-4" />
                       </Button>
@@ -391,6 +402,9 @@ export function VentesStockManager() {
           )}
         </div>
       )}
+
+      {/* ── ONGLET PROMOTIONS ── */}
+      {tab === "promotions" && <PromotionsManager />}
 
       {/* ── ONGLET TABLEAU DE BORD ── */}
       {tab === "dashboard" && (
@@ -596,7 +610,10 @@ export function VentesStockManager() {
                           <span className="text-gray-800 truncate max-w-[140px]">{s.userName}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{s.productName}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {s.productName}
+                        {s.isGift && <Badge className="ml-2 text-xs bg-green-100 text-green-700">🎁 Offert</Badge>}
+                      </td>
                       <td className="px-4 py-3 text-center text-gray-700">{s.quantity}</td>
                       <td className="px-4 py-3 text-right text-gray-600">{fmt(s.unitPrice)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900">{fmt(s.total)}</td>

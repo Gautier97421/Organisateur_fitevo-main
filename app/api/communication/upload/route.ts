@@ -45,6 +45,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Type de fichier non autorisé' }, { status: 400 })
     }
 
+    const storageSetting = await prisma.systemSetting.findUnique({ where: { id: 'singleton' } })
+    if (storageSetting?.storageQuotaMb) {
+      const usage = await prisma.attachment.aggregate({ _sum: { size: true } })
+      const usedBytes = usage._sum.size ?? 0
+      const quotaBytes = storageSetting.storageQuotaMb * 1024 * 1024
+      if (usedBytes + file.size > quotaBytes) {
+        return NextResponse.json({ error: 'Quota de stockage atteint, contactez un administrateur' }, { status: 400 })
+      }
+    }
+
     // Si dépôt dans un dossier : vérifier le droit de voir/déposer
     if (typeof folderId === 'string' && folderId) {
       const folder = await prisma.folder.findUnique({ where: { id: folderId } })
