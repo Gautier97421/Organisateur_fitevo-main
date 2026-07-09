@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, description, price, category, stock, gymId } = body
+    const { name, description, price, category, stock, gymId, trackStock } = body
 
     if (!name || price === undefined || price === null) {
       return NextResponse.json({ error: "Nom et prix sont obligatoires" }, { status: 400 })
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         price: Number(price),
         category: category?.trim() || null,
         stock: Number(stock) || 0,
+        trackStock: trackStock !== false,
         gymId: gymId || null,
         createdBy: auth.userId,
       },

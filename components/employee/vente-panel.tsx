@@ -18,6 +18,7 @@ interface Product {
   price: number
   category?: string | null
   stock: number
+  trackStock: boolean
 }
 
 interface CartItem {
@@ -212,7 +213,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {items.map((product) => {
                       const inCart = cart.find((i) => i.product.id === product.id)
-                      const outOfStock = product.stock === 0
+                      const outOfStock = product.trackStock && product.stock === 0
                       return (
                         <div
                           key={product.id}
@@ -230,7 +231,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
                                   <AlertTriangle className="w-3 h-3 mr-1" />Rupture
                                 </Badge>
                               )}
-                              {!outOfStock && product.stock <= 5 && (
+                              {product.trackStock && !outOfStock && product.stock <= 5 && (
                                 <Badge className="text-xs bg-amber-100 text-amber-700 flex-shrink-0">
                                   {product.stock} restant(s)
                                 </Badge>

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
       for (const [productId, qty] of stockDeltas) {
         const fresh = await tx.product.findUnique({ where: { id: productId } })
-        if (fresh && fresh.stock > 0) {
+        if (fresh && fresh.trackStock && fresh.stock > 0) {
           await tx.product.update({ where: { id: productId }, data: { stock: Math.max(0, fresh.stock - qty) } })
         }
       }

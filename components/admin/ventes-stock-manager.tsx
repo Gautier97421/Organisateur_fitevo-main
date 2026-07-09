@@ -34,6 +34,7 @@ interface Product {
   price: number
   category?: string | null
   stock: number
+  trackStock: boolean
   isActive: boolean
   gymId?: string | null
 }
@@ -93,6 +94,7 @@ export function VentesStockManager() {
     price: "",
     category: "",
     stock: "0",
+    trackStock: true,
     gymId: "",
   })
 
@@ -138,7 +140,7 @@ export function VentesStockManager() {
 
   const openAdd = () => {
     setEditingProduct(null)
-    setForm({ name: "", description: "", price: "", category: "", stock: "0", gymId: "" })
+    setForm({ name: "", description: "", price: "", category: "", stock: "0", trackStock: true, gymId: "" })
     setShowDialog(true)
   }
 
@@ -150,6 +152,7 @@ export function VentesStockManager() {
       price: String(p.price),
       category: p.category || "",
       stock: String(p.stock),
+      trackStock: p.trackStock,
       gymId: p.gymId || "",
     })
     setShowDialog(true)
@@ -171,7 +174,8 @@ export function VentesStockManager() {
       description: form.description.trim() || null,
       price,
       category: form.category.trim() || null,
-      stock: Number(form.stock) || 0,
+      stock: form.trackStock ? (Number(form.stock) || 0) : 0,
+      trackStock: form.trackStock,
       gymId: form.gymId || null,
     }
 
@@ -244,13 +248,18 @@ export function VentesStockManager() {
     const topProducts = Object.values(byProduct).sort((a, b) => b.total - a.total).slice(0, 5)
 
     // Alertes stock
-    const lowStock = products.filter((p) => p.isActive && p.stock <= 5)
+    const lowStock = products.filter((p) => p.isActive && p.trackStock && p.stock <= 5)
 
     return { totalDay, totalMonth, countDay, countMonth, topProducts, lowStock }
   }, [sales, products])
 
   const activeProducts = products.filter((p) => p.isActive)
   const inactiveProducts = products.filter((p) => !p.isActive)
+
+  const categoryOptions = useMemo(() => {
+    const cats = new Set(products.map((p) => p.category).filter(Boolean) as string[])
+    return Array.from(cats).sort()
+  }, [products])
 
   // Mois dispo (6 derniers)
   const monthOptions = useMemo(() => {
@@ -333,7 +342,7 @@ export function VentesStockManager() {
                             {gymById.get(p.gymId) || p.gymId}
                           </Badge>
                         )}
-                        {p.stock <= 5 && (
+                        {p.trackStock && p.stock <= 5 && (
                           <Badge className="text-xs bg-amber-100 text-amber-700">
                             <AlertTriangle className="w-3 h-3 mr-1" />
                             Stock faible ({p.stock})
@@ -343,7 +352,11 @@ export function VentesStockManager() {
                       {p.description && <p className="text-xs text-gray-500 mt-1 truncate">{p.description}</p>}
                       <div className="flex items-center gap-4 mt-2 text-sm">
                         <span className="font-bold text-red-600">{fmt(p.price)}</span>
-                        <span className="text-gray-500">Stock : <strong className="text-gray-700">{p.stock}</strong></span>
+                        {p.trackStock ? (
+                          <span className="text-gray-500">Stock : <strong className="text-gray-700">{p.stock}</strong></span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">Sans stock</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
@@ -683,16 +696,33 @@ export function VentesStockManager() {
                   className="mt-1"
                 />
               </div>
-              <div>
-                <Label className="text-sm font-medium">Stock</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.stock}
-                  onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                  className="mt-1"
-                />
-              </div>
+              {form.trackStock && (
+                <div>
+                  <Label className="text-sm font-medium">Stock</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.stock}
+                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="track-stock-toggle"
+                type="checkbox"
+                checked={form.trackStock}
+                onChange={(e) => setForm((f) => ({ ...f, trackStock: e.target.checked }))}
+                className="h-4 w-4"
+              />
+              <label htmlFor="track-stock-toggle" className="text-sm text-gray-700">
+                Suivre le stock
+              </label>
+              {!form.trackStock && (
+                <span className="text-xs text-gray-400">(ex : formule séance, prestation sans stock)</span>
+              )}
             </div>
             <div>
               <Label className="text-sm font-medium">Catégorie</Label>
@@ -701,7 +731,11 @@ export function VentesStockManager() {
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                 placeholder="ex : Nutrition, Équipement…"
                 className="mt-1"
+                list="product-category-options"
               />
+              <datalist id="product-category-options">
+                {categoryOptions.map((c) => <option key={c} value={c} />)}
+              </datalist>
             </div>
             <div>
               <Label className="text-sm font-medium">Salle (laisser vide = toutes)</Label>

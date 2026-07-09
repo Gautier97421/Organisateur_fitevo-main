@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (product.stock > 0) {
+    if (product.trackStock && product.stock > 0) {
       await prisma.product.update({
         where: { id: productId },
         data: { stock: Math.max(0, product.stock - qty) },
