@@ -88,6 +88,8 @@ export function VentesStockManager() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [productToDelete, setProductToDelete] = useState<string | null>(null)
+  const [filterArticleCategory, setFilterArticleCategory] = useState("")
+  const [filterArticleGym, setFilterArticleGym] = useState("")
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -253,13 +255,21 @@ export function VentesStockManager() {
     return { totalDay, totalMonth, countDay, countMonth, topProducts, lowStock }
   }, [sales, products])
 
-  const activeProducts = products.filter((p) => p.isActive)
-  const inactiveProducts = products.filter((p) => !p.isActive)
-
   const categoryOptions = useMemo(() => {
     const cats = new Set(products.map((p) => p.category).filter(Boolean) as string[])
     return Array.from(cats).sort()
   }, [products])
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (filterArticleCategory && p.category !== filterArticleCategory) return false
+      if (filterArticleGym && p.gymId !== filterArticleGym) return false
+      return true
+    })
+  }, [products, filterArticleCategory, filterArticleGym])
+
+  const activeProducts = filteredProducts.filter((p) => p.isActive)
+  const inactiveProducts = filteredProducts.filter((p) => !p.isActive)
 
   // Mois dispo (6 derniers)
   const monthOptions = useMemo(() => {
@@ -319,13 +329,43 @@ export function VentesStockManager() {
       {/* ── ONGLET ARTICLES ── */}
       {tab === "articles" && (
         <div className="space-y-4">
+          {/* Filtres */}
+          <div className="flex flex-wrap gap-3">
+            <Select value={filterArticleCategory || "_all"} onValueChange={(v) => setFilterArticleCategory(v === "_all" ? "" : v)}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Toutes les catégories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Toutes les catégories</SelectItem>
+                {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterArticleGym || "_all"} onValueChange={(v) => setFilterArticleGym(v === "_all" ? "" : v)}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Toutes les salles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Toutes les salles</SelectItem>
+                {gyms.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {(filterArticleCategory || filterArticleGym) && (
+              <button
+                onClick={() => { setFilterArticleCategory(""); setFilterArticleGym("") }}
+                className="text-xs text-gray-400 hover:text-red-600 transition-colors self-center"
+              >
+                Réinitialiser
+              </button>
+            )}
+          </div>
+
           {loadingProducts ? (
             <p className="text-gray-500 text-sm">Chargement…</p>
           ) : activeProducts.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-gray-500">
                 <Package className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                <p>Aucun article. Cliquez sur "Ajouter un article" pour commencer.</p>
+                <p>{filterArticleCategory || filterArticleGym ? "Aucun article ne correspond à ces filtres." : "Aucun article. Cliquez sur \"Ajouter un article\" pour commencer."}</p>
               </CardContent>
             </Card>
           ) : (
