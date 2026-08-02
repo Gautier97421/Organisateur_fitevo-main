@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 type ScheduledEventWithValidations = {
@@ -104,10 +104,42 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { eventId, userEmail } = body
+    let { eventId, userEmail } = body
+
+    // Un employé standard ne peut valider un événement que sous son propre nom —
+    // sinon il pourrait valider à la place d'un·e collègue qui ne l'a pas fait.
+    const managerAuth = await verifyManagerOrAdmin(request)
+    if (!managerAuth) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+      if (!actor) {
+        return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 401 })
+      }
+      userEmail = actor.email
+    }
 
     if (!eventId || !userEmail) {
       return NextResponse.json({ error: "eventId et userEmail sont obligatoires" }, { status: 400 })
+    }
+
+    // Vérifier que la date de l'événement est aujourd'hui ou après
+    const event = await prisma.scheduledEvent.findUnique({
+      where: { id: eventId }
+    })
+
+    if (!event) {
+      return NextResponse.json({ error: "Événement introuvable" }, { status: 404 })
+    }
+
+    const eventDate = new Date(event.eventDate)
+    eventDate.setHours(0, 0, 0, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (eventDate < today) {
+      return NextResponse.json(
+        { error: "Impossible de valider un événement passé" },
+        { status: 400 }
+      )
     }
 
     const validation = await prisma.scheduledEventValidation.upsert({
@@ -129,7 +161,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const event = await prisma.scheduledEvent.findUnique({
+    // Re-fetch l'événement avec validations pour vérifier si tout est validé
+    const updatedEvent = await prisma.scheduledEvent.findUnique({
       where: { id: eventId },
       include: {
         validations: {
@@ -141,8 +174,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (event) {
-      const validated = await isEventValidated(event)
+    if (updatedEvent) {
+      const validated = await isEventValidated(updatedEvent)
       if (validated) {
         await prisma.scheduledEvent.update({
           where: { id: eventId },

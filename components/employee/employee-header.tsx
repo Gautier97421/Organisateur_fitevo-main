@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button"
 import { LogOut, User, MessageCircle } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { clearCurrentUser } from "@/lib/current-user"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface EmployeeHeaderProps {
   userEmail: string
@@ -14,6 +23,7 @@ interface EmployeeHeaderProps {
 export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
   const router = useRouter()
   const [whatsappLink, setWhatsappLink] = useState<string | null>(null)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   useEffect(() => {
     // Charger le lien WhatsApp depuis la configuration
@@ -30,9 +40,13 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
     loadWhatsappLink()
   }, [])
 
-  const handleLogout = () => {
+  const handleLogoutConfirm = () => {
     clearCurrentUser()
     router.push("/")
+  }
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true)
   }
 
   const handleWhatsappClick = () => {
@@ -63,11 +77,28 @@ export function EmployeeHeader({ userEmail }: EmployeeHeaderProps) {
               WhatsApp
             </Button>
           )}
-          <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100 text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
+          <Button onClick={handleLogoutClick} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100 text-xs sm:text-sm px-2 sm:px-4 whitespace-nowrap">
             <LogOut className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
             Déconnexion
           </Button>
         </div>
+
+        <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Déconnexion</AlertDialogTitle>
+              <AlertDialogDescription>
+                Êtes-vous certain de vouloir vous déconnecter ?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-4">
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction onClick={handleLogoutConfirm} className="bg-red-600 hover:bg-red-700">
+                Déconnectez-moi
+              </AlertDialogAction>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </header>
   )
