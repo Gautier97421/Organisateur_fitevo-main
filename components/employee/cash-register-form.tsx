@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { FileText, XCircle, CheckCircle } from "lucide-react"
+import { FileText, XCircle, CheckCircle, AlertTriangle, Minus, Plus } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -57,6 +57,9 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
 
   const [customFields, setCustomFields] = useState<CashRegisterField[]>([])
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({})
+  // Dernières valeurs connues, pour repérer une éventuelle baisse (un champ numérique ne
+  // devrait normalement jamais diminuer, sauf erreur de saisie de l'employé).
+  const [initialFieldValues, setInitialFieldValues] = useState<Record<string, any>>({})
   const [isLoadingFields, setIsLoadingFields] = useState(true)
 
   const [coinCounts, setCoinCounts] = useState({
@@ -102,6 +105,7 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
             }
           })
           setCustomFieldValues(initialValues)
+          setInitialFieldValues({ ...initialValues })
         }
       } catch (error) {
       } finally {
@@ -290,34 +294,67 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
                         />
                         <span className="text-sm text-gray-600">{field.label}</span>
                       </div>
-                    ) : (
-                      <Input
-                        type={field.fieldType === "number" ? "number" : "text"}
-                        value={customFieldValues[field.id] || ""}
-                        min={field.fieldType === "number" ? 0 : undefined}
-                        onChange={(e) => {
-                          if (field.fieldType === "number") {
-                            if (e.target.value === "") {
+                    ) : field.fieldType === "number" ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCustomFieldValues({
+                              ...customFieldValues,
+                              [field.id]: Math.max(0, (Number(customFieldValues[field.id]) || 0) - 1)
+                            })}
+                            disabled={(Number(customFieldValues[field.id]) || 0) <= 0}
+                            className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                          >
+                            <Minus className="w-4 h-4 text-gray-700" />
+                          </button>
+                          <Input
+                            type="number"
+                            value={customFieldValues[field.id] || ""}
+                            min={0}
+                            onChange={(e) => {
+                              if (e.target.value === "") {
+                                setCustomFieldValues({ ...customFieldValues, [field.id]: "" })
+                                return
+                              }
+                              const parsed = Number(e.target.value)
                               setCustomFieldValues({
                                 ...customFieldValues,
-                                [field.id]: ""
+                                [field.id]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
                               })
-                              return
-                            }
-
-                            const parsed = Number(e.target.value)
-                            setCustomFieldValues({
+                            }}
+                            className="text-lg border-2 rounded-xl bg-white text-gray-900 text-center w-28"
+                            placeholder={field.label}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCustomFieldValues({
                               ...customFieldValues,
-                              [field.id]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
-                            })
-                            return
-                          }
-
-                          setCustomFieldValues({
-                            ...customFieldValues,
-                            [field.id]: e.target.value
-                          })
-                        }}
+                              [field.id]: (Number(customFieldValues[field.id]) || 0) + 1
+                            })}
+                            className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50"
+                          >
+                            <Plus className="w-4 h-4 text-gray-700" />
+                          </button>
+                        </div>
+                        {initialFieldValues[field.id] !== undefined
+                          && initialFieldValues[field.id] !== ""
+                          && customFieldValues[field.id] !== ""
+                          && Number(customFieldValues[field.id]) < Number(initialFieldValues[field.id]) && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                            En baisse par rapport au dernier enregistrement ({initialFieldValues[field.id]}) — vérifiez qu'il ne s'agit pas d'une erreur.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <Input
+                        type="text"
+                        value={customFieldValues[field.id] || ""}
+                        onChange={(e) => setCustomFieldValues({
+                          ...customFieldValues,
+                          [field.id]: e.target.value
+                        })}
                         className="text-lg border-2 rounded-xl bg-white text-gray-900"
                         placeholder={field.label}
                       />

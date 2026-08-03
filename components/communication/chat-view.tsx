@@ -282,9 +282,6 @@ export function ChatView({
   }
 
   const memberCount = conversation.members.length
-  const canManageGroup =
-    conversation.type === "group" &&
-    (conversation.myRole === "admin" || currentUser.role === "admin" || currentUser.role === "superadmin")
 
   let lastDay = ""
 
@@ -513,7 +510,6 @@ export function ChatView({
           onOpenChange={setShowSettings}
           conversation={conversation}
           currentUser={currentUser}
-          canManage={canManageGroup}
           onChanged={onConversationChanged}
         />
       )}

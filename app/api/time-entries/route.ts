@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { verifyAuth, verifyManagerOrAdmin } from '@/lib/auth-middleware'
 
 // GET - Récupérer les pointages
 export async function GET(request: NextRequest) {
@@ -12,17 +12,24 @@ export async function GET(request: NextRequest) {
 
   try {
     const searchParams = request.nextUrl.searchParams
-    const userEmail = searchParams.get('user_email')
+    let userEmail = searchParams.get('user_email')
     const gymId = searchParams.get('gym_id')
     const dateFrom = searchParams.get('date_from')
     const dateTo = searchParams.get('date_to')
-    
+
+    // Un employé standard ne peut consulter que ses propres pointages, jamais ceux de collègues.
+    const managerAuth = await verifyManagerOrAdmin(request)
+    if (!managerAuth) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+      userEmail = actor?.email || null
+    }
+
     const where: any = {}
-    
+
     if (userEmail) {
       where.employeeEmail = userEmail
     }
-    
+
     if (gymId) {
       where.gymId = gymId
     }
@@ -63,17 +70,28 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { user_email, gym_id } = await request.json()
-    
+    let { user_email, gym_id } = await request.json()
+
+    // Un employé standard ne peut pointer que pour lui-même — sinon il pourrait
+    // créer un pointage (donc potentiellement une base de paie) au nom d'un collègue.
+    const managerAuth = await verifyManagerOrAdmin(request)
+    if (!managerAuth) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+      if (!actor) {
+        return NextResponse.json({ data: null, error: 'Utilisateur introuvable' }, { status: 401 })
+      }
+      user_email = actor.email
+    }
+
     if (!user_email || !gym_id) {
       return NextResponse.json(
         { data: null, error: 'Email utilisateur et ID salle requis' },
         { status: 400 }
       )
     }
-    
+
     // Récupérer l'utilisateur
-    const user = await prisma.user.findUnique({ 
+    const user = await prisma.user.findUnique({
       where: { email: user_email }
     })
     

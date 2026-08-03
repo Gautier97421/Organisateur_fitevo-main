@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 function normalizeMonth(input?: string): string {
@@ -12,9 +12,21 @@ function normalizeMonth(input?: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  // Le récap complet (toutes les salles/employés) est réservé aux managers/admins. Un employé
+  // standard peut néanmoins lire SES PROPRES saisies (comptage d'ouverture, recomptages "Caisse"
+  // en cours de période) — sinon l'onglet "Caisse" de l'employé ne peut jamais rien afficher.
+  const managerAuth = await verifyManagerOrAdmin(request)
+  let selfEmail: string | null = null
+  if (!managerAuth) {
+    const userId = await verifyAuth(request)
+    if (!userId) {
+      return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+    }
+    const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+    if (!actor) {
+      return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 401 })
+    }
+    selfEmail = actor.email
   }
 
   try {
@@ -25,6 +37,9 @@ export async function GET(request: NextRequest) {
     const where: any = { entryMonth: month }
     if (gymId) {
       where.gymId = gymId
+    }
+    if (selfEmail) {
+      where.userEmail = selfEmail
     }
 
     const entries = await prisma.cashRegisterEntry.findMany({
@@ -64,7 +79,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const {
+    let {
       entryDate,
       period,
       gymId,
@@ -76,6 +91,18 @@ export async function POST(request: NextRequest) {
       notes,
       customValues,
     } = body
+
+    // Un employé standard ne peut soumettre un récap de caisse que sous sa propre identité —
+    // sinon il pourrait attribuer un écart de caisse à un·e collègue.
+    const managerAuth = await verifyManagerOrAdmin(request)
+    if (!managerAuth) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+      if (!actor) {
+        return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 401 })
+      }
+      userEmail = actor.email
+      userName = actor.name
+    }
 
     if (!period || !userEmail) {
       return NextResponse.json({ error: "period et userEmail sont obligatoires" }, { status: 400 })

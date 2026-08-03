@@ -203,7 +203,7 @@ export function TaskManager() {
     qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[] // IDs des rôles sélectionnés
-    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
+    subPeriods: Array<"debut" | "milieu" | "fin"> // Sous-créneaux (choix multiple)
   }>({
     title: "",
     description: "",
@@ -212,7 +212,7 @@ export function TaskManager() {
     qcmAllowMultiple: false,
     required: true,
     roleIds: [],
-    subPeriod: undefined,
+    subPeriods: [],
   })
   const [editTask, setEditTask] = useState<{
     title: string
@@ -222,7 +222,7 @@ export function TaskManager() {
     qcmAllowMultiple: boolean
     required: boolean
     roleIds: string[]
-    subPeriod?: "debut" | "milieu" | "fin" // Sous-créneau
+    subPeriods: Array<"debut" | "milieu" | "fin"> // Sous-créneaux (choix multiple)
   }>({
     title: "",
     description: "",
@@ -231,8 +231,22 @@ export function TaskManager() {
     qcmAllowMultiple: false,
     required: true,
     roleIds: [],
-    subPeriod: undefined,
+    subPeriods: [],
   })
+
+  const toggleNewTaskSubPeriod = (sp: "debut" | "milieu" | "fin") => {
+    setNewTask((prev) => ({
+      ...prev,
+      subPeriods: prev.subPeriods.includes(sp) ? prev.subPeriods.filter((s) => s !== sp) : [...prev.subPeriods, sp],
+    }))
+  }
+
+  const toggleEditTaskSubPeriod = (sp: "debut" | "milieu" | "fin") => {
+    setEditTask((prev) => ({
+      ...prev,
+      subPeriods: prev.subPeriods.includes(sp) ? prev.subPeriods.filter((s) => s !== sp) : [...prev.subPeriods, sp],
+    }))
+  }
   const [newOptionInput, setNewOptionInput] = useState("")
   const [editOptionInput, setEditOptionInput] = useState("")
 
@@ -412,16 +426,21 @@ export function TaskManager() {
       }
 
       const filteredOptions = newTask.options.filter((opt) => opt.trim().length > 0)
+      const applicableSubPeriods = (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriods : []
+      // Choix multiple de sous-créneaux : une tâche par sous-créneau sélectionné (le modèle
+      // Task ne porte qu'un seul sub_period par ligne), ou une tâche sans sous-créneau si aucun choisi.
+      const subPeriodsToCreate: Array<"debut" | "milieu" | "fin" | null> = applicableSubPeriods.length > 0 ? applicableSubPeriods : [null]
+
       const response = await fetch('/api/db/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          data: {
+          data: subPeriodsToCreate.map((subPeriod, index) => ({
             title: newTask.title,
             description: newTask.description || null,
             type: newTask.type,
             period: activePeriod,
-            sub_period: (activePeriod === "matin" || activePeriod === "aprem") ? newTask.subPeriod : null,
+            sub_period: subPeriod,
             options: newTask.type === "qcm"
               ? {
                   choices: filteredOptions,
@@ -429,13 +448,13 @@ export function TaskManager() {
                 }
               : null,
             required: newTask.required,
-            order_index: maxOrder + 1,
+            order_index: maxOrder + 1 + index,
             gym_id: selectedGym,
             role_ids: newTask.roleIds.length > 0 ? newTask.roleIds : null,
             user_id: userId,
             created_by: userId,
             status: 'pending'
-          }
+          }))
         })
       })
 
@@ -445,7 +464,7 @@ export function TaskManager() {
       }
 
       const result = await response.json()
-      
+
       // Recharger toutes les tâches depuis le serveur
       await loadTasks()
 
@@ -457,7 +476,7 @@ export function TaskManager() {
         qcmAllowMultiple: false,
         required: true,
         roleIds: [],
-        subPeriod: undefined,
+        subPeriods: [],
       })
       setShowForm(false)
     } catch (error: any) {
@@ -532,9 +551,9 @@ export function TaskManager() {
       type: task.type as "checkbox" | "text" | "qcm" || "checkbox",
       options: task.options || [],
       qcmAllowMultiple: Boolean(task.qcm_allow_multiple),
-      required: task.required || true,
+      required: task.required ?? true,
       roleIds: task.role_ids || [],
-      subPeriod: task.sub_period,
+      subPeriods: task.sub_period ? [task.sub_period] : [],
     })
     setShowEditForm(true)
     setShowForm(false)
@@ -546,6 +565,8 @@ export function TaskManager() {
 
     try {
       const filteredOptions = editTask.options.filter((opt) => opt.trim().length > 0)
+      const applicableSubPeriods = (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriods : []
+
       const response = await fetch(`/api/db/tasks/${editingTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -561,13 +582,44 @@ export function TaskManager() {
             : null,
           required: editTask.required,
           role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
-          sub_period: (editingTask.period === "matin" || editingTask.period === "aprem") ? editTask.subPeriod : null,
+          sub_period: applicableSubPeriods[0] ?? null,
         })
       })
 
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error?.message || `Erreur ${response.status}`)
+      }
+
+      // Choix multiple de sous-créneaux : la tâche éditée porte le premier sous-créneau choisi ;
+      // les suivants sont créés comme de nouvelles tâches (le modèle ne porte qu'un sub_period par ligne).
+      if (applicableSubPeriods.length > 1) {
+        const userId = getUserId()
+        const currentTasks = getCurrentTasks()
+        const maxOrder = currentTasks.length > 0 ? Math.max(...currentTasks.map((t) => t.order_index || 0)) : 0
+        await fetch('/api/db/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: applicableSubPeriods.slice(1).map((subPeriod, index) => ({
+              title: editTask.title,
+              description: editTask.description || null,
+              type: editTask.type,
+              period: editingTask.period,
+              sub_period: subPeriod,
+              options: editTask.type === "qcm"
+                ? { choices: filteredOptions, allowMultiple: editTask.qcmAllowMultiple }
+                : null,
+              required: editTask.required,
+              order_index: maxOrder + 1 + index,
+              gym_id: editingTask.gym_id,
+              role_ids: editTask.roleIds.length > 0 ? editTask.roleIds : null,
+              user_id: userId,
+              created_by: userId,
+              status: 'pending',
+            })),
+          }),
+        })
       }
 
       await loadTasks()
@@ -581,6 +633,7 @@ export function TaskManager() {
         qcmAllowMultiple: false,
         required: true,
         roleIds: [],
+        subPeriods: [],
       })
       setEditOptionInput("")
     } catch (error: any) {
@@ -900,21 +953,30 @@ export function TaskManager() {
                 {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
                 {editingTask && (editingTask.period === "matin" || editingTask.period === "aprem") && (
                   <div className="space-y-2">
-                    <Label className="text-lg font-medium">Sous-créneau :</Label>
-                    <Select
-                      value={editTask.subPeriod || "none"}
-                      onValueChange={(value) => setEditTask({ ...editTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
-                    >
-                      <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
-                        <SelectValue placeholder="Sélectionner un sous-créneau" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucun</SelectItem>
-                        <SelectItem value="debut">Début (ouverture)</SelectItem>
-                        <SelectItem value="milieu">Milieu</SelectItem>
-                        <SelectItem value="fin">Fin (fermeture)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-lg font-medium">Sous-créneau(x) :</Label>
+                    <p className="text-sm text-gray-500">Aucune case cochée = affichée sur tout le créneau.</p>
+                    <div className="flex flex-wrap gap-3">
+                      {([
+                        { value: "debut", label: "Début (ouverture)" },
+                        { value: "milieu", label: "Milieu" },
+                        { value: "fin", label: "Fin (fermeture)" },
+                      ] as const).map((opt) => (
+                        <label
+                          key={opt.value}
+                          htmlFor={`edit-sub-period-${opt.value}`}
+                          className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-4 py-3 rounded-xl cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`edit-sub-period-${opt.value}`}
+                            checked={editTask.subPeriods.includes(opt.value)}
+                            onChange={() => toggleEditTaskSubPeriod(opt.value)}
+                            className="w-5 h-5 text-blue-600 rounded"
+                          />
+                          <span className="text-base">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1109,24 +1171,34 @@ export function TaskManager() {
                   </div>
                 </div>
 
-                {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
+                {/* Sélecteur de sous-créneau (seulement pour matin et aprem) — choix multiple :
+                    une tâche par sous-créneau sélectionné sera créée. */}
                 {(activePeriod === "matin" || activePeriod === "aprem") && (
                   <div className="space-y-2">
-                    <Label className="text-lg font-medium">Sous-créneau :</Label>
-                    <Select
-                      value={newTask.subPeriod || "none"}
-                      onValueChange={(value) => setNewTask({ ...newTask, subPeriod: value === "none" ? undefined : value as "debut" | "milieu" | "fin" })}
-                    >
-                      <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
-                        <SelectValue placeholder="Sélectionner un sous-créneau" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucun</SelectItem>
-                        <SelectItem value="debut">Début (ouverture)</SelectItem>
-                        <SelectItem value="milieu">Milieu</SelectItem>
-                        <SelectItem value="fin">Fin (fermeture)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-lg font-medium">Sous-créneau(x) :</Label>
+                    <p className="text-sm text-gray-500">Aucune case cochée = affichée sur tout le créneau.</p>
+                    <div className="flex flex-wrap gap-3">
+                      {([
+                        { value: "debut", label: "Début (ouverture)" },
+                        { value: "milieu", label: "Milieu" },
+                        { value: "fin", label: "Fin (fermeture)" },
+                      ] as const).map((opt) => (
+                        <label
+                          key={opt.value}
+                          htmlFor={`new-sub-period-${opt.value}`}
+                          className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-4 py-3 rounded-xl cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            id={`new-sub-period-${opt.value}`}
+                            checked={newTask.subPeriods.includes(opt.value)}
+                            onChange={() => toggleNewTaskSubPeriod(opt.value)}
+                            className="w-5 h-5 text-blue-600 rounded"
+                          />
+                          <span className="text-base">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
 

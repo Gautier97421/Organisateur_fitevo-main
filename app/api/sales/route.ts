@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+  // Historique des ventes = donnée financière de toute l'organisation — réservé aux managers/admins.
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
 
   try {
     const { searchParams } = new URL(request.url)

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, Check, UserPlus, LogOut, Trash2, Loader2, Pencil, Shield, ShieldOff, AlertTriangle, X } from "lucide-react"
+import { Search, Check, UserPlus, LogOut, Trash2, Loader2, Pencil, Shield, ShieldOff, PenLine, AlertTriangle, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Conversation, DirectoryUser } from "./types"
 
@@ -14,11 +14,10 @@ interface Props {
   onOpenChange: (open: boolean) => void
   conversation: Conversation
   currentUser: { id: string; name: string; role: string }
-  canManage: boolean
   onChanged: () => void
 }
 
-export function GroupSettingsDialog({ open, onOpenChange, conversation, currentUser, canManage, onChanged }: Props) {
+export function GroupSettingsDialog({ open, onOpenChange, conversation, currentUser, onChanged }: Props) {
   const [name, setName] = useState(conversation.name || "")
   const [editingName, setEditingName] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -27,8 +26,19 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [showTransferConfirm, setShowTransferConfirm] = useState<{ userId: string; name: string } | null>(null)
 
   const memberIds = new Set(conversation.members.map((m) => m.userId))
+
+  // Trois niveaux de rôle dans un groupe : admin (un seul, tous droits), editor (droit de
+  // modification : renommer + ajouter des membres, plusieurs possibles), member (aucun droit).
+  const isAppAdmin = currentUser.role === "admin" || currentUser.role === "superadmin"
+  const isGroupAdmin = isAppAdmin || conversation.myRole === "admin"
+  const isEditor = conversation.myRole === "editor"
+  const canRename = isGroupAdmin || isEditor
+  const canAddMembers = isGroupAdmin || isEditor
+  const canRemoveMembers = isGroupAdmin
+  const canChangeRoles = isGroupAdmin
 
   useEffect(() => {
     if (!adding) return
@@ -70,7 +80,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     else toast.error("Erreur lors de l'ajout")
   }
 
-  const setRole = async (userId: string, role: "admin" | "member") => {
+  const setRole = async (userId: string, role: "admin" | "editor" | "member") => {
     setBusy(true)
     const res = await fetch(`/api/communication/conversations/${conversation.id}/members`, {
       method: "PATCH",
@@ -78,7 +88,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
       body: JSON.stringify({ userId, role }),
     })
     setBusy(false)
-    if (res.ok) onChanged()
+    if (res.ok) { setShowTransferConfirm(null); onChanged() }
     else {
       const err = await res.json().catch(() => ({}))
       toast.error(err.error || "Erreur lors du changement de rôle")
@@ -102,7 +112,11 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
     })
     setBusy(false)
     if (res.ok) { setShowLeaveConfirm(false); onOpenChange(false); onChanged() }
-    else toast.error("Erreur lors de la sortie du groupe")
+    else {
+      const err = await res.json().catch(() => ({}))
+      setShowLeaveConfirm(false)
+      toast.error(err.error || "Erreur lors de la sortie du groupe")
+    }
   }
 
   return (
@@ -114,7 +128,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
 
         {/* Nom */}
         <div className="flex items-center gap-2">
-          {editingName && canManage ? (
+          {editingName && canRename ? (
             <>
               <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className="flex-1" />
               <Button size="sm" onClick={saveName} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white">
@@ -124,7 +138,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
           ) : (
             <>
               <span className="flex-1 font-semibold text-gray-900 dark:text-white">{conversation.name}</span>
-              {canManage && (
+              {canRename && (
                 <Button size="sm" variant="ghost" onClick={() => setEditingName(true)}>
                   <Pencil className="w-4 h-4" />
                 </Button>
@@ -134,7 +148,7 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
         </div>
 
         {/* Ajout de membres */}
-        {canManage && (
+        {canAddMembers && (
           <div>
             <Button variant="outline" size="sm" onClick={() => setAdding((v) => !v)} className="w-full">
               <UserPlus className="w-4 h-4 mr-2" /> {adding ? "Annuler l'ajout" : "Ajouter des membres"}
@@ -193,17 +207,28 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
                       {m.name} {m.userId === currentUser.id && "(vous)"}
                     </div>
                     {m.role === "admin" && <div className="text-xs text-red-600">Admin du groupe</div>}
+                    {m.role === "editor" && <div className="text-xs text-blue-600">Droit de modification</div>}
                   </div>
-                  {canManage && m.userId !== currentUser.id && (
+                  {canChangeRoles && m.userId !== currentUser.id && m.role !== "admin" && (
                     <>
-                      {m.role === "admin" ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowTransferConfirm({ userId: m.userId, name: m.name })}
+                        disabled={busy}
+                        title="Transférer l'administration"
+                        className="text-gray-400 hover:text-red-600 px-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                      </Button>
+                      {m.role === "editor" ? (
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => setRole(m.userId, "member")}
                           disabled={busy}
-                          title="Retirer le rôle admin"
-                          className="text-red-600 hover:text-gray-600 px-2"
+                          title="Retirer le droit de modification"
+                          className="text-blue-600 hover:text-gray-600 px-2"
                         >
                           <ShieldOff className="w-4 h-4" />
                         </Button>
@@ -211,18 +236,20 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => setRole(m.userId, "admin")}
+                          onClick={() => setRole(m.userId, "editor")}
                           disabled={busy}
-                          title="Nommer admin du groupe"
-                          className="text-gray-400 hover:text-red-600 px-2"
+                          title="Accorder le droit de modification"
+                          className="text-gray-400 hover:text-blue-600 px-2"
                         >
-                          <Shield className="w-4 h-4" />
+                          <PenLine className="w-4 h-4" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" onClick={() => removeMember(m.userId)} disabled={busy} className="text-gray-400 hover:text-red-600 px-2">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </>
+                  )}
+                  {canRemoveMembers && m.userId !== currentUser.id && m.role !== "admin" && (
+                    <Button size="sm" variant="ghost" onClick={() => removeMember(m.userId)} disabled={busy} className="text-gray-400 hover:text-red-600 px-2">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   )}
                 </li>
               ))}
@@ -234,6 +261,35 @@ export function GroupSettingsDialog({ open, onOpenChange, conversation, currentU
           <LogOut className="w-4 h-4 mr-2" /> Quitter le groupe
         </Button>
       </DialogContent>
+
+      <Dialog open={!!showTransferConfirm} onOpenChange={(o) => !o && setShowTransferConfirm(null)}>
+        <DialogContent className="max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <Shield className="h-5 w-5 text-red-600" />
+              Transférer l'administration
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              {showTransferConfirm && (
+                <>Rendre <strong>{showTransferConfirm.name}</strong> administrateur du groupe ? Vous ne serez alors plus vous-même administrateur.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowTransferConfirm(null)}>
+              <X className="mr-2 h-4 w-4" /> Annuler
+            </Button>
+            <Button
+              onClick={() => showTransferConfirm && setRole(showTransferConfirm.userId, "admin")}
+              disabled={busy}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
+              Transférer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
         <DialogContent className="max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">

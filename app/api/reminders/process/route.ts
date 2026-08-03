@@ -1,13 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import { sendEventReminderEmail, sendValidationOverdueEmail } from "@/lib/email"
 import logger from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 
+// Tâche de maintenance (envoi en masse de rappels) — pas une action qu'un employé
+// quelconque doit pouvoir déclencher à volonté.
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ success: false, message: "Authentification requise" }, { status: 401 })
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ success: false, message: "Accès refusé" }, { status: 403 })
   }
 
   try {

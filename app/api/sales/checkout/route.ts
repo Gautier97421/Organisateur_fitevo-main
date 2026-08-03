@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { items, userEmail, userName, gymId, period, notes } = body
+    const { items, userEmail, userName, gymId, period, notes, declinedGifts } = body
 
     if (!Array.isArray(items) || items.length === 0 || !userEmail) {
       return NextResponse.json({ error: "items et userEmail sont obligatoires" }, { status: 400 })
@@ -46,9 +46,12 @@ export async function POST(request: NextRequest) {
     }
     const extraIds = [...promoProductIds].filter((id) => !productsById.has(id))
     const extraProducts = extraIds.length ? await prisma.product.findMany({ where: { id: { in: extraIds } } }) : []
-    const catalog = [...products, ...extraProducts].map((p) => ({ id: p.id, name: p.name, price: p.price, category: p.category }))
+    const catalog = [...products, ...extraProducts].map((p) => ({ id: p.id, name: p.name, price: p.price, category: p.category, stock: p.stock, trackStock: p.trackStock }))
 
-    const result = applyPromotions(cart, promotions as PromotionRule[], catalog, gymId || null)
+    const declinedGiftQuantities: Record<string, number> | undefined =
+      declinedGifts && typeof declinedGifts === "object" ? declinedGifts : undefined
+
+    const result = applyPromotions(cart, promotions as PromotionRule[], catalog, gymId || null, declinedGiftQuantities)
 
     const now = new Date()
     const saleMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -59,6 +62,19 @@ export async function POST(request: NextRequest) {
     }
 
     const sales = await prisma.$transaction(async (tx) => {
+      // Vérifie le stock réel (source de vérité serveur) avant de créer quoi que ce soit :
+      // le panier client ne doit jamais pouvoir vendre plus que ce qui est disponible, y compris
+      // en cas de vente concurrente sur le même article.
+      const freshProducts = new Map<string, { stock: number; trackStock: boolean; name: string }>()
+      for (const [productId, qty] of stockDeltas) {
+        const fresh = await tx.product.findUnique({ where: { id: productId } })
+        if (!fresh) continue
+        if (fresh.trackStock && fresh.stock < qty) {
+          throw new Error(`STOCK_INSUFFICIENT:${fresh.name}`)
+        }
+        freshProducts.set(productId, fresh)
+      }
+
       const created = []
       for (const line of result.lines) {
         const sale = await tx.sale.create({
@@ -84,9 +100,9 @@ export async function POST(request: NextRequest) {
       }
 
       for (const [productId, qty] of stockDeltas) {
-        const fresh = await tx.product.findUnique({ where: { id: productId } })
-        if (fresh && fresh.trackStock && fresh.stock > 0) {
-          await tx.product.update({ where: { id: productId }, data: { stock: Math.max(0, fresh.stock - qty) } })
+        const fresh = freshProducts.get(productId)
+        if (fresh && fresh.trackStock) {
+          await tx.product.update({ where: { id: productId }, data: { stock: fresh.stock - qty } })
         }
       }
 
@@ -103,6 +119,10 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201 })
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("STOCK_INSUFFICIENT:")) {
+      const productName = error.message.slice("STOCK_INSUFFICIENT:".length)
+      return NextResponse.json({ error: `Stock insuffisant pour ${productName}` }, { status: 409 })
+    }
     logger.error("Erreur checkout vente", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }

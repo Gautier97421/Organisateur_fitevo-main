@@ -67,45 +67,6 @@ export function isValidBoolean(value: any): boolean {
 }
 
 /**
- * Sanitize une chaîne pour empêcher les injections XSS
- * Échappe les caractères HTML dangereux
- */
-export function sanitizeString(str: string): string {
-  if (typeof str !== 'string') return ''
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-}
-
-/**
- * Sanitize un objet récursivement
- */
-export function sanitizeObject(obj: any): any {
-  if (obj === null || obj === undefined) return obj
-  
-  if (typeof obj === 'string') {
-    return sanitizeString(obj)
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item))
-  }
-  
-  if (typeof obj === 'object') {
-    const sanitized: any = {}
-    for (const [key, value] of Object.entries(obj)) {
-      sanitized[key] = sanitizeObject(value)
-    }
-    return sanitized
-  }
-  
-  return obj
-}
-
-/**
  * Valide les champs d'un utilisateur (employees, admins, users)
  */
 export function validateUserFields(data: any): { valid: boolean; errors: string[] } {

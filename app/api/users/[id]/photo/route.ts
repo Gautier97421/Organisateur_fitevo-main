@@ -86,11 +86,15 @@ export async function POST(
 
 /**
  * GET /api/users/[id]/photo — Sert la photo de profil.
+ * Réservé aux utilisateurs connectés (pas de fuite de photo à un visiteur non authentifié).
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) return new NextResponse(null, { status: 401 })
+
   try {
     const { id } = await params
     const user = await prisma.user.findUnique({ where: { id }, select: { profilePhoto: true } })

@@ -60,7 +60,7 @@ export function PromotionsManager() {
     getQuantity: "1",
     percentage: "10",
     targetScope: "all" as TargetScope,
-    targetProductId: "",
+    targetProductIds: [] as string[],
     targetCategory: "",
   })
 
@@ -99,9 +99,18 @@ export function PromotionsManager() {
     getQuantity: "1",
     percentage: "10",
     targetScope: "all",
-    targetProductId: "",
+    targetProductIds: [],
     targetCategory: "",
   })
+
+  const toggleTargetProduct = (productId: string) => {
+    setForm((f) => ({
+      ...f,
+      targetProductIds: f.targetProductIds.includes(productId)
+        ? f.targetProductIds.filter((id) => id !== productId)
+        : [...f.targetProductIds, productId],
+    }))
+  }
 
   const openAdd = () => {
     setEditingPromo(null)
@@ -121,7 +130,7 @@ export function PromotionsManager() {
       getQuantity: String(promo.getQuantity ?? 1),
       percentage: String(promo.percentage ?? 10),
       targetScope: promo.targetProductId ? "product" : promo.targetCategory ? "category" : "all",
-      targetProductId: promo.targetProductId || "",
+      targetProductIds: promo.targetProductId ? [promo.targetProductId] : [],
       targetCategory: promo.targetCategory || "",
     })
     setShowDialog(true)
@@ -136,8 +145,8 @@ export function PromotionsManager() {
       toast.error("Sélectionnez le produit à acheter")
       return
     }
-    if (form.type === "percentage" && form.targetScope === "product" && !form.targetProductId) {
-      toast.error("Sélectionnez le produit ciblé")
+    if (form.type === "percentage" && form.targetScope === "product" && form.targetProductIds.length === 0) {
+      toast.error("Sélectionnez au moins un produit ciblé")
       return
     }
     if (form.type === "percentage" && form.targetScope === "category" && !form.targetCategory) {
@@ -145,39 +154,59 @@ export function PromotionsManager() {
       return
     }
 
-    const payload: any = {
+    const basePayload: any = {
       name: form.name.trim(),
       type: form.type,
       gymId: form.gymId || null,
     }
     if (form.type === "buy_x_get_y") {
-      payload.buyProductId = form.buyProductId
-      payload.buyQuantity = Number(form.buyQuantity) || 1
-      payload.getProductId = form.getProductId || form.buyProductId
-      payload.getQuantity = Number(form.getQuantity) || 1
+      basePayload.buyProductId = form.buyProductId
+      basePayload.buyQuantity = Number(form.buyQuantity) || 1
+      basePayload.getProductId = form.getProductId || form.buyProductId
+      basePayload.getQuantity = Number(form.getQuantity) || 1
     } else {
-      payload.percentage = Number(form.percentage) || 0
-      payload.targetProductId = form.targetScope === "product" ? form.targetProductId : null
-      payload.targetCategory = form.targetScope === "category" ? form.targetCategory : null
+      basePayload.percentage = Number(form.percentage) || 0
+      basePayload.targetCategory = form.targetScope === "category" ? form.targetCategory : null
     }
+
+    // Une réduction en % "produit précis" peut viser plusieurs articles à la fois : comme le
+    // modèle Promotion ne porte qu'un seul targetProductId, on crée une ligne par produit
+    // sélectionné (même logique que pour les tâches multi-sous-créneaux) plutôt que de changer
+    // le schéma de données.
+    const targetProductIds = form.type === "percentage" && form.targetScope === "product"
+      ? form.targetProductIds
+      : [null]
 
     try {
       if (editingPromo) {
+        // La promo éditée porte le premier produit sélectionné ; les suivants (s'il y en a de
+        // nouveaux) sont créés comme des promotions supplémentaires.
+        const [firstProductId, ...restProductIds] = targetProductIds
         const res = await fetch(`/api/promotions/${editingPromo.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...basePayload, targetProductId: firstProductId }),
         })
         if (!res.ok) throw new Error()
+
+        for (const productId of restProductIds) {
+          await fetch("/api/promotions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...basePayload, targetProductId: productId }),
+          })
+        }
         toast.success("Promotion mise à jour")
       } else {
-        const res = await fetch("/api/promotions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error()
-        toast.success("Promotion créée")
+        for (const productId of targetProductIds) {
+          const res = await fetch("/api/promotions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...basePayload, targetProductId: productId }),
+          })
+          if (!res.ok) throw new Error()
+        }
+        toast.success(targetProductIds.length > 1 ? "Promotions créées" : "Promotion créée")
       }
       setShowDialog(false)
       load()
@@ -419,14 +448,26 @@ export function PromotionsManager() {
                   </Select>
                 </div>
                 {form.targetScope === "product" && (
-                  <Select value={form.targetProductId} onValueChange={(v) => setForm((f) => ({ ...f, targetProductId: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choisir un produit…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Un ou plusieurs articles peuvent être ciblés.</p>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-1">
+                      {activeProducts.length === 0 ? (
+                        <p className="text-xs text-gray-500">Aucun produit actif.</p>
+                      ) : (
+                        activeProducts.map((p) => (
+                          <label key={p.id} className="flex items-center gap-2 text-sm text-gray-700 py-0.5">
+                            <input
+                              type="checkbox"
+                              checked={form.targetProductIds.includes(p.id)}
+                              onChange={() => toggleTargetProduct(p.id)}
+                              className="w-4 h-4 text-red-600 rounded"
+                            />
+                            <span>{p.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
                 {form.targetScope === "category" && (
                   <Select value={form.targetCategory} onValueChange={(v) => setForm((f) => ({ ...f, targetCategory: v }))}>

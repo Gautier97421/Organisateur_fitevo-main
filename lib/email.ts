@@ -1,6 +1,18 @@
 import nodemailer from "nodemailer"
 import logger from "@/lib/logger"
 
+// Échappe le HTML pour toute donnée utilisateur injectée dans un template d'email
+// (nom, message libre, titre d'événement...) — sinon un employé peut injecter du
+// HTML/des liens arbitraires dans un email reçu par l'équipe (phishing interne).
+export function escapeHtml(input: unknown): string {
+  return String(input ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 function getTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env
 
@@ -14,8 +26,10 @@ function getTransporter() {
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
     tls: {
-      rejectUnauthorized: false,
-      minVersion: "TLSv1",
+      // Un certificat invalide ou un TLS obsolète ne doit jamais être accepté silencieusement :
+      // ces identifiants SMTP réels transiteraient alors en clair pour un attaquant en MITM.
+      rejectUnauthorized: true,
+      minVersion: "TLSv1.2",
     },
   })
 }
@@ -101,8 +115,8 @@ export async function sendWorkRecapEmail(data: {
       <h2 style="color:#dc2626;margin-bottom:4px">Fin de période – FitEvo</h2>
       <p style="color:#6b7280;margin-top:0;margin-bottom:24px">${today}</p>
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-        <tr><td style="padding:6px 0;color:#6b7280">Employé</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.employeeName} (${data.employeeEmail})</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Salle</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.gymName}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Employé</td><td style="padding:6px 0;font-weight:600;color:#111827">${escapeHtml(data.employeeName)} (${escapeHtml(data.employeeEmail)})</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Salle</td><td style="padding:6px 0;font-weight:600;color:#111827">${escapeHtml(data.gymName)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Période</td><td style="padding:6px 0;font-weight:600;color:#111827">${periodDisplay}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Début</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.startTime}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Fin</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.endTime}</td></tr>
@@ -137,7 +151,7 @@ export async function sendValidationOverdueEmail(data: {
           L'événement planifié ci-dessous nécessitait une validation qui n'a pas été effectuée avant la fin de la journée prévue.
         </p>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-          <tr><td style="padding:6px 0;color:#6b7280">Événement</td><td style="padding:6px 0;font-weight:600;color:#111827">${data.eventTitle}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280">Événement</td><td style="padding:6px 0;font-weight:600;color:#111827">${escapeHtml(data.eventTitle)}</td></tr>
           <tr><td style="padding:6px 0;color:#6b7280">Date prévue</td><td style="padding:6px 0;font-weight:600;color:#111827">${dateDisplay}</td></tr>
         </table>
         <p style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;padding:12px;border-radius:6px;font-size:14px">
@@ -165,7 +179,7 @@ export async function sendEmergencyEmail(data: {
 
   const msgBlock = data.message.trim()
     ? `<div style="background:#fff1f1;border-left:4px solid #dc2626;padding:12px 16px;border-radius:4px;margin-bottom:16px">
-        <p style="margin:0;color:#374151;font-size:15px"><strong>Message :</strong><br/>${data.message.replace(/\n/g, "<br/>")}</p>
+        <p style="margin:0;color:#374151;font-size:15px"><strong>Message :</strong><br/>${escapeHtml(data.message.trim()).replace(/\n/g, "<br/>")}</p>
       </div>`
     : `<p style="color:#6b7280;font-style:italic">Aucun message fourni.</p>`
 
@@ -180,7 +194,7 @@ export async function sendEmergencyEmail(data: {
       </div>
       <div style="border:1px solid #fca5a5;border-top:none;border-radius:0 0 8px 8px;padding:20px">
         <p style="color:#374151;margin-bottom:16px">
-          L'employé <strong>${data.employeeName}</strong> (<a href="mailto:${data.employeeEmail}" style="color:#dc2626">${data.employeeEmail}</a>)
+          L'employé <strong>${escapeHtml(data.employeeName)}</strong> (<a href="mailto:${encodeURIComponent(data.employeeEmail)}" style="color:#dc2626">${escapeHtml(data.employeeEmail)}</a>)
           a déclenché une alerte d'urgence.
         </p>
         ${msgBlock}
@@ -210,19 +224,19 @@ export async function sendEventReminderEmail(data: {
     year: "numeric",
   })
   const timeLine = data.eventTime
-    ? `<p style="color:#374151;margin:4px 0"><strong>Heure :</strong> ${data.eventTime}</p>`
+    ? `<p style="color:#374151;margin:4px 0"><strong>Heure :</strong> ${escapeHtml(data.eventTime)}</p>`
     : ""
   const locationLine = data.eventLocation
-    ? `<p style="color:#374151;margin:4px 0"><strong>Lieu :</strong> ${data.eventLocation}</p>`
+    ? `<p style="color:#374151;margin:4px 0"><strong>Lieu :</strong> ${escapeHtml(data.eventLocation)}</p>`
     : ""
   const customLine = data.customMessage
-    ? `<p style="color:#374151;margin-top:16px;padding:12px;background:#f9fafb;border-left:4px solid #dc2626;border-radius:4px">${data.customMessage}</p>`
+    ? `<p style="color:#374151;margin-top:16px;padding:12px;background:#f9fafb;border-left:4px solid #dc2626;border-radius:4px">${escapeHtml(data.customMessage)}</p>`
     : ""
 
   const html = `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 16px">
       <h2 style="color:#dc2626;margin-bottom:8px">Rappel d'événement – FitEvo</h2>
-      <h3 style="color:#111827;margin-top:0;margin-bottom:16px">${data.eventTitle}</h3>
+      <h3 style="color:#111827;margin-top:0;margin-bottom:16px">${escapeHtml(data.eventTitle)}</h3>
       <p style="color:#374151;margin:4px 0"><strong>Date :</strong> ${dateDisplay}</p>
       ${timeLine}
       ${locationLine}
@@ -231,5 +245,28 @@ export async function sendEventReminderEmail(data: {
     </div>
   `
   await dispatch(data.recipientEmails, `Rappel : ${data.eventTitle}`, html)
+}
+
+export async function sendWelcomeEmail(
+  toEmail: string,
+  activationUrl: string,
+): Promise<void> {
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 16px">
+      <h2 style="color:#dc2626;margin-bottom:8px">Bienvenue sur FitEvo</h2>
+      <p style="color:#374151;margin-bottom:24px">
+        Un compte a été créé pour vous sur FitEvo.<br/>
+        Ce lien d'activation est valable <strong>7 jours</strong> et permet de choisir votre identifiant et votre mot de passe.
+      </p>
+      <a href="${activationUrl}"
+         style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">
+        Activer mon compte
+      </a>
+      <p style="color:#6b7280;font-size:13px;margin-top:24px">
+        Si vous ne vous attendiez pas à cet email, contactez votre administrateur.
+      </p>
+    </div>
+  `
+  await dispatch(toEmail, "Bienvenue sur FitEvo — activez votre compte", html)
 }
 

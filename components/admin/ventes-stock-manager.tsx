@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { Fragment, useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select"
 import {
   ShoppingBag, Plus, Edit2, Trash2, TrendingUp, Package,
-  Euro, AlertTriangle, CalendarDays, User, Building2, X, History, Gift,
+  Euro, AlertTriangle, CalendarDays, User, Building2, X, History, Gift, Download,
+  ChevronDown, ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
 import { PromotionsManager } from "@/components/admin/promotions-manager"
@@ -105,6 +106,7 @@ export function VentesStockManager() {
   const [loadingSales, setLoadingSales] = useState(false)
   const [filterMonth, setFilterMonth] = useState(currentMonth())
   const [filterGym, setFilterGym] = useState("")
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [gyms, setGyms] = useState<Gym[]>([])
 
   useEffect(() => {
@@ -283,6 +285,126 @@ export function VentesStockManager() {
   }, [])
 
   const gymById = useMemo(() => new Map(gyms.map((g) => [g.id, g.name])), [gyms])
+
+  // Regroupe les lignes d'une même vente (un panier validé peut produire plusieurs lignes, une par
+  // article) : toutes les lignes créées par un même checkout partagent exactement le même horodatage.
+  const saleGroups = useMemo(() => {
+    const map = new Map<string, { key: string; saleDate: string; userEmail: string; userName: string; gymId?: string | null; period?: string | null; items: Sale[]; total: number; itemCount: number }>()
+    for (const s of sales) {
+      const key = `${s.saleDate}|${s.userEmail}|${s.gymId || ""}|${s.period || ""}`
+      let group = map.get(key)
+      if (!group) {
+        group = { key, saleDate: s.saleDate, userEmail: s.userEmail, userName: s.userName, gymId: s.gymId, period: s.period, items: [], total: 0, itemCount: 0 }
+        map.set(key, group)
+      }
+      group.items.push(s)
+      group.total += s.total
+      group.itemCount += s.quantity
+    }
+    return Array.from(map.values()).sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+  }, [sales])
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const exportSalesPDF = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ])
+
+    const [y, mo] = filterMonth.split("-")
+    const monthLabel = new Date(Number(y), Number(mo) - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+    const gymName = filterGym ? (gymById.get(filterGym) || filterGym) : "Toutes les salles"
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+    const pageW = doc.internal.pageSize.getWidth()
+
+    // Bandeau titre rouge
+    doc.setFillColor(220, 38, 38)
+    doc.rect(0, 0, pageW, 18, "F")
+    doc.setFontSize(14)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(255, 255, 255)
+    doc.text(`Ventes — ${monthLabel}`, 14, 12)
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+    doc.text(
+      `Exporté le ${new Date().toLocaleDateString("fr-FR")}  ·  ${gymName}  ·  ${saleGroups.length} vente(s)`,
+      pageW - 14,
+      12,
+      { align: "right" },
+    )
+
+    // Résumé
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.text("Résumé", 14, 26)
+
+    const totalAmount = sales.reduce((a, s) => a + s.total, 0)
+    const totalArticles = sales.reduce((a, s) => a + s.quantity, 0)
+    autoTable(doc, {
+      startY: 29,
+      head: [["Total des ventes", "Nombre de ventes", "Nombre d'articles"]],
+      body: [[fmt(totalAmount), String(saleGroups.length), String(totalArticles)]],
+      theme: "grid",
+      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: "bold", fontSize: 8 },
+      bodyStyles: { fontSize: 9, fontStyle: "bold", halign: "center" },
+      margin: { left: 14, right: 14 },
+    })
+
+    const afterSummary = (doc as any).lastAutoTable?.finalY ?? 40
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    doc.text("Détail des ventes", 14, afterSummary + 8)
+
+    // Une "vente" (transaction) = une ligne d'en-tête (fond rouge clair, fusionnée sur toutes les
+    // colonnes) suivie des articles qui la composent, pour rester lisible même avec beaucoup de ventes.
+    const columns = ["Article", "Qté", "P.U.", "Total"]
+    const rows: any[] = []
+    for (const g of saleGroups) {
+      const dateLabel = new Date(g.saleDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
+      const timeLabel = new Date(g.saleDate).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+      const gymLabel = g.gymId ? (gymById.get(g.gymId) || "—") : "Toutes"
+      const periodLabelText = g.period ? (periodLabel[g.period] ?? g.period) : "—"
+      rows.push([
+        {
+          content: `${dateLabel} ${timeLabel}  ·  ${g.userName}  ·  ${gymLabel}  ·  ${periodLabelText}  ·  Total ${fmt(g.total)}`,
+          colSpan: columns.length,
+          styles: { fillColor: [254, 226, 226], textColor: [153, 27, 27], fontStyle: "bold", fontSize: 7.5, halign: "left" },
+        },
+      ])
+      for (const s of g.items) {
+        rows.push([
+          s.productName + (s.isGift ? " (offert)" : ""),
+          String(s.quantity),
+          fmt(s.unitPrice),
+          fmt(s.total),
+        ])
+      }
+    }
+
+    autoTable(doc, {
+      startY: afterSummary + 11,
+      head: [columns],
+      body: rows,
+      theme: "grid",
+      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: "bold", fontSize: 7 },
+      bodyStyles: { fontSize: 7.5 },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { halign: "center", cellWidth: 16 }, 2: { halign: "right", cellWidth: 22 }, 3: { halign: "right", cellWidth: 22 } },
+      margin: { left: 14, right: 14 },
+    })
+
+    doc.save(`ventes-${filterMonth}.pdf`)
+  }
 
   return (
     <div className="space-y-6">
@@ -619,6 +741,14 @@ export function VentesStockManager() {
                 {gyms.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Button
+              onClick={exportSalesPDF}
+              disabled={sales.length === 0}
+              variant="outline"
+              className="ml-auto border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-900 flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" /> Télécharger PDF
+            </Button>
           </div>
 
           {loadingSales ? (
@@ -635,56 +765,75 @@ export function VentesStockManager() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="w-8 px-2 py-3" />
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Employé</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Article</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-600">Qté</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">P.U.</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600">Articles</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Salle</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Période</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {sales.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <CalendarDays className="w-3.5 h-3.5 text-gray-400" />
-                          {new Date(s.saleDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                          <span className="text-gray-400 text-xs">
-                            {new Date(s.saleDate).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-gray-800 truncate max-w-[140px]">{s.userName}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">
-                        {s.productName}
-                        {s.isGift && <Badge className="ml-2 text-xs bg-green-100 text-green-700">🎁 Offert</Badge>}
-                      </td>
-                      <td className="px-4 py-3 text-center text-gray-700">{s.quantity}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{fmt(s.unitPrice)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{fmt(s.total)}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {s.gymId ? (
-                          <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{gymById.get(s.gymId) || "—"}</span>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {s.period ? <Badge variant="outline" className="text-xs">{periodLabel[s.period] ?? s.period}</Badge> : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  {saleGroups.map((g) => {
+                    const expanded = expandedGroups.has(g.key)
+                    return (
+                      <Fragment key={g.key}>
+                        <tr
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => toggleGroup(g.key)}
+                        >
+                          <td className="px-2 py-3 text-gray-400">
+                            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <CalendarDays className="w-3.5 h-3.5 text-gray-400" />
+                              {new Date(g.saleDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                              <span className="text-gray-400 text-xs">
+                                {new Date(g.saleDate).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-gray-800 truncate max-w-[140px]">{g.userName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center text-gray-700">{g.itemCount}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-900">{fmt(g.total)}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {g.gymId ? (
+                              <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{gymById.get(g.gymId) || "—"}</span>
+                            ) : "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {g.period ? <Badge variant="outline" className="text-xs">{periodLabel[g.period] ?? g.period}</Badge> : "—"}
+                          </td>
+                        </tr>
+                        {expanded && g.items.map((s) => (
+                          <tr key={s.id} className="bg-gray-50/70 text-xs">
+                            <td />
+                            <td className="px-4 py-2 text-gray-400" colSpan={2}>{s.productName}</td>
+                            <td className="px-4 py-2 text-center text-gray-600">
+                              {s.quantity}
+                              {s.isGift && <Badge className="ml-1.5 text-[10px] bg-green-100 text-green-700">🎁 Offert</Badge>}
+                            </td>
+                            <td className="px-4 py-2 text-right text-gray-600">
+                              {fmt(s.total)} <span className="text-gray-400">({fmt(s.unitPrice)}/u)</span>
+                            </td>
+                            <td colSpan={2} />
+                          </tr>
+                        ))}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
                 <tfoot className="bg-gray-50 border-t border-gray-200">
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-sm font-medium text-gray-600">
-                      Total ({sales.length} vente(s))
+                    <td colSpan={4} className="px-4 py-3 text-sm font-medium text-gray-600">
+                      Total {saleGroups.length} vente(s) · {sales.reduce((a, s) => a + s.quantity, 0)} article(s)
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-900">
                       {fmt(sales.reduce((a, s) => a + s.total, 0))}

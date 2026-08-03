@@ -1,20 +1,10 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { LogOut, Shield } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { clearCurrentUser } from "@/lib/current-user"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 interface AdminHeaderProps {
   userEmail: string
@@ -22,15 +12,10 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ userEmail }: AdminHeaderProps) {
   const router = useRouter()
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
-  const handleLogoutConfirm = () => {
+  const handleLogout = () => {
     clearCurrentUser()
     router.push("/")
-  }
-
-  const handleLogoutClick = () => {
-    setShowLogoutConfirm(true)
   }
 
   return (
@@ -45,27 +30,10 @@ export function AdminHeader({ userEmail }: AdminHeaderProps) {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button onClick={handleLogoutClick} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100">
+          <Button onClick={handleLogout} variant="outline" className="bg-white text-red-600 border-2 border-white hover:bg-gray-100">
             <LogOut className="mr-2 h-4 w-4" />
             Déconnexion
           </Button>
-
-          <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Déconnexion</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Êtes-vous certain de vouloir vous déconnecter ?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="flex gap-4">
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction onClick={handleLogoutConfirm} className="bg-red-600 hover:bg-red-700">
-                  Déconnectez-moi
-                </AlertDialogAction>
-              </div>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
     </header>

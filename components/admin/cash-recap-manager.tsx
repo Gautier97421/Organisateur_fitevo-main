@@ -42,12 +42,34 @@ interface CashRegisterEntry {
   cash_amount: number
   notes?: string | null
   custom_values?: Record<string, any>
+  created_at?: string
 }
 
 function entryMode(notes?: string | null): "Ouverture" | "Fermeture" | null {
   if (notes?.includes("[OUVERTURE]")) return "Ouverture"
   if (notes?.includes("[FIN_PERIODE]")) return "Fermeture"
   return null
+}
+
+// "Informations supplémentaires" (côté employé) enregistre à chaque fois le TOTAL cumulé du jour
+// (pas un delta) et peut être ré-enregistré plusieurs fois pendant la même période — sommer
+// directement toutes les saisies compterait donc plusieurs fois le même total. On ne garde que la
+// dernière saisie par employé + période + jour + type de saisie avant de sommer les champs
+// numériques personnalisés, pour tout calcul de "suivi"/total.
+function latestEntryPerGroup(entries: CashRegisterEntry[]): CashRegisterEntry[] {
+  const latest = new Map<string, CashRegisterEntry>()
+  for (const entry of entries) {
+    const day = (entry.entry_date || "").split("T")[0]
+    const type = entryMode(entry.notes) ?? (entry.notes?.includes("[INFOS PENDANT]") ? "Infos" : "Autre")
+    const key = `${entry.user_email}|${entry.period}|${day}|${type}`
+    const existing = latest.get(key)
+    const entryTime = new Date(entry.created_at || entry.entry_date).getTime()
+    const existingTime = existing ? new Date(existing.created_at || existing.entry_date).getTime() : -Infinity
+    if (!existing || entryTime > existingTime) {
+      latest.set(key, entry)
+    }
+  }
+  return Array.from(latest.values())
 }
 
 function monthLabel(month: string): string {
@@ -188,6 +210,8 @@ export function CashRecapManager() {
     }
   }, [displayEntries])
 
+  const dedupedDisplayEntries = useMemo(() => latestEntryPerGroup(displayEntries), [displayEntries])
+
   const numericCustomFieldTotals = useMemo(() => {
     const totals = new Map<string, number>()
 
@@ -195,7 +219,7 @@ export function CashRecapManager() {
       totals.set(field.id, 0)
     }
 
-    for (const entry of displayEntries) {
+    for (const entry of dedupedDisplayEntries) {
       const values = (entry.custom_values || {}) as Record<string, any>
       for (const field of fields) {
         const raw = values[field.id]
@@ -216,11 +240,11 @@ export function CashRecapManager() {
         value: Number((totals.get(field.id) || 0).toFixed(2)),
       }))
       .filter((item) => item.value > 0)
-  }, [displayEntries, fields])
+  }, [dedupedDisplayEntries, fields])
 
   const customFieldsGrandTotal = useMemo(
-    () => numericCustomFieldsGrandTotal(displayEntries, fields),
-    [displayEntries, fields],
+    () => numericCustomFieldsGrandTotal(dedupedDisplayEntries, fields),
+    [dedupedDisplayEntries, fields],
   )
 
   const monthsToCompare = useMemo(() => recentMonths(selectedMonth, 6), [selectedMonth])
@@ -228,10 +252,11 @@ export function CashRecapManager() {
   const monthlyComparisonData = useMemo(() => {
     return monthsToCompare.map((month) => {
       const allMonthEntries = entriesByMonth[month] || []
-      const monthEntries =
+      const monthEntries = latestEntryPerGroup(
         gymFilter === "all"
           ? allMonthEntries
           : allMonthEntries.filter((e) => (e.gym_id || "global") === gymFilter)
+      )
       const row: Record<string, any> = {
         month,
         monthLabel: monthLabel(month),

@@ -40,26 +40,31 @@ export function CashRegisterBlotter({ period, gymId, gymName, userEmail, userNam
       const json = await res.json()
       const all: any[] = Array.isArray(json.data) ? json.data : []
       const todayStr = now.toISOString().split("T")[0]
-      const mine = all.filter((e) =>
+      const todayMine = all.filter((e) =>
         e.user_email === userEmail
         && e.period === period
         && (e.entry_date || "").startsWith(todayStr)
         && typeof e.notes === "string"
-        && e.notes.includes("[PENDANT]")
       )
-      if (mine.length === 0) {
+      // "Dernier comptage" = le dernier recomptage volontaire fait pendant la période, ou à
+      // défaut le comptage d'ouverture — sinon l'onglet reste vide juste après l'ouverture alors
+      // que la caisse de départ vient d'être saisie.
+      const pendant = todayMine.filter((e) => e.notes.includes("[PENDANT]"))
+      const ouverture = todayMine.filter((e) => e.notes.includes("[OUVERTURE]"))
+      const source = pendant.length > 0 ? pendant : ouverture
+      if (source.length === 0) {
         setLastCashEntry(null)
         setCashInitialData(null)
         return
       }
-      const latest = mine[mine.length - 1]
+      const latest = source[source.length - 1]
       const custom = (latest.custom_values || {}) as Record<string, any>
       const coinCounts = (custom.__coinCounts && typeof custom.__coinCounts === "object")
         ? custom.__coinCounts as Record<string, number>
         : undefined
       setCashInitialData({
         coinCounts,
-        notes: (latest.notes || "").replace(/^\[PENDANT\]\s*/, ""),
+        notes: (latest.notes || "").replace(/^\[(PENDANT|OUVERTURE)\]\s*/, ""),
       })
       setLastCashEntry({
         total: Number(latest.total_register || 0),

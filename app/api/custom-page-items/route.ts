@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import logger from "@/lib/logger"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyAuthWithRole } from "@/lib/auth-middleware"
 
 export async function GET(request: NextRequest) {
   const userId = await verifyAuth(request)
@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyAuthWithRole(request)
+  if (!auth || !['admin', 'superadmin'].includes(auth.role)) {
+    return NextResponse.json({ data: null, error: "Accès refusé" }, { status: 403 })
   }
 
   try {
@@ -73,9 +73,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyAuthWithRole(request)
+  if (!auth || !['admin', 'superadmin'].includes(auth.role)) {
+    return NextResponse.json({ data: null, error: "Accès refusé" }, { status: 403 })
   }
 
   try {
@@ -106,9 +106,9 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ data: null, error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyAuthWithRole(request)
+  if (!auth || !['admin', 'superadmin'].includes(auth.role)) {
+    return NextResponse.json({ data: null, error: "Accès refusé" }, { status: 403 })
   }
 
   try {

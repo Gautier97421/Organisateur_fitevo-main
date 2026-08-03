@@ -32,12 +32,21 @@ function recordFirstLoginAttempt(email: string, success: boolean) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, username, password } = await request.json()
+    const { email, username, password, token } = await request.json()
 
     // Validation simple
     if (!email || !username || !password) {
       return NextResponse.json(
         { error: 'Email, pseudo et mot de passe requis' },
+        { status: 400 }
+      )
+    }
+
+    // Le jeton d'activation (envoyé par email à la création du compte) empêche quiconque
+    // connaît simplement l'adresse email d'un compte pas encore activé de se l'approprier.
+    if (!token || typeof token !== 'string') {
+      return NextResponse.json(
+        { error: 'Lien d\'activation manquant ou invalide' },
         { status: 400 }
       )
     }
@@ -87,6 +96,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Vérifier le jeton d'activation : doit exister, correspondre à ce compte,
+    // ne pas être expiré, et ne pas avoir déjà été utilisé.
+    const activationToken = await prisma.passwordResetToken.findUnique({ where: { token } })
+    if (!activationToken || activationToken.userId !== user.id) {
+      recordFirstLoginAttempt(email, false)
+      return NextResponse.json(
+        { error: 'Lien d\'activation invalide' },
+        { status: 400 }
+      )
+    }
+    if (activationToken.usedAt) {
+      return NextResponse.json(
+        { error: 'Ce lien d\'activation a déjà été utilisé' },
+        { status: 400 }
+      )
+    }
+    if (new Date() > activationToken.expiresAt) {
+      return NextResponse.json(
+        { error: 'Lien d\'activation expiré. Contactez un administrateur pour en recevoir un nouveau.' },
+        { status: 400 }
+      )
+    }
+
     // Vérifier que le pseudo n'est pas déjà pris
     const existingUsername = await prisma.user.findFirst({
       where: { 
@@ -105,15 +137,21 @@ export async function POST(request: NextRequest) {
     // Hacher le mot de passe
     const hashedPassword = await hashPassword(password)
 
-    // Mettre à jour l'utilisateur
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        username: username.trim(),
-        password: hashedPassword,
-        isFirstLogin: false
-      }
-    })
+    // Mettre à jour l'utilisateur et consommer le jeton d'activation dans une transaction
+    const [updatedUser] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          username: username.trim(),
+          password: hashedPassword,
+          isFirstLogin: false
+        }
+      }),
+      prisma.passwordResetToken.update({
+        where: { token },
+        data: { usedAt: new Date() }
+      })
+    ])
 
     // RGPD: pas d'email en clair dans les logs, on utilise l'id interne.
     logger.info('Première connexion configurée pour l’utilisateur:', updatedUser.id)

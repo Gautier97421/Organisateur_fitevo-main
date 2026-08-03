@@ -10,6 +10,8 @@ export interface PromoProduct {
   name: string
   price: number
   category?: string | null
+  stock?: number
+  trackStock?: boolean
 }
 
 export interface PromotionRule {
@@ -83,7 +85,8 @@ function applyBogoPromotions(
   promotions: PromotionRule[],
   catalogById: Map<string, PromoProduct>,
   gymId: string | null | undefined,
-  applied: Map<string, { id: string; name: string; label: string }>
+  applied: Map<string, { id: string; name: string; label: string }>,
+  declinedGiftQuantities?: Record<string, number>
 ) {
   const bogoPromos = promotions.filter((p) => p.type === "buy_x_get_y" && isPromoInScope(p, gymId))
 
@@ -97,29 +100,46 @@ function applyBogoPromotions(
     const buyQtyInCart = buyLine?.quantity ?? 0
     if (buyQtyInCart <= 0) continue
 
-    let freeUnits: number
-    if (sameProduct) {
-      // "X acheté(s) Y offert(s)" sur le même article : groupes de (X+Y) unités, Y gratuites par groupe.
-      const groupSize = promo.buyQuantity + getQty
-      const groups = Math.floor(buyQtyInCart / groupSize)
-      freeUnits = groups * getQty
-    } else {
-      // Offre croisée (ex : 2 produits achetés -> 1 serviette offerte) : pas de regroupement, chaque palier de X déclenche Y offerts.
-      const groups = Math.floor(buyQtyInCart / promo.buyQuantity)
-      freeUnits = groups * getQty
-    }
+    // Chaque palier de "buyQuantity" acheté déclenche "getQty" offert(s), qui s'AJOUTENT à ce qui
+    // est déjà au panier (ex : 2 achetées → 1 offerte : il suffit d'ajouter 2 au panier, pas 3,
+    // pour que la 3e s'ajoute automatiquement).
+    const groups = Math.floor(buyQtyInCart / promo.buyQuantity)
+    let freeUnits = groups * getQty
     if (freeUnits <= 0) continue
 
     const giftProduct = catalogById.get(getProductId)
     if (!giftProduct) continue
 
-    if (sameProduct && buyLine) {
-      buyLine.quantity -= freeUnits
-      buyLine.total = buyLine.unitPrice * buyLine.quantity
-    } else {
+    // Le produit offert sort physiquement du stock : impossible d'en donner plus qu'il n'en reste.
+    if (giftProduct.trackStock) {
+      if (sameProduct) {
+        // L'offert s'ajoute au-dessus de ce qui est déjà acheté : il faut assez de stock pour
+        // couvrir acheté + offert, plus ce qu'une autre offre aurait déjà réservé sur ce produit.
+        const priorGiftQty = lines.filter((l) => l.isGift && l.productId === getProductId).reduce((sum, l) => sum + l.quantity, 0)
+        const availableForGift = Math.max(0, (giftProduct.stock ?? 0) - buyQtyInCart - priorGiftQty)
+        freeUnits = Math.min(freeUnits, availableForGift)
+      } else {
+        // Produit offert différent : au pire on convertit ce qui est déjà acheté en gratuit (pas
+        // de stock supplémentaire nécessaire), mais jamais au-delà du stock total, en tenant
+        // compte de ce qu'une autre offre aurait déjà réservé sur ce même article offert.
+        const priorGiftQty = lines.filter((l) => l.isGift && l.productId === getProductId).reduce((sum, l) => sum + l.quantity, 0)
+        const availableForGift = Math.max(0, (giftProduct.stock ?? 0) - priorGiftQty)
+        freeUnits = Math.min(freeUnits, availableForGift)
+      }
+    }
+
+    // Le client peut refuser tout ou partie du produit offert (droit de ne pas le prendre).
+    const declined = declinedGiftQuantities?.[promo.id] || 0
+    freeUnits = Math.max(0, freeUnits - declined)
+    if (freeUnits <= 0) continue
+
+    if (!sameProduct) {
+      // Si le produit offert est aussi acheté manuellement, on évite de le facturer en double en
+      // convertissant une partie de ce qui était déjà au panier en gratuit plutôt que d'empiler.
       const existingGetLine = lines.find((l) => l.productId === getProductId && !l.isGift)
       if (existingGetLine) {
-        existingGetLine.quantity = Math.max(0, existingGetLine.quantity - freeUnits)
+        const convert = Math.min(freeUnits, existingGetLine.quantity)
+        existingGetLine.quantity -= convert
         existingGetLine.total = existingGetLine.unitPrice * existingGetLine.quantity
       }
     }
@@ -144,7 +164,8 @@ export function applyPromotions(
   cart: CartLine[],
   promotions: PromotionRule[],
   catalog: PromoProduct[],
-  gymId?: string | null
+  gymId?: string | null,
+  declinedGiftQuantities?: Record<string, number>
 ): PromotionResult {
   const catalogById = new Map(catalog.map((p) => [p.id, p]))
   const categoryById = new Map(catalog.map((p) => [p.id, p.category || null]))
@@ -184,7 +205,7 @@ export function applyPromotions(
   }
 
   // Offres "X acheté(s) Y offert(s)"
-  applyBogoPromotions(lines, promotions, catalogById, gymId, applied)
+  applyBogoPromotions(lines, promotions, catalogById, gymId, applied, declinedGiftQuantities)
 
   const totalDiscount = lines.reduce((sum, l) => sum + l.discount, 0)
   const total = lines.reduce((sum, l) => sum + l.total, 0)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { verifyAuth, verifyAuthWithRole } from '@/lib/auth-middleware'
 
 // GET - Récupérer tous les rôles
 export async function GET(request: NextRequest) {
@@ -27,9 +27,10 @@ export async function GET(request: NextRequest) {
 
 // POST - Créer un nouveau rôle
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  // La création de rôles organisationnels est une action d'admin.
+  const auth = await verifyAuthWithRole(request)
+  if (!auth || !['admin', 'superadmin'].includes(auth.role)) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
   try {

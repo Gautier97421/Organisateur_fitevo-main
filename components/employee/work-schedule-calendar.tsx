@@ -170,36 +170,47 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+      const startStr = startOfMonth.toISOString().split("T")[0]
+      const endStr = endOfMonth.toISOString().split("T")[0]
 
-      let url = `/api/db/work_schedules?work_date_gte=${startOfMonth.toISOString().split("T")[0]}&work_date_lte=${endOfMonth.toISOString().split("T")[0]}&orderBy=work_date`
+      const gymFilter = selectedGymId === "all" ? "" : `&gym_id=${selectedGymId}`
+      // Note: L'API ne supporte pas les filtres multiples pour "all", donc on filtre côté client
 
-      // Si l'utilisateur n'a aucune salle assignée, ne rien charger
-      if (gymsToUse.length === 0) {
-        setSchedules([])
-        setConflicts([])
-        return
-      }
+      let url = `/api/db/work_schedules?work_date_gte=${startStr}&work_date_lte=${endStr}&orderBy=work_date${gymFilter}`
 
-      // Si l'utilisateur a des salles spécifiques, filtrer par ces salles
-      if (selectedGymId === "all") {
-        // Charger les plannings de toutes les salles accessibles
-        // Note: L'API ne supporte pas les filtres multiples, donc on filtre côté client
-      } else {
-        // Filtrer par salle spécifique
-        url += `&gym_id=${selectedGymId}`
-      }
+      // Ne pas retourner tôt si l'utilisateur n'a aucune salle assignée : ses propres horaires
+      // (congés compris, qui n'ont pas de salle) doivent quand même être chargés et affichés.
 
-      const response = await fetch(url)
-      
+      // Un congé qui a commencé avant ce mois mais se termine dedans (ou après) ne serait pas
+      // trouvé par le filtre ci-dessus (qui ne regarde que la date de début) : comme pour les
+      // événements calendrier multi-jours, on ajoute une requête "chevauchement" complémentaire.
+      const spanningUrl = `/api/db/work_schedules?end_date_gte=${startStr}&work_date_lte=${endStr}${gymFilter}`
+
+      const [response, spanningResponse] = await Promise.all([fetch(url), fetch(spanningUrl)])
+
       if (!response.ok) throw new Error('Erreur lors du chargement')
-      
+
       const result = await response.json()
-      let schedulesData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
-      
-      // Toujours filtrer côté client pour ne garder que les salles accessibles
+      const primaryData = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : [])
+
+      let spanningData: any[] = []
+      if (spanningResponse.ok) {
+        const spanningResult = await spanningResponse.json()
+        spanningData = Array.isArray(spanningResult.data) ? spanningResult.data : (spanningResult.data ? [spanningResult.data] : [])
+      }
+
+      const byId = new Map<string, any>()
+      for (const s of [...primaryData, ...spanningData]) byId.set(s.id, s)
+      let schedulesData = Array.from(byId.values())
+
+      // Filtrer côté client pour ne garder que les salles accessibles, sauf pour les propres
+      // horaires de l'utilisateur connecté : ceux-ci doivent toujours s'afficher (les congés
+      // n'ont pas de salle, et un horaire assigné par un admin peut viser une salle qui n'est
+      // pas (encore) dans ses user_gyms).
       const gymIds = gymsToUse.map(g => g.id)
-      schedulesData = schedulesData.filter((s: WorkSchedule) => 
-        s.gym_id && gymIds.includes(s.gym_id)
+      const ownEmail = getUserEmail()
+      schedulesData = schedulesData.filter((s: WorkSchedule) =>
+        s.employee_email === ownEmail || (s.gym_id && gymIds.includes(s.gym_id))
       )
       
       // Exclure les périodes de travail temporaires (celles créées par les employés)
@@ -237,13 +248,16 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   const detectConflicts = (schedules: WorkSchedule[]) => {
     const conflictDates: string[] = []
 
-    // Grouper par date
+    // Grouper par date (normalisée en "YYYY-MM-DD" : work_date est un timestamp ISO complet,
+    // alors que la vue mensuelle compare des dates "YYYY-MM-DD" simples — sans ça, .includes()
+    // ne matchait jamais et le badge d'avertissement ne s'affichait jamais en vue mensuelle).
     const schedulesByDate = schedules.reduce(
       (acc, schedule) => {
-        if (!acc[schedule.work_date]) {
-          acc[schedule.work_date] = []
+        const dateKey = schedule.work_date?.split("T")[0] || schedule.work_date
+        if (!acc[dateKey]) {
+          acc[dateKey] = []
         }
-        acc[schedule.work_date].push(schedule)
+        acc[dateKey].push(schedule)
         return acc
       },
       {} as Record<string, WorkSchedule[]>,
@@ -464,7 +478,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       })
 
       if (!response.ok) {
-        setErrorMessage("❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
+        const result = await response.json().catch(() => null)
+        setErrorMessage(result?.error?.message ? `❌ ${result.error.message}` : "❌ Erreur lors de l'enregistrement. Veuillez réessayer.")
         return
       }
 
@@ -572,7 +587,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       })
 
       if (!response.ok) {
-        setErrorMessage("❌ Erreur lors de la modification. Veuillez réessayer.")
+        const result = await response.json().catch(() => null)
+        setErrorMessage(result?.error ? `❌ ${result.error}` : "❌ Erreur lors de la modification. Veuillez réessayer.")
         return
       }
 

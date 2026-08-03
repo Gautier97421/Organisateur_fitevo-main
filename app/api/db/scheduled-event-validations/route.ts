@@ -121,24 +121,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "eventId et userEmail sont obligatoires" }, { status: 400 })
     }
 
-    // Vérifier que la date de l'événement est aujourd'hui ou après
-    const event = await prisma.scheduledEvent.findUnique({
-      where: { id: eventId }
-    })
-
-    if (!event) {
+    // Un événement ne peut être validé qu'à partir de son jour même (pas avant), sinon un
+    // employé pourrait valider une tâche qu'il n'a pas encore réalisée.
+    const targetEvent = await prisma.scheduledEvent.findUnique({ where: { id: eventId }, select: { eventDate: true, title: true } })
+    if (!targetEvent) {
       return NextResponse.json({ error: "Événement introuvable" }, { status: 404 })
     }
-
-    const eventDate = new Date(event.eventDate)
-    eventDate.setHours(0, 0, 0, 0)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    if (eventDate < today) {
+    const now = new Date()
+    const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    const eventDayStart = Date.UTC(
+      targetEvent.eventDate.getUTCFullYear(), targetEvent.eventDate.getUTCMonth(), targetEvent.eventDate.getUTCDate()
+    )
+    if (eventDayStart > todayStart) {
       return NextResponse.json(
-        { error: "Impossible de valider un événement passé" },
-        { status: 400 }
+        { error: `Impossible de valider "${targetEvent.title}" avant le jour de l'événement (${targetEvent.eventDate.toLocaleDateString("fr-FR")}).` },
+        { status: 400 },
       )
     }
 
@@ -161,8 +158,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Re-fetch l'événement avec validations pour vérifier si tout est validé
-    const updatedEvent = await prisma.scheduledEvent.findUnique({
+    const event = await prisma.scheduledEvent.findUnique({
       where: { id: eventId },
       include: {
         validations: {
@@ -174,8 +170,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (updatedEvent) {
-      const validated = await isEventValidated(updatedEvent)
+    if (event) {
+      const validated = await isEventValidated(event)
       if (validated) {
         await prisma.scheduledEvent.update({
           where: { id: eventId },

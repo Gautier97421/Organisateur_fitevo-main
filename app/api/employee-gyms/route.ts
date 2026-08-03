@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import logger from '@/lib/logger'
-import { verifyAuth } from '@/lib/auth-middleware'
+import { verifyAuth, verifyManagerOrAdmin } from '@/lib/auth-middleware'
 
 // GET - Récupérer les salles d'un employé/utilisateur
 export async function GET(request: NextRequest) {
@@ -65,9 +65,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Assigner des salles à un employé/utilisateur
 export async function POST(request: NextRequest) {
-  const sessionUserId = await verifyAuth(request)
-  if (!sessionUserId) {
-    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  // Réassigner les salles d'accès (donc le périmètre wifi/géofencing du pointage) est une
+  // action de gestion, pas une action que n'importe quel employé doit pouvoir faire.
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 403 })
   }
 
   try {
@@ -123,9 +125,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Retirer l'assignation d'une salle à un employé
 export async function DELETE(request: NextRequest) {
-  const sessionUserId = await verifyAuth(request)
-  if (!sessionUserId) {
-    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 403 })
   }
 
   try {

@@ -10,7 +10,7 @@ export interface DirectoryUser {
 
 export interface ConversationMemberInfo {
   userId: string
-  role: string // "admin" | "member"
+  role: string // "admin" | "editor" | "member" — rôle dans CE groupe
   name: string
   email: string
   userRole: string // rôle applicatif

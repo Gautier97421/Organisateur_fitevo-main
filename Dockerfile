@@ -1,16 +1,20 @@
 # Build stage
-FROM public.ecr.aws/docker/library/node:20-alpine AS builder
+FROM public.ecr.aws/docker/library/node:22-alpine AS builder
 
 WORKDIR /app
 
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy package files (pnpm-workspace.yaml holds the "overrides" config — required at
+# install time, or pnpm sees a config mismatch against what's recorded in the lockfile)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install dependencies (without frozen-lockfile to allow updates)
-RUN pnpm install
+# --frozen-lockfile : échoue si le lockfile ne correspond pas exactement à package.json,
+# au lieu de dériver silencieusement. --config.dangerouslyAllowAllBuilds : la version de pnpm
+# de cette image applique l'approbation des scripts d'installation (onlyBuiltDependencies)
+# différemment qu'en local ; Dockerfile.prod fait déjà de même.
+RUN pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
 
 # Copy prisma schema
 COPY prisma ./prisma
@@ -25,7 +29,7 @@ COPY . .
 RUN pnpm build
 
 # Production stage
-FROM public.ecr.aws/docker/library/node:20-alpine AS runner
+FROM public.ecr.aws/docker/library/node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -35,6 +39,8 @@ RUN npm install -g pnpm && apk add --no-cache netcat-openbsd
 # Copy necessary files from builder
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/.npmrc ./.npmrc
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma

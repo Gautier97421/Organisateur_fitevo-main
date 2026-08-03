@@ -4,17 +4,23 @@ import { verifyAuthWithRole } from '@/lib/auth-middleware'
 import { getMembership, isAppAdmin } from '@/lib/communication'
 import logger from '@/lib/logger'
 
-/** Vérifie que l'appelant peut administrer le groupe (admin du groupe ou admin app). */
-async function canManage(conversationId: string, auth: { userId: string; role: string }) {
+/**
+ * Contexte de rôle dans un groupe. Trois niveaux : "admin" (un seul par groupe, tous droits),
+ * "editor" (droit de modification : renommer + ajouter des membres, mais pas en retirer, ni
+ * changer les rôles), "member" (aucun droit de gestion). Un admin/superadmin applicatif a
+ * toujours les droits admin, quel que soit son rôle dans ce groupe précis.
+ */
+async function getGroupContext(conversationId: string, auth: { userId: string; role: string }) {
   const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
   if (!conv || conv.type !== 'group') return null
   const membership = await getMembership(conversationId, auth.userId)
-  const allowed = isAppAdmin(auth.role) || membership?.role === 'admin'
-  if (!membership || !allowed) return null
-  return conv
+  if (!membership) return null
+  const isAdmin = isAppAdmin(auth.role) || membership.role === 'admin'
+  const isEditor = membership.role === 'editor'
+  return { conv, membership, isAdmin, isEditor, canAddMembers: isAdmin || isEditor }
 }
 
-/** POST : ajoute des membres { memberIds: string[] } */
+/** POST : ajoute des membres { memberIds: string[] } — admin ou droit de modification. */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,7 +30,8 @@ export async function POST(
 
   try {
     const { id: conversationId } = await params
-    if (!(await canManage(conversationId, auth))) {
+    const ctx = await getGroupContext(conversationId, auth)
+    if (!ctx || !ctx.canAddMembers) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
@@ -58,7 +65,13 @@ export async function POST(
   }
 }
 
-/** PATCH : change le rôle d'un membre { userId, role: 'admin' | 'member' } — admin requis. */
+/**
+ * PATCH : change le rôle d'un membre { userId, role: 'admin' | 'editor' | 'member' } — admin
+ * du groupe (ou admin app) requis. Un groupe n'a jamais qu'un seul admin : passer quelqu'un
+ * d'autre admin est un TRANSFERT — l'admin actuel du groupe redescend automatiquement simple
+ * membre dans la même transaction. Le droit de modification ("editor"), lui, peut être accordé
+ * à plusieurs membres en même temps.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -68,13 +81,14 @@ export async function PATCH(
 
   try {
     const { id: conversationId } = await params
-    if (!(await canManage(conversationId, auth))) {
+    const ctx = await getGroupContext(conversationId, auth)
+    if (!ctx || !ctx.isAdmin) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
     const body = await request.json()
     const targetUserId: string = typeof body.userId === 'string' ? body.userId : ''
-    const role: string = body.role === 'admin' ? 'admin' : body.role === 'member' ? 'member' : ''
+    const role: string = ['admin', 'editor', 'member'].includes(body.role) ? body.role : ''
     if (!targetUserId || !role) {
       return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400 })
     }
@@ -84,17 +98,31 @@ export async function PATCH(
       return NextResponse.json({ error: 'Membre introuvable' }, { status: 404 })
     }
 
-    // Empêcher de retirer le dernier admin du groupe
-    if (role === 'member' && target.role === 'admin') {
-      const adminCount = await prisma.conversationMember.count({
-        where: { conversationId, role: 'admin' },
-      })
-      if (adminCount <= 1) {
-        return NextResponse.json(
-          { error: 'Le groupe doit conserver au moins un administrateur' },
-          { status: 400 }
-        )
+    if (role === 'admin') {
+      if (target.role === 'admin') {
+        return NextResponse.json({ error: 'Ce membre est déjà administrateur' }, { status: 400 })
       }
+      // Transfert : l'admin actuel (s'il y en a un) redevient simple membre, la cible devient admin.
+      await prisma.$transaction([
+        prisma.conversationMember.updateMany({
+          where: { conversationId, role: 'admin' },
+          data: { role: 'member' },
+        }),
+        prisma.conversationMember.update({
+          where: { conversationId_userId: { conversationId, userId: targetUserId } },
+          data: { role: 'admin' },
+        }),
+      ])
+      return NextResponse.json({ data: { success: true }, error: null })
+    }
+
+    // role === 'editor' | 'member' : impossible de faire descendre l'admin actuel sans
+    // remplaçant — il doit d'abord transférer son rôle à quelqu'un d'autre.
+    if (target.role === 'admin') {
+      return NextResponse.json(
+        { error: "Transférez d'abord l'administration à quelqu'un d'autre" },
+        { status: 400 }
+      )
     }
 
     await prisma.conversationMember.update({
@@ -109,7 +137,12 @@ export async function PATCH(
   }
 }
 
-/** DELETE ?userId=... : retire un membre. Un utilisateur peut se retirer lui-même. */
+/**
+ * DELETE ?userId=... : retire un membre. Un utilisateur peut toujours se retirer lui-même ;
+ * retirer quelqu'un d'autre nécessite les droits admin (le droit de modification ne suffit
+ * pas). L'admin du groupe ne peut pas quitter tant qu'il reste d'autres membres — il doit
+ * d'abord transférer son rôle, sinon le groupe se retrouverait sans administrateur.
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -123,11 +156,32 @@ export async function DELETE(
     const targetUserId = searchParams.get('userId') || auth.userId
 
     const selfLeave = targetUserId === auth.userId
-    if (!selfLeave && !(await canManage(conversationId, auth))) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-    }
-    if (selfLeave && !(await getMembership(conversationId, auth.userId))) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    if (selfLeave) {
+      const membership = await getMembership(conversationId, auth.userId)
+      if (!membership) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+      if (membership.role === 'admin') {
+        const memberCount = await prisma.conversationMember.count({ where: { conversationId } })
+        if (memberCount > 1) {
+          return NextResponse.json(
+            { error: "Transférez d'abord l'administration avant de quitter le groupe" },
+            { status: 400 }
+          )
+        }
+      }
+    } else {
+      const ctx = await getGroupContext(conversationId, auth)
+      if (!ctx || !ctx.isAdmin) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+      const target = await getMembership(conversationId, targetUserId)
+      if (target?.role === 'admin') {
+        return NextResponse.json(
+          { error: "Transférez d'abord l'administration à quelqu'un d'autre" },
+          { status: 400 }
+        )
+      }
     }
 
     await prisma.conversationMember.deleteMany({

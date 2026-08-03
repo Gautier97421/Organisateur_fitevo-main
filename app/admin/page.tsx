@@ -24,6 +24,15 @@ import {
 } from "lucide-react"
 import * as LucideIcons from "lucide-react"
 import { fetchCurrentUser, clearCurrentUser } from "@/lib/current-user"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 const CommunicationWidget = dynamic(
   () => import("@/components/communication/communication-widget").then((m) => m.CommunicationWidget),
@@ -55,6 +64,7 @@ export default function AdminPage() {
   // Mobile: sidebar overlay
   const [mobileOpen, setMobileOpen] = useState(false)
   const [onlineCount, setOnlineCount] = useState<number | null>(null)
+  const [showLogoutConfirmDialog, setShowLogoutConfirmDialog] = useState(false)
   const router = useRouter()
 
   // Restaure le dernier onglet consulté au chargement
@@ -117,7 +127,12 @@ export default function AdminPage() {
     return () => clearInterval(iv)
   }, [userEmail])
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    setShowLogoutConfirmDialog(true)
+  }
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirmDialog(false)
     await fetch("/api/auth/logout", { method: "POST" })
     clearCurrentUser()
     localStorage.clear()
@@ -411,6 +426,33 @@ export default function AdminPage() {
       </div>
 
       <CommunicationWidget />
+
+      {/* Confirmation de déconnexion (évite une déconnexion accidentelle) */}
+      <Dialog open={showLogoutConfirmDialog} onOpenChange={setShowLogoutConfirmDialog}>
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+              <LogOut className="h-5 w-5 text-red-600" />
+              <span>Confirmer la déconnexion</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              Êtes-vous sûr de vouloir vous déconnecter ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowLogoutConfirmDialog(false)}
+              className="flex-1 border-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button onClick={confirmLogout} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+              Se déconnecter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

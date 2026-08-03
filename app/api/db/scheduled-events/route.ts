@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 type ScheduledEventWithValidations = {
@@ -228,9 +228,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  // Planifier des événements pour l'organisation est une action de gestion.
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 403 })
   }
 
   try {
@@ -365,9 +366,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 403 })
   }
 
   try {

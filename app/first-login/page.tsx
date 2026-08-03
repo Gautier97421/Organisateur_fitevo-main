@@ -14,6 +14,7 @@ function FirstLoginForm() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const [email, setEmail] = useState("")
+  const [token, setToken] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -26,6 +27,10 @@ function FirstLoginForm() {
     const emailParam = searchParams.get("email")
     if (emailParam) {
       setEmail(emailParam)
+    }
+    const tokenParam = searchParams.get("token")
+    if (tokenParam) {
+      setToken(tokenParam)
     }
   }, [searchParams])
 
@@ -59,6 +64,11 @@ function FirstLoginForm() {
       return
     }
 
+    if (!token) {
+      setError("Lien d'activation manquant ou invalide. Utilisez le lien reçu par email.")
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -72,6 +82,7 @@ function FirstLoginForm() {
           email,
           username,
           password,
+          token,
         }),
       })
 
@@ -108,6 +119,11 @@ function FirstLoginForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!token && (
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-400 text-sm">
+              Lien d'activation manquant. Utilisez le lien reçu par email pour configurer votre compte.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email" className="dark:text-gray-200">Email</Label>

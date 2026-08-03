@@ -2,28 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import logger from '@/lib/logger'
-import { verifyAuth } from '@/lib/auth-middleware'
-
-// Mapping des tables
-const tableMapping: { [key: string]: string } = {
-  calendar_events: 'calendarEvent',
-  event_reminders: 'eventReminder',
-  gyms: 'gym',
-  tasks: 'task',
-  work_schedules: 'workSchedule',
-  allowed_networks: 'allowedNetwork',
-  users: 'user',
-  admins: 'user',
-  employees: 'user',
-  new_member_instruction_items: 'newMemberInstructionItem',
-  app_config: 'appConfig',
-  cash_movements: 'cashMovement',
-}
+import { verifyAuthWithRole } from '@/lib/auth-middleware'
+import {
+  isKnownTable,
+  resolvePrismaModel,
+  USER_TABLES,
+  ADMIN_ONLY_TABLES,
+  MANAGER_TABLES,
+  OWNER_TABLES,
+  PROTECTED_USER_FIELDS,
+  PROTECTED_EVENT_FIELDS,
+  isAdminRole,
+  isManagerTier,
+  stripFields,
+  omitPassword,
+  findAssignedEventConflict,
+} from '@/lib/db-access-control'
 
 // Mapper les champs du client vers le schéma Prisma
 function mapFieldsFromClient(table: string, data: any): any {
   const mapped = { ...data }
-  
+
   if (table === 'users' || table === 'admins' || table === 'employees') {
     if (mapped.is_first_login !== undefined) {
       mapped.isFirstLogin = mapped.is_first_login
@@ -66,7 +65,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.role_id
     }
   }
-  
+
   if (table === 'tasks') {
     if (mapped.order_index !== undefined) {
       mapped.orderIndex = mapped.order_index
@@ -104,7 +103,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.value
     }
   }
-  
+
   if (table === 'gyms') {
     // Mapper location vers address
     if (mapped.location !== undefined) {
@@ -133,7 +132,7 @@ function mapFieldsFromClient(table: string, data: any): any {
       delete mapped.qr_code_enabled
     }
   }
-  
+
   if (table === 'work_schedules') {
     if (mapped.work_date !== undefined) {
       mapped.date = mapped.work_date
@@ -146,6 +145,18 @@ function mapFieldsFromClient(table: string, data: any): any {
     if (mapped.end_time !== undefined) {
       mapped.endTime = mapped.end_time
       delete mapped.end_time
+    }
+    if (mapped.end_date !== undefined) {
+      mapped.endDate = mapped.end_date
+      delete mapped.end_date
+    }
+    if (mapped.break_duration !== undefined) {
+      mapped.breakDuration = mapped.break_duration
+      delete mapped.break_duration
+    }
+    if (mapped.break_start_time !== undefined) {
+      mapped.breakStartTime = mapped.break_start_time
+      delete mapped.break_start_time
     }
     if (mapped.employee_email !== undefined) {
       mapped.employeeEmail = mapped.employee_email
@@ -179,17 +190,21 @@ function mapFieldsFromClient(table: string, data: any): any {
       mapped.totalTasks = mapped.total_tasks
       delete mapped.total_tasks
     }
+    // Une date de fin de congé "YYYY-MM-DD" seule fait échouer le parsing DateTime de Prisma.
+    if (typeof mapped.endDate === 'string' && mapped.endDate && !mapped.endDate.includes('T')) {
+      mapped.endDate = `${mapped.endDate}T00:00:00.000Z`
+    }
   }
-  
+
   return mapped
 }
 
 // Mapper les champs du schéma Prisma vers les noms attendus par le client
 function mapFieldsToClient(table: string, data: any): any {
   if (!data) return data
-  
+
   const mapped = { ...data }
-  
+
   if (table === 'users' || table === 'admins' || table === 'employees') {
     if (mapped.isFirstLogin !== undefined) {
       mapped.is_first_login = mapped.isFirstLogin
@@ -224,7 +239,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.roleId
     }
   }
-  
+
   if (table === 'tasks') {
     if (mapped.orderIndex !== undefined) {
       mapped.order_index = mapped.orderIndex
@@ -255,7 +270,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.roleIds
     }
   }
-  
+
   if (table === 'gyms') {
     if (mapped.address !== undefined) {
       mapped.location = mapped.address
@@ -282,7 +297,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.qrCodeEnabled
     }
   }
-  
+
   if (table === 'work_schedules') {
     if (mapped.date !== undefined) {
       mapped.work_date = mapped.date
@@ -295,6 +310,18 @@ function mapFieldsToClient(table: string, data: any): any {
     if (mapped.endTime !== undefined) {
       mapped.end_time = mapped.endTime
       delete mapped.endTime
+    }
+    if (mapped.endDate !== undefined) {
+      mapped.end_date = mapped.endDate
+      delete mapped.endDate
+    }
+    if (mapped.breakDuration !== undefined) {
+      mapped.break_duration = mapped.breakDuration
+      delete mapped.breakDuration
+    }
+    if (mapped.breakStartTime !== undefined) {
+      mapped.break_start_time = mapped.breakStartTime
+      delete mapped.breakStartTime
     }
     if (mapped.employeeEmail !== undefined) {
       mapped.employee_email = mapped.employeeEmail
@@ -329,7 +356,7 @@ function mapFieldsToClient(table: string, data: any): any {
       delete mapped.totalTasks
     }
   }
-  
+
   if (mapped.createdAt !== undefined) {
     mapped.created_at = mapped.createdAt
     delete mapped.createdAt
@@ -338,8 +365,32 @@ function mapFieldsToClient(table: string, data: any): any {
     mapped.updated_at = mapped.updatedAt
     delete mapped.updatedAt
   }
-  
+
   return mapped
+}
+
+interface RouteCheckResult {
+  denied?: NextResponse
+  managerTier: boolean
+}
+
+async function checkTableAccess(
+  table: string,
+  auth: { userId: string; role: string }
+): Promise<RouteCheckResult> {
+  if (ADMIN_ONLY_TABLES.has(table) && !isAdminRole(auth.role)) {
+    return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier: false }
+  }
+  if (USER_TABLES.has(table) && !isAdminRole(auth.role)) {
+    return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier: false }
+  }
+  const managerTier = MANAGER_TABLES.has(table) || OWNER_TABLES.has(table)
+    ? await isManagerTier(auth.userId, auth.role)
+    : false
+  if (MANAGER_TABLES.has(table) && !managerTier) {
+    return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier }
+  }
+  return { managerTier }
 }
 
 // GET - Récupérer une entrée par ID
@@ -347,31 +398,47 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
-  // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
     )
   }
-  
+
   const { table, id } = await params
+  if (!isKnownTable(table)) {
+    return NextResponse.json({ error: 'Table inconnue' }, { status: 400 })
+  }
+  // Seul cash_movements est sensible en lecture ; user_gyms (l'autre table de MANAGER_TABLES)
+  // n'a rien de confidentiel et un employé doit pouvoir le lire (voir checkTableAccess pour l'écriture).
+  if (table === 'cash_movements' && !(await isManagerTier(auth.userId, auth.role))) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+  }
+
   try {
-    const prismaModel = tableMapping[table] || table
-    
-    // @ts-ignore - Accès dynamique au modèle Prisma
-    const result = await prisma[prismaModel].findUnique({
+    const prismaModel = resolvePrismaModel(table)
+
+    const result = await (prisma as any)[prismaModel].findUnique({
       where: { id },
     })
-    
+
     if (!result) {
       return NextResponse.json({ error: 'Entrée non trouvée' }, { status: 404 })
     }
-    
+
+    // work_schedules : même règle que la liste (GET /api/db/work_schedules) — un employé
+    // standard ne peut lire que ses propres lignes ou le planning permanent partagé.
+    if (table === 'work_schedules' && result.userId !== auth.userId && result.isTemporary) {
+      if (!(await isManagerTier(auth.userId, auth.role))) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+    }
+
     // Mapper les champs de retour
-    const mappedResult = mapFieldsToClient(table, result)
-    
+    let mappedResult = mapFieldsToClient(table, result)
+    if (USER_TABLES.has(table)) mappedResult = omitPassword(mappedResult)
+
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
     logger.error('Erreur GET', error)
@@ -384,40 +451,94 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
-  // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
     )
   }
-  
+
   const { table, id } = await params
+  if (!isKnownTable(table)) {
+    return NextResponse.json({ error: 'Table inconnue' }, { status: 400 })
+  }
+  const access = await checkTableAccess(table, auth)
+  if (access.denied) return access.denied
+
   try {
     const body = await request.json()
-    
-    const prismaModel = tableMapping[table] || table
-    
+
+    const prismaModel = resolvePrismaModel(table)
+
+    let existingRecord: any = null
+    if (OWNER_TABLES.has(table) && !access.managerTier) {
+      existingRecord = await (prisma as any)[prismaModel].findUnique({ where: { id } })
+      if (!existingRecord) {
+        return NextResponse.json({ error: 'Entrée non trouvée' }, { status: 404 })
+      }
+      if (existingRecord.userId !== auth.userId) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+    }
+
     // Mapper les champs du client vers Prisma
     const mappedData = mapFieldsFromClient(table, body)
-    
+
+    // Un employé ne peut pas transformer un planning en congé (ou étendre un congé) qui
+    // chevaucherait un événement planifié auquel il est assigné.
+    if (table === 'work_schedules' && !access.managerTier) {
+      if (!existingRecord) {
+        existingRecord = await (prisma as any)[prismaModel].findUnique({ where: { id } })
+      }
+      const finalLabel = mappedData.label !== undefined ? mappedData.label : existingRecord?.label
+      if (existingRecord && finalLabel === 'conges' && existingRecord.employeeEmail) {
+        const rangeStart = new Date(Date.UTC(
+          existingRecord.date.getUTCFullYear(), existingRecord.date.getUTCMonth(), existingRecord.date.getUTCDate(), 0, 0, 0, 0
+        ))
+        const finalEndDateRaw = mappedData.endDate !== undefined ? mappedData.endDate : existingRecord.endDate
+        const endDateSource = finalEndDateRaw ? new Date(finalEndDateRaw) : existingRecord.date
+        const rangeEnd = new Date(Date.UTC(
+          endDateSource.getUTCFullYear(), endDateSource.getUTCMonth(), endDateSource.getUTCDate(), 23, 59, 59, 999
+        ))
+        const conflict = await findAssignedEventConflict(existingRecord.employeeEmail, rangeStart, rangeEnd)
+        if (conflict) {
+          return NextResponse.json(
+            { error: `Impossible de poser un congé : vous êtes assigné à l'événement "${conflict.title}" le ${conflict.eventDate.toLocaleDateString('fr-FR')}, qui tombe dans cette période.` },
+            { status: 409 }
+          )
+        }
+      }
+    }
+
+    // Un simple employé/manager ne peut jamais toucher aux champs de permission d'un compte,
+    // et seul un superadmin peut attribuer le rôle superadmin.
+    if (USER_TABLES.has(table)) {
+      if (!isAdminRole(auth.role)) stripFields(mappedData, PROTECTED_USER_FIELDS)
+      if (mappedData.role === 'superadmin' && auth.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Seul un superadmin peut attribuer ce rôle' }, { status: 403 })
+      }
+    }
+    if (table === 'calendar_events' && !access.managerTier) {
+      stripFields(mappedData, PROTECTED_EVENT_FIELDS)
+    }
+
     // Hacher le mot de passe s'il est présent (pour les users)
     if ((table === 'users' || table === 'employees' || table === 'admins') && mappedData.password) {
       mappedData.password = await hashPassword(mappedData.password)
       // Marquer que ce n'est plus la première connexion
       mappedData.isFirstLogin = false
     }
-    
-    // @ts-ignore - Accès dynamique au modèle Prisma
-    const result = await prisma[prismaModel].update({
+
+    const result = await (prisma as any)[prismaModel].update({
       where: { id },
       data: mappedData,
     })
-    
+
     // Mapper les champs de retour
-    const mappedResult = mapFieldsToClient(table, result)
-    
+    let mappedResult = mapFieldsToClient(table, result)
+    if (USER_TABLES.has(table)) mappedResult = omitPassword(mappedResult)
+
     return NextResponse.json({ success: true, data: mappedResult })
   } catch (error: any) {
     logger.error('Erreur PUT:', error)
@@ -430,15 +551,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
-  // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
     )
   }
-  
+
   return PUT(request, { params })
 }
 
@@ -447,18 +567,33 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
-  // Vérifier l'authentification
-  const userId = await verifyAuth(request)
-  if (!userId) {
+  const auth = await verifyAuthWithRole(request)
+  if (!auth) {
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
     )
   }
-  
+
   const { table, id } = await params
+  if (!isKnownTable(table)) {
+    return NextResponse.json({ error: 'Table inconnue' }, { status: 400 })
+  }
+  const access = await checkTableAccess(table, auth)
+  if (access.denied) return access.denied
+
   try {
-    const prismaModel = tableMapping[table] || table
+    const prismaModel = resolvePrismaModel(table)
+
+    if (OWNER_TABLES.has(table) && !access.managerTier) {
+      const existing = await (prisma as any)[prismaModel].findUnique({ where: { id } })
+      if (!existing) {
+        return NextResponse.json({ error: 'Entrée non trouvée' }, { status: 404 })
+      }
+      if (existing.userId !== auth.userId) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+    }
 
     // Pour les utilisateurs, supprimer les enregistrements liés en cascade
     // (les relations sans onDelete: Cascade bloquent sinon la suppression)
@@ -505,11 +640,10 @@ export async function DELETE(
       return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
     }
 
-    // @ts-ignore - Accès dynamique au modèle Prisma
-    await prisma[prismaModel].delete({
+    await (prisma as any)[prismaModel].delete({
       where: { id },
     })
-    
+
     return NextResponse.json({ success: true, message: 'Supprimé avec succès' })
   } catch (error: any) {
     logger.error('Erreur DELETE:', error)

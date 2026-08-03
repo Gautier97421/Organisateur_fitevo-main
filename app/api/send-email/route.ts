@@ -45,6 +45,13 @@ export async function POST(request: NextRequest) {
       })
       const adminEmails = admins.map((a) => a.email)
 
+      // Le nom/email de l'employé vient du compte authentifié, pas du corps de la requête —
+      // sinon n'importe quel employé pourrait envoyer un récap au nom d'un·e collègue.
+      const sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      })
+
       // Résoudre le nom de la salle si on a un gymId
       let gymName: string = data.gymName || "Non spécifiée"
       if (data.gymId && !data.gymName) {
@@ -53,8 +60,8 @@ export async function POST(request: NextRequest) {
       }
 
       await sendWorkRecapEmail({
-        employeeName: data.employeeName ?? "",
-        employeeEmail: data.employeeEmail ?? "",
+        employeeName: sender?.name ?? data.employeeName ?? "",
+        employeeEmail: sender?.email ?? data.employeeEmail ?? "",
         gymName,
         period: data.period ?? "",
         startTime: data.startTime ?? "",

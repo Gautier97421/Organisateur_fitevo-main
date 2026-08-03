@@ -4,7 +4,7 @@ import { verifyAuthWithRole } from '@/lib/auth-middleware'
 import { getMembership, isAppAdmin } from '@/lib/communication'
 import logger from '@/lib/logger'
 
-/** PATCH : renommer un groupe { name } (admin du groupe ou admin app). */
+/** PATCH : renommer un groupe { name } (admin du groupe, droit de modification, ou admin app). */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +19,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Conversation introuvable' }, { status: 404 })
     }
     const membership = await getMembership(id, auth.userId)
-    if (!membership || (!isAppAdmin(auth.role) && membership.role !== 'admin')) {
+    const canRename = isAppAdmin(auth.role) || membership?.role === 'admin' || membership?.role === 'editor'
+    if (!membership || !canRename) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 

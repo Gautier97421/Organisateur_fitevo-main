@@ -1,12 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Camera, ClipboardList, ImagePlus, Loader2, Save, Trash2 } from "lucide-react"
+import { AlertTriangle, Camera, ClipboardList, ImagePlus, Loader2, Minus, Plus, Save, Trash2 } from "lucide-react"
 import { getUserId } from "@/lib/current-user"
 
 interface CashRegisterField {
@@ -36,7 +37,12 @@ const INFOS_TAG = "[INFOS PENDANT]"
 export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: ExtraInfoPanelProps) {
   const [fields, setFields] = useState<CashRegisterField[]>([])
   const [values, setValues] = useState<Record<string, any>>({})
+  // Dernières valeurs enregistrées, pour repérer une éventuelle baisse (un champ numérique
+  // ne devrait normalement jamais diminuer, sauf erreur de saisie de l'employé).
+  const [initialValues, setInitialValues] = useState<Record<string, any>>({})
   const [photos, setPhotos] = useState<Record<string, string[]>>({}) // fieldId -> filenames
+  // Dernières photos enregistrées, pour détecter un ajout/retrait de photo non sauvegardé.
+  const [initialPhotos, setInitialPhotos] = useState<Record<string, string[]>>({})
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -96,7 +102,9 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
         setLastSavedAt(null)
       }
       setValues(initial)
+      setInitialValues({ ...initial })
       setPhotos(initialPhotos)
+      setInitialPhotos(initialPhotos)
     } catch {
       // silencieux
     } finally {
@@ -106,8 +114,40 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
 
   useEffect(() => { loadAll() }, [loadAll])
 
+  // Une modification non enregistrée (valeur de champ ou photo ajoutée/retirée) doit être signalée
+  // clairement, champ par champ, sinon l'employé peut quitter la page en pensant avoir sauvegardé
+  // ou sans savoir quelle zone précise a changé.
+  const dirtyFieldIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const f of fields) {
+      const a = values[f.id]
+      const b = initialValues[f.id]
+      let changed: boolean
+      if (f.fieldType === "checkbox") {
+        changed = !!a !== !!b
+      } else {
+        const an = a === undefined || a === null ? "" : a
+        const bn = b === undefined || b === null ? "" : b
+        changed = String(an) !== String(bn)
+      }
+      if (!changed && f.allowPhoto) {
+        const pa = photos[f.id] || []
+        const pb = initialPhotos[f.id] || []
+        changed = pa.length !== pb.length || pa.some((v, i) => v !== pb[i])
+      }
+      if (changed) ids.add(f.id)
+    }
+    return ids
+  }, [fields, values, initialValues, photos, initialPhotos])
+  const isDirty = dirtyFieldIds.size > 0
+
   const updateValue = (id: string, value: any) => {
     setValues((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleDiscard = () => {
+    setValues({ ...initialValues })
+    setPhotos({ ...initialPhotos })
   }
 
   const handlePhotoSelect = async (fieldId: string, file: File) => {
@@ -228,6 +268,12 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
           <h2 className="font-bold text-gray-900 text-base">Informations supplémentaires</h2>
           <p className="text-xs text-gray-500">{gymName ? `${gymName} · ` : ""}Période en cours</p>
         </div>
+        {!loading && isDirty && (
+          <div className="ml-auto flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 flex-shrink-0">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Infos non enregistrées
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -243,11 +289,24 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
       ) : (
         <>
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-4">
-            {fields.map((field) => (
-              <div key={field.id} className="space-y-2">
-                <Label className="text-sm font-medium text-gray-900">
+            {fields.map((field) => {
+              const fieldDirty = dirtyFieldIds.has(field.id)
+              return (
+              <div
+                key={field.id}
+                className={[
+                  "space-y-2 rounded-lg transition-colors",
+                  fieldDirty ? "p-2 -m-2 border border-amber-300 bg-amber-50" : "",
+                ].join(" ")}
+              >
+                <Label className="text-sm font-medium text-gray-900 flex items-center gap-1.5 flex-wrap">
                   {field.label}
-                  {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+                  {field.isRequired && <span className="text-red-500">*</span>}
+                  {fieldDirty && (
+                    <Badge className="text-[10px] bg-amber-100 text-amber-700 font-normal">
+                      Non enregistré
+                    </Badge>
+                  )}
                 </Label>
                 {field.fieldType === "checkbox" ? (
                   <div className="flex items-center gap-2">
@@ -257,20 +316,52 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
                     />
                     <span className="text-sm text-gray-600">{field.label}</span>
                   </div>
+                ) : field.fieldType === "number" ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateValue(field.id, Math.max(0, (Number(values[field.id]) || 0) - 1))}
+                        disabled={(Number(values[field.id]) || 0) <= 0}
+                        className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                      >
+                        <Minus className="w-4 h-4 text-gray-700" />
+                      </button>
+                      <Input
+                        type="number"
+                        value={values[field.id] ?? ""}
+                        min={0}
+                        onChange={(e) => {
+                          if (e.target.value === "") { updateValue(field.id, ""); return }
+                          const parsed = Number(e.target.value)
+                          updateValue(field.id, Number.isNaN(parsed) ? 0 : Math.max(0, parsed))
+                        }}
+                        placeholder={field.label}
+                        className="border-2 rounded-xl bg-white text-gray-900 text-center w-24"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateValue(field.id, (Number(values[field.id]) || 0) + 1)}
+                        className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50"
+                      >
+                        <Plus className="w-4 h-4 text-gray-700" />
+                      </button>
+                    </div>
+                    {initialValues[field.id] !== undefined
+                      && initialValues[field.id] !== ""
+                      && values[field.id] !== ""
+                      && Number(values[field.id]) < Number(initialValues[field.id]) && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                        En baisse par rapport au dernier enregistrement ({initialValues[field.id]}) — vérifiez qu'il ne s'agit pas d'une erreur.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <Input
-                    type={field.fieldType === "number" ? "number" : "text"}
+                    type="text"
                     value={values[field.id] ?? ""}
-                    min={field.fieldType === "number" ? 0 : undefined}
-                    onChange={(e) => {
-                      if (field.fieldType === "number") {
-                        if (e.target.value === "") { updateValue(field.id, ""); return }
-                        const parsed = Number(e.target.value)
-                        updateValue(field.id, Number.isNaN(parsed) ? 0 : Math.max(0, parsed))
-                        return
-                      }
-                      updateValue(field.id, e.target.value)
-                    }}
+                    onChange={(e) => updateValue(field.id, e.target.value)}
                     placeholder={field.label}
                     className="border-2 rounded-xl bg-white text-gray-900"
                   />
@@ -339,7 +430,8 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -348,14 +440,27 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
                 ? `Dernier enregistrement : ${new Date(lastSavedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
                 : "Pas encore d'enregistrement aujourd'hui."}
             </p>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span className="ml-2">Enregistrer</span>
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {isDirty && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleDiscard}
+                  disabled={saving}
+                  className="border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-700 w-full sm:w-auto"
+                >
+                  Annuler les modifications
+                </Button>
+              )}
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span className="ml-2">Enregistrer</span>
+              </Button>
+            </div>
           </div>
         </>
       )}

@@ -3,6 +3,28 @@ import { prisma } from '@/lib/prisma'
 import { verifyAuth } from '@/lib/auth-middleware'
 import logger from '@/lib/logger'
 
+/**
+ * Résout l'IP du client en ne faisant confiance qu'aux en-têtes que notre propre reverse proxy
+ * (Nginx Proxy Manager, sur npm_network) écrase réellement plutôt qu'il ne les transmet tels quels :
+ *  - X-Real-IP : nginx le définit via $remote_addr (écrasé, pas concaténé) — fiable.
+ *  - X-Forwarded-For : nginx AJOUTE le vrai IP à la fin de la liste plutôt que de la remplacer,
+ *    donc c'est la DERNIÈRE entrée qu'il faut lire, pas la première (que le client peut forger).
+ * CF-Connecting-IP / True-Client-IP ne sont pas utilisés : cette app n'est pas derrière
+ * Cloudflare/Akamai, donc un client pourrait les envoyer lui-même sans passer par un vrai CDN.
+ */
+function resolveClientIp(request: NextRequest): string {
+  const realIp = request.headers.get('x-real-ip')
+  if (realIp) return realIp.trim()
+
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length > 0) return parts[parts.length - 1]
+  }
+
+  return 'unknown'
+}
+
 export async function GET(request: NextRequest) {
   const userId = await verifyAuth(request)
   if (!userId) {
@@ -10,23 +32,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Récupérer l'adresse IP du client depuis plusieurs sources possibles
-    const forwarded = request.headers.get('x-forwarded-for')
-    const realIp = request.headers.get('x-real-ip')
-    const cfConnectingIp = request.headers.get('cf-connecting-ip') // Cloudflare
-    const trueClientIp = request.headers.get('true-client-ip') // Akamai
-    
-    const clientIp = cfConnectingIp || trueClientIp || forwarded?.split(',')[0]?.trim() || realIp || 'unknown'
+    const clientIp = resolveClientIp(request)
 
     return NextResponse.json({
       success: true,
       ip: clientIp,
-      debug: {
-        forwarded,
-        realIp,
-        cfConnectingIp,
-        trueClientIp
-      }
     })
   } catch (error) {
     return NextResponse.json(
@@ -73,13 +83,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Récupérer l'adresse IP du client depuis plusieurs sources
-    const forwarded = request.headers.get('x-forwarded-for')
-    const realIp = request.headers.get('x-real-ip')
-    const cfConnectingIp = request.headers.get('cf-connecting-ip')
-    const trueClientIp = request.headers.get('true-client-ip')
-    
-    const clientIp = cfConnectingIp || trueClientIp || forwarded?.split(',')[0]?.trim() || realIp || 'unknown'
+    const clientIp = resolveClientIp(request)
 
     // Vérifier si l'IP du client correspond à celle de la salle
     const expectedIp = gym.ipAddress
@@ -95,15 +99,18 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Comparaison des IPs
-    // Accepter les IPs locales/Docker pour le développement
-    const isLocalDev = clientIp === '127.0.0.1' || 
-                       clientIp === '::1' || 
-                       clientIp === 'unknown' ||
-                       clientIp.startsWith('172.') || // Docker network
-                       clientIp.startsWith('192.168.') || // LAN
-                       clientIp.startsWith('10.') // Private network
-                       
+    // En développement local uniquement, ignorer la restriction pour les IPs privées/Docker.
+    // En production, on ne bypass JAMAIS : un employé distant ne doit pas pouvoir se faire
+    // passer pour présent sur site simplement parce que son IP resolue tombe dans une plage privée.
+    const isLocalDev = process.env.NODE_ENV !== 'production' && (
+      clientIp === '127.0.0.1' ||
+      clientIp === '::1' ||
+      clientIp === 'unknown' ||
+      clientIp.startsWith('172.') ||
+      clientIp.startsWith('192.168.') ||
+      clientIp.startsWith('10.')
+    )
+
     const ipMatches = clientIp === expectedIp || isLocalDev
 
     if (ipMatches) {

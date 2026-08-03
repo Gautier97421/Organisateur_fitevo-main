@@ -385,7 +385,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       })
 
       if (!response.ok) {
-        throw new Error("Validation impossible")
+        const result = await response.json().catch(() => null)
+        throw new Error(result?.error || "Validation impossible")
       }
 
       if (calendarView === "year") {
@@ -393,7 +394,8 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
       } else if (selectedMonth) {
         await loadMonthEvents()
       }
-    } catch (error) {
+    } catch (error: any) {
+      setErrorMessage(`❌ ${error?.message || "Validation impossible"}`)
     } finally {
       setIsValidatingEventId(null)
     }
@@ -942,7 +944,9 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                 {/* Grille du calendrier mensuel */}
                 <div className="grid grid-cols-7 gap-1 sm:gap-2">
                   {getDaysInMonth().map((dayInfo, index) => {
-                    const dayEvents = getEventsForDate(dayInfo.date)
+                    // Les événements refusés restent visibles dans le détail du jour (clic sur la
+                    // case), mais encombrent inutilement la vue mensuelle : on les masque ici.
+                    const dayEvents = getEventsForDate(dayInfo.date).filter((event) => getEffectiveStatus(event) !== "rejected")
                     const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
                     const isPast = dayInfo.date < new Date() && dayInfo.isCurrentMonth
 
@@ -977,7 +981,7 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${event.event_end_date ? "bg-purple-500 dark:bg-purple-600" : getStatusColor(getEffectiveStatus(event))}`}
+                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(getEffectiveStatus(event))}`}
                               title={`${event.title}${event.event_end_date ? " (période)" : ""} - ${getStatusLabel(event)}`}
                             >
                               {event.event_end_date && <span className="mr-1 opacity-80">↔</span>}
@@ -1042,34 +1046,51 @@ export function CalendarView({ hasWorkScheduleAccess = true, hasCalendarAccess =
                 <p className="text-sm text-orange-700">Aucune validation en attente.</p>
               ) : (
                 <div className="space-y-3">
-                  {pendingScheduledEvents.map((event) => (
-                    <div key={event.id} className="rounded-lg border border-orange-200 bg-white p-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-gray-900">{event.title}</p>
-                          <p className="text-sm text-gray-600">
-                            {new Date(event.event_date).toLocaleDateString("fr-FR", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                            {event.start_time ? ` • ${event.start_time}` : ""}
-                          </p>
-                          <p className="text-xs text-orange-700 mt-1">
-                            Statut: {event.status === "moved" ? "Non validé: reporté pour aujourd'hui" : event.status}
-                          </p>
+                  {pendingScheduledEvents.map((event) => {
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    const eventDay = new Date(event.event_date)
+                    eventDay.setHours(0, 0, 0, 0)
+                    const isFutureEvent = eventDay.getTime() > today.getTime()
+
+                    return (
+                      <div key={event.id} className="rounded-lg border border-orange-200 bg-white p-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-gray-900">{event.title}</p>
+                            <p className="text-sm text-gray-600">
+                              {new Date(event.event_date).toLocaleDateString("fr-FR", {
+                                weekday: "long",
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                              {event.start_time ? ` • ${event.start_time}` : ""}
+                            </p>
+                            <p className="text-xs text-orange-700 mt-1">
+                              Statut: {event.status === "moved"
+                                ? "Non validé: reporté pour aujourd'hui"
+                                : event.status === "pending"
+                                ? "En attente de validation"
+                                : event.status === "validated"
+                                ? "Validé"
+                                : event.status}
+                            </p>
+                            {isFutureEvent && (
+                              <p className="text-xs text-gray-500 mt-1">Validation disponible le jour de l'événement.</p>
+                            )}
+                          </div>
+                          <Button
+                            onClick={() => validateScheduledEvent(event.id)}
+                            disabled={isValidatingEventId === event.id || isFutureEvent}
+                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                          >
+                            {isValidatingEventId === event.id ? "Validation..." : "Valider"}
+                          </Button>
                         </div>
-                        <Button
-                          onClick={() => validateScheduledEvent(event.id)}
-                          disabled={isValidatingEventId === event.id}
-                          className="bg-orange-600 hover:bg-orange-700 text-white"
-                        >
-                          {isValidatingEventId === event.id ? "Validation..." : "Valider"}
-                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

@@ -647,6 +647,40 @@ export function CalendarManager() {
 
       if (error) throw error
 
+      // L'assignation et la restriction de validation vivent dans un ScheduledEvent compagnon
+      // (créé par addEvent, retrouvé par titre+date+heure+créateur d'origine — pas par id).
+      // On le supprime puis le recrée avec les nouvelles valeurs, comme à la création ; les
+      // événements multi-jours n'en ont jamais (l'assignation ne s'applique qu'aux événements
+      // d'un seul jour).
+      await fetch("/api/db/scheduled-events", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({
+          title: eventToEdit.title,
+          eventDate: eventToEdit.event_date,
+          startTime: eventToEdit.event_time || undefined,
+          createdByEmail: eventToEdit.created_by_email,
+        }),
+      }).catch(() => {})
+
+      if (!newEvent.is_multi_day) {
+        await fetch("/api/db/scheduled-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+          body: JSON.stringify({
+            title: newEvent.title,
+            description: newEvent.description,
+            eventDate: eventToEdit.event_date,
+            startTime: newEvent.event_time || null,
+            durationMinutes: newEvent.duration_minutes,
+            assignedEmployeeEmails: newEvent.assigned_employee_emails,
+            assignedRoleIds: newEvent.assigned_role_ids,
+            requiresValidation: newEvent.requires_validation,
+            createdByEmail: eventToEdit.created_by_email,
+          }),
+        }).catch(() => {})
+      }
+
       if (calendarView === "year") {
         await loadEvents()
       } else if (selectedMonth) {
@@ -1189,8 +1223,15 @@ export function CalendarManager() {
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs p-1 rounded text-white truncate ${event.event_end_date ? "bg-purple-500 dark:bg-purple-600" : getStatusColor(event.scheduled_status || event.status)}`}
-                              title={`${event.title}${event.event_end_date ? " (période)" : ""} - ${event.scheduled_status || event.status}`}
+                              className={`text-xs p-1 rounded text-white truncate ${getStatusColor(event.scheduled_status || event.status)}`}
+                              title={`${event.title}${event.event_end_date ? " (période)" : ""} - ${(() => {
+                                const s = event.scheduled_status || event.status
+                                if (s === "approved" || s === "validated") return "Approuvé"
+                                if (s === "moved") return "Reporté"
+                                if (s === "pending") return "En attente"
+                                if (s === "rejected") return "Refusé"
+                                return s
+                              })()}`}
                             >
                               {event.event_end_date && <span className="mr-1 opacity-80">↔</span>}
                               {event.title}
@@ -2115,9 +2156,9 @@ export function CalendarManager() {
                         location: selectedEventForDetails.location,
                         event_time: selectedEventForDetails.event_time || "",
                         duration_minutes: selectedEventForDetails.duration_minutes,
-                        assigned_employee_emails: [],
-                        assigned_role_ids: [],
-                        requires_validation: false,
+                        assigned_employee_emails: selectedEventForDetails.scheduled_assigned_employee_emails || [],
+                        assigned_role_ids: selectedEventForDetails.scheduled_assigned_role_ids || [],
+                        requires_validation: selectedEventForDetails.scheduled_requires_validation ?? false,
                         is_multi_day: !!selectedEventForDetails.event_end_date,
                         event_start_date: normalizeDateOnly(selectedEventForDetails.event_date),
                         event_end_date: selectedEventForDetails.event_end_date
@@ -2274,6 +2315,86 @@ export function CalendarManager() {
                 />
               </div>
             </div>
+
+            {!newEvent.is_multi_day && (
+              <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-800">Assignation (optionnelle)</p>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Employé(s) assigné(s)</label>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                    {employees.length === 0 ? (
+                      <p className="text-xs text-gray-500">Aucun employé actif.</p>
+                    ) : (
+                      employees.map((employee) => (
+                        <label key={employee.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <Checkbox
+                            checked={newEvent.assigned_employee_emails.includes(employee.email)}
+                            onCheckedChange={(checked) =>
+                              setNewEvent({
+                                ...newEvent,
+                                assigned_employee_emails: toggleArraySelection(
+                                  newEvent.assigned_employee_emails,
+                                  employee.email,
+                                  Boolean(checked),
+                                ),
+                              })
+                            }
+                          />
+                          <span>{employee.name} ({employee.email})</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">Rôle(s) assigné(s)</label>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 space-y-2">
+                    {roles.length === 0 ? (
+                      <p className="text-xs text-gray-500">Aucun rôle disponible.</p>
+                    ) : (
+                      roles.map((role) => (
+                        <label key={role.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <Checkbox
+                            checked={newEvent.assigned_role_ids.includes(role.id)}
+                            onCheckedChange={(checked) =>
+                              setNewEvent({
+                                ...newEvent,
+                                assigned_role_ids: toggleArraySelection(
+                                  newEvent.assigned_role_ids,
+                                  role.id,
+                                  Boolean(checked),
+                                ),
+                              })
+                            }
+                          />
+                          <span>{role.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
+                  <Checkbox
+                    id="edit-requires_validation"
+                    checked={newEvent.requires_validation}
+                    onCheckedChange={(checked) =>
+                      setNewEvent({ ...newEvent, requires_validation: Boolean(checked) })
+                    }
+                  />
+                  <div>
+                    <label htmlFor="edit-requires_validation" className="text-sm font-medium text-gray-800 cursor-pointer">
+                      Restriction de validation
+                    </label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Si activé, l'événement passe au lendemain tant qu'il n'est pas validé.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex space-x-3">
             <Button

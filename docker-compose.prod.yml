@@ -17,6 +17,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Limite mémoire/CPU : sans ça, une fuite ou un pic de charge sur un conteneur
+    # peut saturer tout le serveur et faire tomber les autres services avec lui.
+    mem_limit: 512m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   web:
     build:
@@ -25,7 +34,10 @@ services:
     container_name: fitevo-web
     restart: unless-stopped
     ports:
-      - "3000"
+      # Accessible uniquement en local sur le serveur — le reverse proxy (npm_network)
+      # est le seul point d'entrée public. Ne PAS remplacer par juste "3000" :
+      # cela publierait le port sur toutes les interfaces, en clair, en contournant le proxy.
+      - "127.0.0.1:3000:3000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - NODE_ENV=production
@@ -55,6 +67,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   fitevo_internal:

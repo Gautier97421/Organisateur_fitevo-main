@@ -33,6 +33,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -87,6 +88,7 @@ export default function EmployeePage() {
   const [showNoGymDialog, setShowNoGymDialog] = useState(false)
   const [showWifiRestrictionDialog, setShowWifiRestrictionDialog] = useState(false)
   const [showLogoutBlockedDialog, setShowLogoutBlockedDialog] = useState(false)
+  const [showLogoutConfirmDialog, setShowLogoutConfirmDialog] = useState(false)
   const [sessionCompleted, setSessionCompleted] = useState(false)
   const [customPages, setCustomPages] = useState<any[]>([])
   const [selectedCustomPage, setSelectedCustomPage] = useState<any | null>(null)
@@ -368,13 +370,18 @@ setHasCalendarAccess(data.has_calendar_access !== false)
     localStorage.setItem("employeeBreakState", JSON.stringify(breakState))
   }, [isOnBreak, activeBreakType, accumulatedBreakTime, shortBreakProgress, shortBreaksCompleted, lunchBreakTaken, breakStartTime])
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     // Bloquer la déconnexion si une période de travail est active et non terminée
     if (selectedPeriod && !sessionCompleted) {
       setShowLogoutBlockedDialog(true)
       return
     }
-    
+    // Confirmation pour éviter une déconnexion accidentelle
+    setShowLogoutConfirmDialog(true)
+  }
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirmDialog(false)
     // Nettoyer l'état de session
     localStorage.removeItem("employeeCurrentView")
     localStorage.removeItem("employeeSelectedPeriod")
@@ -728,6 +735,11 @@ setHasCalendarAccess(data.has_calendar_access !== false)
     localStorage.removeItem(`employee_${userId}_period`)
     localStorage.removeItem(`employee_${userId}_subPeriod`)
     localStorage.removeItem(`employee_${userId}_sessionDate`)
+
+    // Nettoyer le panier de vente en cours (conservé le temps de la période de travail)
+    if (selectedPeriod) {
+      sessionStorage.removeItem(`vente_cart_${userEmail}_${selectedPeriod}_${selectedGym?.id || "none"}`)
+    }
   }
 
   const getPeriodEmoji = (period: "matin" | "aprem" | "journee") => {
@@ -1470,6 +1482,33 @@ setHasCalendarAccess(data.has_calendar_access !== false)
             </div>
             <DialogFooter>
               <Button onClick={() => setShowLogoutBlockedDialog(false)} className="bg-red-600 hover:bg-red-700 flex-1">Retour aux tâches</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Confirmation de déconnexion (évite une déconnexion accidentelle) */}
+        <Dialog open={showLogoutConfirmDialog} onOpenChange={setShowLogoutConfirmDialog}>
+          <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg flex items-center space-x-2 text-gray-900">
+                <LogOut className="h-5 w-5 text-red-600" />
+                <span>Confirmer la déconnexion</span>
+              </DialogTitle>
+              <DialogDescription className="text-sm text-gray-600">
+                Êtes-vous sûr de vouloir vous déconnecter ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowLogoutConfirmDialog(false)}
+                className="flex-1 border-gray-300"
+              >
+                Annuler
+              </Button>
+              <Button onClick={confirmLogout} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                Se déconnecter
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

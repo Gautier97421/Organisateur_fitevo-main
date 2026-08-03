@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth-middleware"
+import { verifyAuth, verifyManagerOrAdmin } from "@/lib/auth-middleware"
 import logger from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
@@ -50,9 +50,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  // La configuration des champs de caisse (contrôle financier) est réservée aux managers/admins.
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 403 })
   }
 
   try {
@@ -98,9 +99,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 403 })
   }
 
   try {
@@ -137,9 +138,9 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const userId = await verifyAuth(request)
-  if (!userId) {
-    return NextResponse.json({ error: "Authentification requise" }, { status: 401 })
+  const auth = await verifyManagerOrAdmin(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Authentification requise" }, { status: 403 })
   }
 
   try {

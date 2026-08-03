@@ -151,19 +151,28 @@ export function WorkScheduleManager() {
       const startDate = startOfMonth.toISOString().split("T")[0]
       const endDate = endOfMonth.toISOString().split("T")[0]
 
-      let url = `/api/db/work_schedules?work_date_gte=${startDate}&work_date_lte=${endDate}`
-      
-      // Filtrer par salle si une salle spécifique est sélectionnée
-      if (selectedGymId !== "all") {
-        url += `&gym_id=${selectedGymId}`
-      }
+      const gymFilter = selectedGymId === "all" ? "" : `&gym_id=${selectedGymId}`
+      let url = `/api/db/work_schedules?work_date_gte=${startDate}&work_date_lte=${endDate}${gymFilter}`
+      // Un congé qui a commencé avant ce mois mais se termine dedans (ou après) : requête
+      // "chevauchement" complémentaire (le filtre ci-dessus ne regarde que la date de début).
+      const spanningUrl = `/api/db/work_schedules?end_date_gte=${startDate}&work_date_lte=${endDate}${gymFilter}`
 
-      const response = await fetch(url)
-      
+      const [response, spanningResponse] = await Promise.all([fetch(url), fetch(spanningUrl)])
+
       if (response.ok) {
         const result = await response.json()
-        let data = result.data || []
-        
+        const primaryData = result.data || []
+
+        let spanningData: any[] = []
+        if (spanningResponse.ok) {
+          const spanningResult = await spanningResponse.json()
+          spanningData = spanningResult.data || []
+        }
+
+        const byId = new Map<string, any>()
+        for (const s of [...primaryData, ...spanningData]) byId.set(s.id, s)
+        let data = Array.from(byId.values())
+
         // Exclure les périodes de travail temporaires (celles créées par les employés en temps réel)
         // On ne garde que les plannings prévus (is_temporary = false ou undefined)
         data = data.filter((schedule: any) => !schedule.is_temporary)
@@ -769,7 +778,9 @@ export function WorkScheduleManager() {
                         <div
                           key={schedule.id}
                           className={`text-[10px] sm:text-xs p-1 rounded text-white truncate ${isConges ? "bg-green-600" : getEmployeeColor(employeeEmail)}`}
-                          title={`${employeeName}: ${isConges ? "Congés" : `${startTime} - ${endTime}`} (${schedule.status})`}
+                          title={`${employeeName}: ${isConges ? "Congés" : `${startTime} - ${endTime}`} (${
+                            schedule.status === "completed" ? "Terminé" : schedule.status === "confirmed" ? "Confirmé" : "Programmé"
+                          })`}
                         >
                           <span className="hidden sm:inline">{employeeName.split(" ")[0]} </span>
                           {isConges ? "🏖️" : `${startTime}-${endTime}`}
@@ -877,7 +888,7 @@ export function WorkScheduleManager() {
               </DialogDescription>
             )}
           </DialogHeader>
-          <DialogFooter className="flex flex-col gap-2">
+          <DialogFooter className="flex flex-col sm:flex-col sm:space-x-0 gap-2">
             <Button
               variant="outline"
               onClick={() => setShowDetailsDialog(false)}
