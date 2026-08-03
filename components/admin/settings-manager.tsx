@@ -4,8 +4,18 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   ShieldCheck, Scale, FileText, Download, Trash2, ExternalLink,
-  AlertTriangle, Loader2, CheckCircle2, HardDrive, Save,
+  AlertTriangle, Loader2, CheckCircle2, HardDrive, Save, Mail, RotateCcw,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -165,6 +175,234 @@ function StorageQuotaCard({ readOnly }: { readOnly: boolean }) {
   )
 }
 
+function EmailSettingsCard() {
+  const [enabled, setEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/settings/email")
+        if (!res.ok) return
+        const json = await res.json()
+        setEnabled(json.data?.emailEnabled ?? true)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const applyToggle = async (checked: boolean) => {
+    const previous = enabled
+    setEnabled(checked) // optimiste, pour un retour immédiat au clic
+    setSaving(true)
+    try {
+      const res = await fetch("/api/settings/email", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailEnabled: checked }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(checked ? "Envoi d'emails activé" : "Envoi d'emails désactivé")
+    } catch {
+      setEnabled(previous)
+      toast.error("Erreur lors de la mise à jour")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Désactiver coupe TOUS les emails de l'appli (activation de compte, alertes...) — un clic
+  // accidentel ne doit pas suffire, d'où la confirmation. Activer, en revanche, est sans risque.
+  const handleToggle = (checked: boolean) => {
+    if (!checked) {
+      setShowDisableConfirm(true)
+      return
+    }
+    applyToggle(true)
+  }
+
+  return (
+    <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
+          <Mail className="w-5 h-5 text-gray-400" />
+          Emails
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                id="email-enabled-toggle"
+                type="checkbox"
+                checked={enabled}
+                disabled={saving}
+                onChange={(e) => handleToggle(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="email-enabled-toggle" className="text-sm text-gray-700 dark:text-gray-300">
+                Activer l'envoi d'emails (activation de compte, rappels, récap de fin de service, alertes...)
+              </label>
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Désactivé, aucun email n'est envoyé par l'application, quelle que soit la configuration SMTP.
+            </p>
+          </>
+        )}
+      </CardContent>
+
+      <AlertDialog open={showDisableConfirm} onOpenChange={setShowDisableConfirm}>
+        <AlertDialogContent className="bg-white dark:bg-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Désactiver l'envoi d'emails ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Plus aucun email ne sera envoyé par l'application (activation de compte, alertes, rappels, récap de fin de service...), tant que ce n'est pas réactivé ici.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDisableConfirm(false)}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setShowDisableConfirm(false); applyToggle(false) }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Désactiver
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
+const RESET_OPTIONS = [
+  {
+    key: "sales" as const,
+    label: "Historique des ventes (Ventes & Stock)",
+    detail: "Vide l'historique des ventes. Les articles, leurs stocks actuels et les promotions restent inchangés.",
+  },
+  {
+    key: "cash_entries" as const,
+    label: "Comptages de caisse, informations & photos terrain, Récap Mensuel",
+    detail: "Ces trois écrans lisent la même donnée : ouvertures/fermetures de caisse, informations saisies pendant la période de travail et leurs photos. Cette case vide tout ça d'un coup, photos comprises.",
+  },
+]
+
+function ResetTestDataCard() {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [resetting, setResetting] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const toggle = (key: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const handleReset = async () => {
+    setShowConfirm(false)
+    setResetting(true)
+    try {
+      const res = await fetch("/api/settings/reset-test-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: Array.from(selected) }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Erreur")
+      toast.success("Données réinitialisées")
+      setSelected(new Set())
+    } catch (e: any) {
+      toast.error(e?.message || "Erreur lors de la réinitialisation")
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const selectedLabels = RESET_OPTIONS.filter((o) => selected.has(o.key)).map((o) => o.label)
+
+  return (
+    <Card className="border-2 border-red-200 dark:border-red-900 dark:bg-gray-800">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
+          <RotateCcw className="w-5 h-5 text-red-600" />
+          Réinitialisation des données de test
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Réservé au superadmin. Cochez ce qu'il faut effacer définitivement avant de passer en conditions réelles — action irréversible, sans confirmation possible après coup.
+        </p>
+        <div className="space-y-2">
+          {RESET_OPTIONS.map((opt) => (
+            <label
+              key={opt.key}
+              className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-red-300"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(opt.key)}
+                onChange={() => toggle(opt.key)}
+                disabled={resetting}
+                className="h-4 w-4 mt-0.5 flex-shrink-0"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-900 dark:text-white">{opt.label}</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <Button
+          onClick={() => setShowConfirm(true)}
+          disabled={selected.size === 0 || resetting}
+          variant="outline"
+          className="border-2 border-red-300 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 w-full sm:w-auto"
+        >
+          {resetting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+          Réinitialiser les données sélectionnées
+        </Button>
+      </CardContent>
+
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent className="bg-white dark:bg-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Supprimer définitivement ces données ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est <strong>irréversible</strong> et supprimera pour de bon :
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                {selectedLabels.map((l) => <li key={l}>{l}</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowConfirm(false)}>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReset} className="bg-red-600 hover:bg-red-700 text-white">
+              Oui, supprimer définitivement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
 export function SettingsManager({ userRole }: SettingsManagerProps) {
   const [users, setUsers] = useState<SimpleUser[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -290,6 +528,10 @@ export function SettingsManager({ userRole }: SettingsManagerProps) {
 
         {canSeeStorage && <StorageQuotaCard readOnly={userRole !== "superadmin"} />}
       </div>
+
+      {canSeeStorage && <EmailSettingsCard />}
+
+      {userRole === "superadmin" && <ResetTestDataCard />}
 
       {/* Droits RGPD */}
       <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">

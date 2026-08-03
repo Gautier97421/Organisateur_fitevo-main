@@ -450,7 +450,7 @@ export function CustomPageManager() {
               return (
                 <Card key={page.id} className={`border ${page.isActive ? 'border-gray-200' : 'border-gray-300 bg-gray-100 opacity-60'}`}>
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
                         {IconComponent && (
                           <IconComponent className={`w-5 h-5 flex-shrink-0 mt-0.5 ${page.isActive ? 'text-red-600' : 'text-gray-400'}`} />
@@ -486,7 +486,7 @@ export function CustomPageManager() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
+                      <div className="flex gap-1 flex-shrink-0 self-end sm:self-auto">
                         {/* Bouton pour modifier les rôles */}
                         <Button
                           onClick={() => openRolesDialog(page.id)}

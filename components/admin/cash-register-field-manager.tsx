@@ -197,10 +197,10 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Banknote className="w-6 h-6 text-red-600 flex-shrink-0" />
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Champs de Caisse Personnalisés</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white truncate">Informations</h2>
         </div>
         <Button
           onClick={(e) => {
@@ -208,7 +208,7 @@ export function CashRegisterFieldManager({ onFieldsUpdated }: CashRegisterFieldM
             e.stopPropagation()
             handleOpenDialog()
           }}
-          className="bg-red-600 hover:bg-red-700 text-white flex-shrink-0"
+          className="bg-red-600 hover:bg-red-700 text-white flex-shrink-0 w-full sm:w-auto"
           type="button"
         >
           <Plus className="h-4 w-4 mr-2" /> Ajouter un champ

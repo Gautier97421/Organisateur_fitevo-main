@@ -800,7 +800,7 @@ setHasCalendarAccess(data.has_calendar_access !== false)
       { id: "taches-manager", label: "Tâches",         active: currentView === "taches-manager" },
       { id: "ventes-stock", label: "Ventes & Stock",   active: currentView === "ventes-stock" },
       { id: "tableau-bord", label: "Tableau de bord",  active: currentView === "tableau-bord" },
-      { id: "champs-caisse",label: "Config Caisse",    active: currentView === "champs-caisse" },
+      { id: "champs-caisse",label: "Infos supp",    active: currentView === "champs-caisse" },
       { id: "caisse",       label: "Caisse",           active: currentView === "caisse" },
       { id: "infos",        label: "Informations",     active: currentView === "infos" },
       { id: "vente",        label: "Vente",            active: currentView === "vente" },
@@ -955,7 +955,7 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                   { id: "taches-manager", label: "Tâches", icon: ClipboardList, active: currentView === "taches-manager", onClick: () => { setCurrentView("taches-manager"); setMobileOpen(false) } },
                   { id: "ventes-stock", label: "Ventes & Stock", icon: ShoppingBag, active: currentView === "ventes-stock", onClick: () => { setCurrentView("ventes-stock"); setMobileOpen(false) } },
                   { id: "tableau-bord", label: "Tableau de bord", icon: BarChart3, active: currentView === "tableau-bord", onClick: () => { setCurrentView("tableau-bord"); setMobileOpen(false) } },
-                  { id: "champs-caisse", label: "Config Caisse", icon: Banknote, active: currentView === "champs-caisse", onClick: () => { setCurrentView("champs-caisse"); setMobileOpen(false) } },
+                  { id: "champs-caisse", label: "Infos supp", icon: Banknote, active: currentView === "champs-caisse", onClick: () => { setCurrentView("champs-caisse"); setMobileOpen(false) } },
                 ]
 
                 return (
@@ -1342,13 +1342,14 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                 {assignedGyms.map((gym) => (
                   <Button key={gym.id} onClick={() => selectGymAndContinue(gym)} variant="outline"
                     className="w-full justify-start text-left h-auto py-3 px-4 hover:bg-red-50 hover:border-red-600">
-                    <div className="flex items-start gap-3 w-full">
-                      <Building className="h-5 w-5 mt-0.5 text-red-600" />
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-900">{gym.name}</div>
+                    <div className="flex items-center gap-3 w-full min-w-0">
+                      <Building className="h-5 w-5 text-red-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-900 truncate">{gym.name}</div>
                         {gym.address && (
-                          <div className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                            <MapPin className="h-3 w-3" />{gym.address}
+                          <div className="text-sm text-gray-500 flex items-center gap-1 mt-1 min-w-0">
+                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate min-w-0 flex-1">{gym.address}</span>
                           </div>
                         )}
                       </div>

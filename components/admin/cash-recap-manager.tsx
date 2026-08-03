@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, Building2, CalendarDays, Download, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, ChevronDown, ChevronRight, Download, RefreshCw, PieChart as PieChartIcon } from "lucide-react"
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -331,6 +331,62 @@ export function CashRecapManager() {
       .sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
   }, [displayEntries, periodFilter, employeeFilter])
 
+  // Regroupe les saisies (ouverture, recomptages en cours de période, fermeture) par période de
+  // travail réelle (même employé + même période + même jour) — sinon une seule période de travail
+  // s'étale sur plusieurs lignes, comme c'était le cas pour l'historique des ventes avant.
+  const periodGroups = useMemo(() => {
+    const map = new Map<string, { key: string; day: string; period: string; gymId?: string; userEmail: string; userName: string; entries: CashRegisterEntry[] }>()
+    for (const entry of filteredEntries) {
+      const day = (entry.entry_date || "").split("T")[0]
+      const key = `${entry.user_email}|${entry.period}|${day}|${entry.gym_id || ""}`
+      let group = map.get(key)
+      if (!group) {
+        group = { key, day, period: entry.period, gymId: entry.gym_id, userEmail: entry.user_email, userName: entry.user_name || entry.user_email, entries: [] }
+        map.set(key, group)
+      }
+      group.entries.push(entry)
+    }
+
+    return Array.from(map.values())
+      .map((g) => {
+        const sorted = [...g.entries].sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime())
+        const openEntry = sorted.find((e) => entryMode(e.notes) === "Ouverture")
+        const closeEntry = [...sorted].reverse().find((e) => entryMode(e.notes) === "Fermeture")
+        // Total caisse / liquide de référence pour la ligne résumée : la fermeture fait foi une
+        // fois faite (comptage final), sinon l'ouverture, sinon la dernière saisie disponible.
+        const reference = closeEntry || openEntry || sorted[sorted.length - 1]
+        // Valeurs des champs personnalisés : la dernière valeur non vide gagne, dans l'ordre
+        // chronologique (les recomptages "Informations" successifs remplacent les précédents).
+        const customValues: Record<string, any> = {}
+        for (const e of sorted) {
+          const values = (e.custom_values || {}) as Record<string, any>
+          for (const [k, v] of Object.entries(values)) {
+            if (v !== undefined && v !== null && v !== "") customValues[k] = v
+          }
+        }
+        return {
+          ...g,
+          entries: sorted,
+          openEntry,
+          closeEntry,
+          totalRegister: Number(reference?.total_register || 0),
+          cashAmount: Number(reference?.cash_amount || 0),
+          customValues,
+        }
+      })
+      .sort((a, b) => new Date(b.entries[b.entries.length - 1].entry_date).getTime() - new Date(a.entries[a.entries.length - 1].entry_date).getTime())
+  }, [filteredEntries])
+
+  const [expandedPeriods, setExpandedPeriods] = useState<Set<string>>(new Set())
+  const togglePeriod = (key: string) => {
+    setExpandedPeriods((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   const exportPDF = async () => {
     const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
       import("jspdf"),
@@ -649,7 +705,7 @@ export function CashRecapManager() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <CalendarDays className="h-5 w-5 text-red-600" />
-            Détail du mois ({filteredEntries.length} ligne(s))
+            Détail du mois ({periodGroups.length} période(s) de travail)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -689,16 +745,17 @@ export function CashRecapManager() {
                 </div>
               </div>
 
-              {filteredEntries.length === 0 ? (
+              {periodGroups.length === 0 ? (
                 <p className="text-gray-600">Aucune ligne ne correspond aux filtres sélectionnés.</p>
               ) : (
                 <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b bg-gray-50">
+                    <th className="w-8 p-2" />
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Période</th>
-                    <th className="text-left p-2">Type</th>
+                    <th className="text-left p-2">Statut</th>
                     <th className="text-left p-2">Salle</th>
                     <th className="text-left p-2">Employé</th>
                     <th className="text-right p-2">Total caisse</th>
@@ -710,39 +767,86 @@ export function CashRecapManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.map((entry) => {
-                    const customValues = (entry.custom_values || {}) as Record<string, any>
-                    const diff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
+                  {periodGroups.map((g) => {
+                    const diff = g.cashAmount - g.totalRegister
+                    const expanded = expandedPeriods.has(g.key)
                     return (
-                      <tr key={entry.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2">{new Date(entry.entry_date).toLocaleDateString("fr-FR")}</td>
-                        <td className="p-2"><Badge variant="outline">{periodLabel(entry.period)}</Badge></td>
-                        <td className="p-2">
-                          {(() => {
-                            const m = entryMode(entry.notes)
-                            if (!m) return <span className="text-gray-400">-</span>
-                            return (
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${m === "Ouverture" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
-                                {m}
-                              </span>
-                            )
-                          })()}
+                      <Fragment key={g.key}>
+                      <tr className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => togglePeriod(g.key)}>
+                        <td className="p-2 text-gray-400">
+                          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </td>
-                        <td className="p-2">{entry.gym_id ? (gymById.get(entry.gym_id) || "Salle") : "Toutes"}</td>
-                        <td className="p-2">{entry.user_name || entry.user_email}</td>
-                        <td className="p-2 text-right font-medium">{Number(entry.total_register || 0).toFixed(2)} EUR</td>
-                        <td className="p-2 text-right">{Number(entry.cash_amount || 0).toFixed(2)} EUR</td>
+                        <td className="p-2">{new Date(g.day + "T00:00:00").toLocaleDateString("fr-FR")}</td>
+                        <td className="p-2"><Badge variant="outline">{periodLabel(g.period)}</Badge></td>
+                        <td className="p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {g.openEntry && (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Ouverture</span>
+                            )}
+                            {g.closeEntry && (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Fermeture</span>
+                            )}
+                            {g.openEntry && !g.closeEntry && (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">En cours</span>
+                            )}
+                            {!g.openEntry && !g.closeEntry && (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Infos</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2">{g.gymId ? (gymById.get(g.gymId) || "Salle") : "Toutes"}</td>
+                        <td className="p-2">{g.userName}</td>
+                        <td className="p-2 text-right font-medium">{g.totalRegister.toFixed(2)} EUR</td>
+                        <td className="p-2 text-right">{g.cashAmount.toFixed(2)} EUR</td>
                         <td className={`p-2 text-right font-medium ${diff >= 0 ? "text-green-700" : "text-red-700"}`}>
                           {diff >= 0 ? "+" : ""}{diff.toFixed(2)} EUR
                         </td>
                         {fields.map((field) => (
                           <td key={field.id} className="p-2">
-                            {customValues[field.id] === undefined || customValues[field.id] === null || customValues[field.id] === ""
+                            {g.customValues[field.id] === undefined || g.customValues[field.id] === null || g.customValues[field.id] === ""
                               ? "-"
-                              : String(customValues[field.id])}
+                              : String(g.customValues[field.id])}
                           </td>
                         ))}
                       </tr>
+                      {expanded && g.entries.map((entry) => {
+                        const customValues = (entry.custom_values || {}) as Record<string, any>
+                        const entryDiff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
+                        const m = entryMode(entry.notes)
+                        return (
+                          <tr key={entry.id} className="border-b bg-gray-50/70 text-xs">
+                            <td className="p-2" />
+                            <td className="p-2 text-gray-500">
+                              {new Date(entry.entry_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="p-2" />
+                            <td className="p-2">
+                              {m ? (
+                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${m === "Ouverture" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                                  {m}
+                                </span>
+                              ) : (
+                                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Infos</span>
+                              )}
+                            </td>
+                            <td className="p-2" />
+                            <td className="p-2 text-gray-500">{entry.user_name || entry.user_email}</td>
+                            <td className="p-2 text-right">{Number(entry.total_register || 0).toFixed(2)} EUR</td>
+                            <td className="p-2 text-right">{Number(entry.cash_amount || 0).toFixed(2)} EUR</td>
+                            <td className={`p-2 text-right ${entryDiff >= 0 ? "text-green-700" : "text-red-700"}`}>
+                              {entryDiff >= 0 ? "+" : ""}{entryDiff.toFixed(2)} EUR
+                            </td>
+                            {fields.map((field) => (
+                              <td key={field.id} className="p-2 text-gray-500">
+                                {customValues[field.id] === undefined || customValues[field.id] === null || customValues[field.id] === ""
+                                  ? "-"
+                                  : String(customValues[field.id])}
+                              </td>
+                            ))}
+                          </tr>
+                        )
+                      })}
+                      </Fragment>
                     )
                   })}
                 </tbody>

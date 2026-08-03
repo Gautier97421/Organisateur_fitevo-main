@@ -239,15 +239,15 @@ export function RecurringTodoManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-red-600" />
+            <RefreshCw className="h-5 w-5 text-red-600 flex-shrink-0" />
             To-Do récurrentes
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">Tâches qui apparaissent automatiquement selon une récurrence</p>
         </div>
-        <Button onClick={openCreate} className="bg-red-600 hover:bg-red-700 text-white gap-2">
+        <Button onClick={openCreate} className="bg-red-600 hover:bg-red-700 text-white gap-2 flex-shrink-0 w-full sm:w-auto">
           <Plus className="h-4 w-4" /> Nouvelle
         </Button>
       </div>

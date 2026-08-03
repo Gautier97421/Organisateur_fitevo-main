@@ -103,8 +103,8 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
       }
       setValues(initial)
       setInitialValues({ ...initial })
-      setPhotos(initialPhotos)
-      setInitialPhotos(initialPhotos)
+      setPhotos({ ...initialPhotos })
+      setInitialPhotos({ ...initialPhotos })
     } catch {
       // silencieux
     } finally {
@@ -125,6 +125,13 @@ export function ExtraInfoPanel({ period, gymId, gymName, userEmail, userName }: 
       let changed: boolean
       if (f.fieldType === "checkbox") {
         changed = !!a !== !!b
+      } else if (f.fieldType === "number") {
+        // "" (jamais touché) et 0 représentent le même "rien de saisi" pour un compteur —
+        // sinon retomber sur 0 après avoir tapé une valeur reste marqué comme non enregistré
+        // alors que rien n'a réellement changé par rapport à un champ vierge.
+        const an = a === "" || a === undefined || a === null ? 0 : Number(a)
+        const bn = b === "" || b === undefined || b === null ? 0 : Number(b)
+        changed = an !== bn
       } else {
         const an = a === undefined || a === null ? "" : a
         const bn = b === undefined || b === null ? "" : b

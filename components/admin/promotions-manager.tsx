@@ -264,7 +264,7 @@ export function PromotionsManager() {
         <div className="grid gap-3">
           {activePromos.map((promo) => (
             <Card key={promo.id} className="border">
-              <CardContent className="p-4 flex items-center justify-between gap-4">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-gray-900">{promo.name}</h3>
@@ -316,7 +316,7 @@ export function PromotionsManager() {
             {inactivePromos.map((promo) => (
               <Card key={promo.id} className="border border-gray-100 opacity-60">
                 <CardContent className="p-3 flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0 truncate">
                     <span className="text-sm text-gray-500 line-through">{promo.name}</span>
                     <span className="ml-2 text-xs text-gray-400">{describePromotion(promo)}</span>
                   </div>
@@ -324,7 +324,7 @@ export function PromotionsManager() {
                     onClick={() => handleToggleActive(promo)}
                     variant="outline"
                     size="sm"
-                    className="text-xs"
+                    className="text-xs flex-shrink-0"
                   >
                     Réactiver
                   </Button>

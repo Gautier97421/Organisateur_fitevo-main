@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { randomBytes } from 'node:crypto'
 import { sendWelcomeEmail } from '../lib/email'
+import { hashPassword } from '../lib/password-utils'
 
 const prisma = new PrismaClient()
 
@@ -43,6 +44,31 @@ async function createWithActivationLink(email: string, name: string, role: strin
   return user
 }
 
+// Compte de test avec mot de passe déjà défini (pas de lien d'activation à suivre) — pratique
+// pour se connecter immédiatement en dev, à ne jamais utiliser tel quel en production.
+async function createTestAccount(email: string, name: string, role: string, plainPassword: string) {
+  const existing = await prisma.user.findUnique({ where: { email } })
+  if (existing) {
+    console.log(`↷ ${email} existe déjà, compte de test non recréé`)
+    return existing
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      password: await hashPassword(plainPassword),
+      name,
+      role,
+      active: true,
+      remoteWorkEnabled: true,
+      isFirstLogin: false,
+    },
+  })
+
+  console.log(`✅ ${role} de test créé: ${email} / ${plainPassword}`)
+  return user
+}
+
 async function main() {
   console.log('🌱 Création des utilisateurs de test...')
   console.log('💡 Les utilisateurs devront définir leur mot de passe via le lien d\'activation ci-dessous (envoyé par email si le SMTP est configuré).')
@@ -50,11 +76,13 @@ async function main() {
 
   await createWithActivationLink('gautier.hoarau97421@gmail.com', 'Super Administrateur', 'superadmin')
   await createWithActivationLink('admin@fitevo.com', 'Administrateur', 'admin')
+  await createTestAccount('superadmin@fitevo.fr', 'Super Administrateur (test)', 'superadmin', '123123123')
 
   console.log('\n📝 Comptes créés (activation requise via le lien ci-dessus):')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('Super Admin:  gautier.hoarau97421@gmail.com')
-  console.log('Admin:        admin@fitevo.com')
+  console.log('Super Admin:       gautier.hoarau97421@gmail.com')
+  console.log('Admin:             admin@fitevo.com')
+  console.log('Super Admin (test): superadmin@fitevo.fr / 123123123')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 }
 

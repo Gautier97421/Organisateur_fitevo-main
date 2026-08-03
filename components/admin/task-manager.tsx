@@ -64,7 +64,48 @@ interface Role {
 }
 
 // Composant SortableTaskItem pour le drag and drop
-function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: TaskItem; index: number; roles: Role[]; onDelete: (id: string) => void; onEdit: (task: TaskItem) => void }) {
+function SortableTaskItem({
+  task, index, roles, onDelete, onEdit,
+  isEditing, editTask, setEditTask, onSaveEdit, onCancelEdit,
+  showCreateConflict, toggleEditTaskSubPeriod, editOptionInput, setEditOptionInput,
+  addQcmOption, updateQcmOption, removeQcmOption,
+}: {
+  task: TaskItem
+  index: number
+  roles: Role[]
+  onDelete: (id: string) => void
+  onEdit: (task: TaskItem) => void
+  isEditing: boolean
+  editTask: {
+    title: string
+    description: string
+    type: "checkbox" | "text" | "qcm"
+    options: string[]
+    qcmAllowMultiple: boolean
+    required: boolean
+    roleIds: string[]
+    subPeriods: Array<"debut" | "milieu" | "fin">
+  }
+  setEditTask: React.Dispatch<React.SetStateAction<{
+    title: string
+    description: string
+    type: "checkbox" | "text" | "qcm"
+    options: string[]
+    qcmAllowMultiple: boolean
+    required: boolean
+    roleIds: string[]
+    subPeriods: Array<"debut" | "milieu" | "fin">
+  }>>
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  showCreateConflict: boolean
+  toggleEditTaskSubPeriod: (sp: "debut" | "milieu" | "fin") => void
+  editOptionInput: string
+  setEditOptionInput: (v: string) => void
+  addQcmOption: (mode: "new" | "edit") => void
+  updateQcmOption: (mode: "new" | "edit", index: number, value: string) => void
+  removeQcmOption: (mode: "new" | "edit", index: number) => void
+}) {
   const {
     attributes,
     listeners,
@@ -72,12 +113,229 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id })
+  } = useSortable({ id: task.id, disabled: isEditing })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  }
+
+  if (isEditing) {
+    return (
+      <Card
+        ref={setNodeRef}
+        style={style}
+        className="border-2 border-blue-400 shadow-lg bg-white dark:bg-gray-800"
+      >
+        <CardContent className="p-4 sm:p-6 space-y-5">
+          {showCreateConflict && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
+              ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant de créer une nouvelle tâche.
+            </div>
+          )}
+
+          <Input
+            placeholder="Titre de la tâche"
+            value={editTask.title}
+            onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
+            className="text-base sm:text-lg h-12 sm:h-14 border-2 rounded-xl"
+          />
+
+          <Textarea
+            placeholder="Description détaillée"
+            value={editTask.description}
+            onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
+            className="text-base sm:text-lg border-2 rounded-xl min-h-[100px]"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <Select
+              value={editTask.type}
+              onValueChange={(value) => setEditTask({ ...editTask, type: value as any })}
+            >
+              <SelectTrigger className="h-12 sm:h-14 text-base sm:text-lg border-2 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="checkbox">Case à cocher</SelectItem>
+                <SelectItem value="text">Texte libre</SelectItem>
+                <SelectItem value="qcm">Choix multiple</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center space-x-3 bg-gray-50 dark:bg-gray-700 p-4 rounded-xl">
+              <input
+                type="checkbox"
+                id={`edit-required-${task.id}`}
+                checked={editTask.required}
+                onChange={(e) => setEditTask({ ...editTask, required: e.target.checked })}
+                className="w-6 h-6 text-blue-600 rounded flex-shrink-0"
+              />
+              <label htmlFor={`edit-required-${task.id}`} className="text-base sm:text-lg font-medium">
+                Tâche obligatoire
+              </label>
+            </div>
+          </div>
+
+          {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
+          {(task.period === "matin" || task.period === "aprem") && (
+            <div className="space-y-2">
+              <Label className="text-base sm:text-lg font-medium">Sous-créneau(x) :</Label>
+              <p className="text-sm text-gray-500">Aucune case cochée = affichée sur tout le créneau.</p>
+              <div className="flex flex-wrap gap-3">
+                {([
+                  { value: "debut", label: "Début (ouverture)" },
+                  { value: "milieu", label: "Milieu" },
+                  { value: "fin", label: "Fin (fermeture)" },
+                ] as const).map((opt) => (
+                  <label
+                    key={opt.value}
+                    htmlFor={`edit-sub-period-${task.id}-${opt.value}`}
+                    className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-4 py-3 rounded-xl cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      id={`edit-sub-period-${task.id}-${opt.value}`}
+                      checked={editTask.subPeriods.includes(opt.value)}
+                      onChange={() => toggleEditTaskSubPeriod(opt.value)}
+                      className="w-5 h-5 text-blue-600 rounded"
+                    />
+                    <span className="text-base">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label className="text-base sm:text-lg font-medium">Rôles autorisés (optionnel)</Label>
+            <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
+            <div className="flex flex-wrap gap-2">
+              {roles.map((role) => (
+                <div
+                  key={role.id}
+                  className={`px-3 py-2 rounded-lg cursor-pointer border-2 transition-all ${
+                    editTask.roleIds.includes(role.id)
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-300 bg-white hover:border-gray-400'
+                  }`}
+                  onClick={() => {
+                    const isSelected = editTask.roleIds.includes(role.id)
+                    setEditTask({
+                      ...editTask,
+                      roleIds: isSelected
+                        ? editTask.roleIds.filter((id) => id !== role.id)
+                        : [...editTask.roleIds, role.id]
+                    })
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: role.color }}
+                    />
+                    <span className="font-medium">{role.name}</span>
+                    {editTask.roleIds.includes(role.id) && (
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {editTask.type === "qcm" && (
+            <div className="space-y-3">
+              <Label className="text-base sm:text-lg font-medium">Options du QCM</Label>
+              <div className="space-y-2">
+                <Label className="text-sm sm:text-base font-medium">Mode de réponse</Label>
+                <Select
+                  value={editTask.qcmAllowMultiple ? "multiple" : "single"}
+                  onValueChange={(value) =>
+                    setEditTask({ ...editTask, qcmAllowMultiple: value === "multiple" })
+                  }
+                >
+                  <SelectTrigger className="h-12 text-sm sm:text-base border-2 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Une seule option à cocher</SelectItem>
+                    <SelectItem value="multiple">Plusieurs options à cocher</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  placeholder="Nom de l'option"
+                  value={editOptionInput}
+                  onChange={(e) => setEditOptionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addQcmOption("edit")
+                    }
+                  }}
+                  className="text-base sm:text-lg h-12 border-2 rounded-xl"
+                />
+                <Button
+                  type="button"
+                  onClick={() => addQcmOption("edit")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+                >
+                  Ajouter option
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {editTask.options.length === 0 ? (
+                  <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
+                ) : (
+                  editTask.options.map((option, idx) => (
+                    <div key={`edit-option-${idx}`} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                      <div className="flex items-center gap-2 w-full mr-2 min-w-0">
+                        <span className="text-sm font-medium w-7 flex-shrink-0">{idx + 1}.</span>
+                        <Input
+                          value={option}
+                          onChange={(e) => updateQcmOption("edit", idx, e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeQcmOption("edit", idx)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <Button
+              onClick={onSaveEdit}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+              Enregistrer
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancelEdit}
+              className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+              Annuler
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -96,11 +354,11 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
             <GripVertical className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <div className="w-8 h-8 bg-red-600 dark:bg-red-700 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 #{index + 1}
               </div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white truncate">{task.title}</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white truncate min-w-[4rem]">{task.title}</h3>
               {task.sub_period && (
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
                   {task.sub_period === "debut" ? "Début" : task.sub_period === "milieu" ? "Milieu" : "Fin"}
@@ -153,7 +411,7 @@ function SortableTaskItem({ task, index, roles, onDelete, onEdit }: { task: Task
               </div>
             )}
           </div>
-          <div className="flex space-x-1">
+          <div className="flex space-x-1 flex-shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -892,226 +1150,6 @@ export function TaskManager() {
             </Button>
           </div>
 
-          {/* Formulaire d'édition */}
-          {showEditForm && editingTask && (
-            <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
-              <CardHeader className="bg-blue-600 dark:bg-blue-700 text-white rounded-t-xl">
-                <CardTitle className="text-xl">
-                  Modifier la tâche : {editingTask.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 p-8">
-                {showCreateConflict && (
-                  <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm">
-                    ⚠️ Veuillez terminer ou annuler la modification de cette tâche avant de créer une nouvelle tâche.
-                  </div>
-                )}
-
-                <Input
-                  placeholder="Titre de la tâche"
-                  value={editTask.title}
-                  onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
-                  className="text-lg h-14 border-2 rounded-xl"
-                />
-
-                <Textarea
-                  placeholder="Description détaillée"
-                  value={editTask.description}
-                  onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
-                  className="text-lg border-2 rounded-xl min-h-[100px]"
-                />
-
-                <div className="grid grid-cols-2 gap-6">
-                  <Select
-                    value={editTask.type}
-                    onValueChange={(value) => setEditTask({ ...editTask, type: value as any })}
-                  >
-                    <SelectTrigger className="h-14 text-lg border-2 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="checkbox">Case à cocher</SelectItem>
-                      <SelectItem value="text">Texte libre</SelectItem>
-                      <SelectItem value="qcm">Choix multiple</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <div className="flex items-center space-x-3 bg-gray-50 dark:bg-gray-700 p-4 rounded-xl">
-                    <input
-                      type="checkbox"
-                      id="edit-required"
-                      checked={editTask.required}
-                      onChange={(e) => setEditTask({ ...editTask, required: e.target.checked })}
-                      className="w-6 h-6 text-blue-600 rounded"
-                    />
-                    <label htmlFor="edit-required" className="text-lg font-medium">
-                      Tâche obligatoire
-                    </label>
-                  </div>
-                </div>
-
-                {/* Sélecteur de sous-créneau (seulement pour matin et aprem) */}
-                {editingTask && (editingTask.period === "matin" || editingTask.period === "aprem") && (
-                  <div className="space-y-2">
-                    <Label className="text-lg font-medium">Sous-créneau(x) :</Label>
-                    <p className="text-sm text-gray-500">Aucune case cochée = affichée sur tout le créneau.</p>
-                    <div className="flex flex-wrap gap-3">
-                      {([
-                        { value: "debut", label: "Début (ouverture)" },
-                        { value: "milieu", label: "Milieu" },
-                        { value: "fin", label: "Fin (fermeture)" },
-                      ] as const).map((opt) => (
-                        <label
-                          key={opt.value}
-                          htmlFor={`edit-sub-period-${opt.value}`}
-                          className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-4 py-3 rounded-xl cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            id={`edit-sub-period-${opt.value}`}
-                            checked={editTask.subPeriods.includes(opt.value)}
-                            onChange={() => toggleEditTaskSubPeriod(opt.value)}
-                            className="w-5 h-5 text-blue-600 rounded"
-                          />
-                          <span className="text-base">{opt.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label className="text-lg font-medium">Rôles autorisés (optionnel)</Label>
-                  <p className="text-sm text-gray-500">Si aucun rôle n'est sélectionné, la tâche sera visible par tous les employés</p>
-                  <div className="flex flex-wrap gap-2">
-                    {roles.map((role) => (
-                      <div
-                        key={role.id}
-                        className={`px-3 py-2 rounded-lg cursor-pointer border-2 transition-all ${
-                          editTask.roleIds.includes(role.id)
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 bg-white hover:border-gray-400'
-                        }`}
-                        onClick={() => {
-                          const isSelected = editTask.roleIds.includes(role.id)
-                          setEditTask({
-                            ...editTask,
-                            roleIds: isSelected
-                              ? editTask.roleIds.filter((id) => id !== role.id)
-                              : [...editTask.roleIds, role.id]
-                          })
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: role.color }}
-                          />
-                          <span className="font-medium">{role.name}</span>
-                          {editTask.roleIds.includes(role.id) && (
-                            <CheckCircle className="h-4 w-4 text-blue-600" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {editTask.type === "qcm" && (
-                  <div className="space-y-3">
-                    <Label className="text-lg font-medium">Options du QCM</Label>
-                    <div className="space-y-2">
-                      <Label className="text-base font-medium">Mode de réponse</Label>
-                      <Select
-                        value={editTask.qcmAllowMultiple ? "multiple" : "single"}
-                        onValueChange={(value) =>
-                          setEditTask({ ...editTask, qcmAllowMultiple: value === "multiple" })
-                        }
-                      >
-                        <SelectTrigger className="h-12 text-base border-2 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="single">Une seule option à cocher</SelectItem>
-                          <SelectItem value="multiple">Plusieurs options à cocher</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        placeholder="Nom de l'option"
-                        value={editOptionInput}
-                        onChange={(e) => setEditOptionInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            addQcmOption("edit")
-                          }
-                        }}
-                        className="text-lg h-12 border-2 rounded-xl"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => addQcmOption("edit")}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        Ajouter option
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {editTask.options.length === 0 ? (
-                        <p className="text-sm text-gray-500">Aucune option ajoutée.</p>
-                      ) : (
-                        editTask.options.map((option, idx) => (
-                          <div key={`edit-option-${idx}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
-                            <div className="flex items-center gap-2 w-full mr-2">
-                              <span className="text-sm font-medium w-7">{idx + 1}.</span>
-                              <Input
-                                value={option}
-                                onChange={(e) => updateQcmOption("edit", idx, e.target.value)}
-                                className="h-9"
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeQcmOption("edit", idx)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              Supprimer
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-                  <Button
-                    onClick={updateTask}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-lg px-4 sm:px-8 py-3 rounded-xl shadow-lg flex items-center gap-2 w-full sm:w-auto"
-                  >
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Enregistrer
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowEditForm(false)
-                      setEditingTask(null)
-                    }}
-                    className="text-sm sm:text-lg px-4 sm:px-8 py-3 border-2 rounded-xl border-gray-300 hover:bg-gray-50 bg-white flex items-center gap-2 w-full sm:w-auto"
-                  >
-                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Annuler
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Formulaire d'ajout */}
           {showForm && (
             <Card className="border-0 shadow-2xl bg-white dark:bg-gray-800">
@@ -1373,6 +1411,18 @@ export function TaskManager() {
                         roles={roles}
                         onDelete={deleteTask}
                         onEdit={openEditTask}
+                        isEditing={showEditForm && editingTask?.id === task.id}
+                        editTask={editTask}
+                        setEditTask={setEditTask}
+                        onSaveEdit={updateTask}
+                        onCancelEdit={() => { setShowEditForm(false); setEditingTask(null) }}
+                        showCreateConflict={showCreateConflict}
+                        toggleEditTaskSubPeriod={toggleEditTaskSubPeriod}
+                        editOptionInput={editOptionInput}
+                        setEditOptionInput={setEditOptionInput}
+                        addQcmOption={addQcmOption}
+                        updateQcmOption={updateQcmOption}
+                        removeQcmOption={removeQcmOption}
                       />
                     ))}
                   </div>

@@ -409,20 +409,20 @@ export function VentesStockManager() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <ShoppingBag className="w-6 h-6 text-red-600 flex-shrink-0" />
-          <h2 className="text-2xl font-bold text-gray-900">Ventes & Stock</h2>
+          <h2 className="text-2xl font-bold text-gray-900 truncate">Ventes & Stock</h2>
         </div>
         {tab === "articles" && (
-          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 text-white flex-shrink-0">
+          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 text-white flex-shrink-0 w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" /> Ajouter un article
           </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {(["articles", "promotions", "dashboard", "historique"] as Tab[]).map((t) => {
           const labels: Record<Tab, string> = { articles: "Articles", promotions: "Promotions", dashboard: "Tableau de bord", historique: "Historique" }
           const icons: Record<Tab, React.ReactNode> = {
@@ -436,7 +436,7 @@ export function VentesStockManager() {
               key={t}
               onClick={() => setTab(t)}
               className={[
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex-shrink-0",
                 t === tab
                   ? "border-red-600 text-red-600"
                   : "border-transparent text-gray-500 hover:text-gray-700",
@@ -494,7 +494,7 @@ export function VentesStockManager() {
             <div className="grid gap-3">
               {activeProducts.map((p) => (
                 <Card key={p.id} className="border">
-                  <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-gray-900">{p.name}</h3>
@@ -557,7 +557,7 @@ export function VentesStockManager() {
                 {inactiveProducts.map((p) => (
                   <Card key={p.id} className="border border-gray-100 opacity-60">
                     <CardContent className="p-3 flex items-center justify-between gap-3">
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-sm text-gray-500 line-through">{p.name}</span>
                         <span className="ml-2 text-xs text-gray-400">{fmt(p.price)}</span>
                       </div>
@@ -565,7 +565,7 @@ export function VentesStockManager() {
                         onClick={() => handleToggleActive(p)}
                         variant="outline"
                         size="sm"
-                        className="text-xs"
+                        className="text-xs flex-shrink-0"
                       >
                         Restaurer
                       </Button>

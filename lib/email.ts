@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer"
 import logger from "@/lib/logger"
+import { prisma } from "@/lib/prisma"
 
 // Échappe le HTML pour toute donnée utilisateur injectée dans un template d'email
 // (nom, message libre, titre d'événement...) — sinon un employé peut injecter du
@@ -35,6 +36,19 @@ function getTransporter() {
 }
 
 async function dispatch(to: string | string[], subject: string, html: string): Promise<void> {
+  // Coupe-circuit global (paramètres admin) : pas de ligne = activé par défaut, seule une
+  // désactivation explicite bloque l'envoi. Un échec de lecture ne doit jamais empêcher un
+  // email légitime de partir (ex: alerte urgence), donc on n'échoue jamais silencieux ici.
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { id: "singleton" } })
+    if (setting?.emailEnabled === false) {
+      logger.info(`Envoi d'emails désactivé dans les paramètres — email ignoré (${subject})`)
+      return
+    }
+  } catch (settingError) {
+    logger.error("Erreur lecture du paramètre email_enabled, envoi tenté quand même", settingError)
+  }
+
   const transporter = getTransporter()
   const from = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@fitevo.app"
   const recipients = Array.isArray(to) ? to.join(", ") : to

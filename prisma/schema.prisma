@@ -622,6 +622,7 @@ model Promotion {
 model SystemSetting {
   id             String   @id @default("singleton")
   storageQuotaMb Int?     @map("storage_quota_mb")
+  emailEnabled   Boolean  @default(true) @map("email_enabled")
   updatedAt      DateTime @updatedAt @map("updated_at")
   updatedBy      String?  @map("updated_by")
 

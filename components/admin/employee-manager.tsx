@@ -1255,7 +1255,7 @@ export function EmployeeManager() {
               employees.map((employee) => (
                 <Card key={employee.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2">
                       <div className="flex items-center space-x-3 min-w-0 flex-1">
                         <label className="relative cursor-pointer group/avatar flex-shrink-0" title="Changer la photo">
                           <input
@@ -1315,7 +1315,7 @@ export function EmployeeManager() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex space-x-1">
+                      <div className="flex space-x-1 flex-shrink-0 self-center sm:self-auto">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1503,7 +1503,7 @@ export function EmployeeManager() {
               visibleAdmins.map((admin) => (
                 <Card key={admin.id} className="border border-gray-200 bg-white hover:border-gray-300 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2">
                       <div className="flex items-center space-x-3 min-w-0 flex-1">
                         <label className="relative cursor-pointer group/avatar flex-shrink-0" title="Changer la photo">
                           <input
@@ -1529,16 +1529,16 @@ export function EmployeeManager() {
                             <Camera className="w-4 h-4 text-white" />
                           </div>
                         </label>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="font-medium text-sm text-gray-900">{admin.name}</h3>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-sm text-gray-900 truncate">{admin.name}</h3>
                             {admin.is_super_admin && (
-                              <Badge className="bg-red-100 text-red-700 text-xs px-2 py-0">
+                              <Badge className="bg-red-100 text-red-700 text-xs px-2 py-0 flex-shrink-0">
                                 Super Admin
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500">{admin.email}</p>
+                          <p className="text-xs text-gray-500 truncate">{admin.email}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                             <User className="w-3 h-3 flex-shrink-0" />
                             {admin.username ? (
@@ -1552,7 +1552,7 @@ export function EmployeeManager() {
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex space-x-1">
+                      <div className="flex space-x-1 flex-shrink-0 self-center sm:self-auto">
                         {isSuperAdmin && !admin.is_super_admin && admin.id !== getUserId() && (
                           <Button
                             variant="ghost"
