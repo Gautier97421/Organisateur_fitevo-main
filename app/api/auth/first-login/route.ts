@@ -30,6 +30,27 @@ function recordFirstLoginAttempt(email: string, success: boolean) {
   firstLoginAttempts.set(email, { count: entry.count + 1, lastAttempt: Date.now() })
 }
 
+// Le jeton d'activation est-il exigé ? Piloté par le superadmin dans Paramètres.
+// Absence de ligne en base = désactivé, pour ne pas bloquer une instance sans SMTP.
+async function isActivationTokenRequired(): Promise<boolean> {
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { id: 'singleton' } })
+    return setting?.activationTokenRequired ?? false
+  } catch (error) {
+    // Une lecture qui échoue ne doit pas verrouiller les activations : on reste permissif,
+    // comme le défaut, plutôt que de renvoyer une erreur incompréhensible à l'employé.
+    logger.error('Erreur lecture du paramètre activation_token_required', error)
+    return false
+  }
+}
+
+// Permet à la page /first-login de savoir s'il faut réclamer un lien d'activation.
+// Volontairement public (elle est affichée avant toute authentification) et ne divulgue
+// qu'un booléen de configuration.
+export async function GET() {
+  return NextResponse.json({ data: { activationTokenRequired: await isActivationTokenRequired() } })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, username, password, token } = await request.json()
@@ -44,7 +65,8 @@ export async function POST(request: NextRequest) {
 
     // Le jeton d'activation (envoyé par email à la création du compte) empêche quiconque
     // connaît simplement l'adresse email d'un compte pas encore activé de se l'approprier.
-    if (!token || typeof token !== 'string') {
+    const activationTokenRequired = await isActivationTokenRequired()
+    if (activationTokenRequired && (!token || typeof token !== 'string')) {
       return NextResponse.json(
         { error: 'Lien d\'activation manquant ou invalide' },
         { status: 400 }
@@ -98,26 +120,42 @@ export async function POST(request: NextRequest) {
 
     // Vérifier le jeton d'activation : doit exister, correspondre à ce compte,
     // ne pas être expiré, et ne pas avoir déjà été utilisé.
-    const activationToken = await prisma.passwordResetToken.findUnique({ where: { token } })
-    if (!activationToken || activationToken.userId !== user.id) {
-      recordFirstLoginAttempt(email, false)
-      return NextResponse.json(
-        { error: 'Lien d\'activation invalide' },
-        { status: 400 }
-      )
+    // Sécurité désactivée : un jeton fourni quand même est consommé s'il est valide, mais
+    // un jeton absent/expiré/invalide ne bloque pas l'activation.
+    const activationToken = token && typeof token === 'string'
+      ? await prisma.passwordResetToken.findUnique({ where: { token } })
+      : null
+
+    if (activationTokenRequired) {
+      if (!activationToken || activationToken.userId !== user.id) {
+        recordFirstLoginAttempt(email, false)
+        return NextResponse.json(
+          { error: 'Lien d\'activation invalide' },
+          { status: 400 }
+        )
+      }
+      if (activationToken.usedAt) {
+        return NextResponse.json(
+          { error: 'Ce lien d\'activation a déjà été utilisé' },
+          { status: 400 }
+        )
+      }
+      if (new Date() > activationToken.expiresAt) {
+        return NextResponse.json(
+          { error: 'Lien d\'activation expiré. Contactez un administrateur pour en recevoir un nouveau.' },
+          { status: 400 }
+        )
+      }
     }
-    if (activationToken.usedAt) {
-      return NextResponse.json(
-        { error: 'Ce lien d\'activation a déjà été utilisé' },
-        { status: 400 }
-      )
-    }
-    if (new Date() > activationToken.expiresAt) {
-      return NextResponse.json(
-        { error: 'Lien d\'activation expiré. Contactez un administrateur pour en recevoir un nouveau.' },
-        { status: 400 }
-      )
-    }
+
+    // Le jeton n'est marqué comme utilisé que s'il appartient bien à ce compte et reste exploitable.
+    const tokenToConsume =
+      activationToken &&
+      activationToken.userId === user.id &&
+      !activationToken.usedAt &&
+      new Date() <= activationToken.expiresAt
+        ? activationToken.token
+        : null
 
     // Vérifier que le pseudo n'est pas déjà pris
     const existingUsername = await prisma.user.findFirst({
@@ -147,10 +185,12 @@ export async function POST(request: NextRequest) {
           isFirstLogin: false
         }
       }),
-      prisma.passwordResetToken.update({
-        where: { token },
-        data: { usedAt: new Date() }
-      })
+      ...(tokenToConsume
+        ? [prisma.passwordResetToken.update({
+            where: { token: tokenToConsume },
+            data: { usedAt: new Date() }
+          })]
+        : [])
     ])
 
     // RGPD: pas d'email en clair dans les logs, on utilise l'id interne.

@@ -22,6 +22,9 @@ function FirstLoginForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  // Le lien d'activation n'est réclamé que si le superadmin a activé cette sécurité
+  // (Paramètres → Sécurité de la première connexion). Le serveur reste seul juge.
+  const [tokenRequired, setTokenRequired] = useState(false)
 
   useEffect(() => {
     const emailParam = searchParams.get("email")
@@ -33,6 +36,13 @@ function FirstLoginForm() {
       setToken(tokenParam)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    fetch("/api/auth/first-login")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setTokenRequired(json?.data?.activationTokenRequired ?? false))
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,7 +74,7 @@ function FirstLoginForm() {
       return
     }
 
-    if (!token) {
+    if (tokenRequired && !token) {
       setError("Lien d'activation manquant ou invalide. Utilisez le lien reçu par email.")
       return
     }
@@ -119,7 +129,7 @@ function FirstLoginForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!token && (
+          {tokenRequired && !token && (
             <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-400 text-sm">
               Lien d'activation manquant. Utilisez le lien reçu par email pour configurer votre compte.
             </div>

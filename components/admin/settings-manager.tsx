@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   ShieldCheck, Scale, FileText, Download, Trash2, ExternalLink,
-  AlertTriangle, Loader2, CheckCircle2, HardDrive, Save, Mail, RotateCcw,
+  AlertTriangle, Loader2, CheckCircle2, HardDrive, Save, Mail, RotateCcw, KeyRound,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -285,6 +285,123 @@ function EmailSettingsCard() {
   )
 }
 
+function ActivationSecurityCard() {
+  const [required, setRequired] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showEnableConfirm, setShowEnableConfirm] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/settings/security")
+        if (!res.ok) return
+        const json = await res.json()
+        setRequired(json.data?.activationTokenRequired ?? false)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const applyToggle = async (checked: boolean) => {
+    const previous = required
+    setRequired(checked) // optimiste, pour un retour immédiat au clic
+    setSaving(true)
+    try {
+      const res = await fetch("/api/settings/security", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activationTokenRequired: checked }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(checked ? "Lien d'activation désormais exigé" : "Lien d'activation non exigé")
+    } catch {
+      setRequired(previous)
+      toast.error("Erreur lors de la mise à jour")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Activer sans SMTP fonctionnel bloque définitivement toutes les premières connexions
+  // (personne ne reçoit le lien), d'où la confirmation. Désactiver est sans risque de blocage.
+  const handleToggle = (checked: boolean) => {
+    if (checked) {
+      setShowEnableConfirm(true)
+      return
+    }
+    applyToggle(false)
+  }
+
+  return (
+    <Card className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white text-lg">
+          <KeyRound className="w-5 h-5 text-gray-400" />
+          Sécurité de la première connexion
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                id="activation-token-toggle"
+                type="checkbox"
+                checked={required}
+                disabled={saving}
+                onChange={(e) => handleToggle(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="activation-token-toggle" className="text-sm text-gray-700 dark:text-gray-300">
+                Exiger le lien d'activation reçu par email
+              </label>
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Désactivé, un nouvel employé configure son pseudo et son mot de passe avec sa seule
+              adresse email — pratique tant qu'aucun serveur SMTP n'est configuré, mais quiconque
+              connaît l'email d'un compte pas encore activé peut se l'approprier.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              À réactiver dès que les emails de bienvenue partent réellement.
+            </p>
+          </>
+        )}
+      </CardContent>
+
+      <AlertDialog open={showEnableConfirm} onOpenChange={setShowEnableConfirm}>
+        <AlertDialogContent className="bg-white dark:bg-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Exiger le lien d'activation ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Plus aucune première connexion ne sera possible sans le lien reçu par email.
+              Assurez-vous que l'envoi d'emails est activé et que le SMTP fonctionne, sinon les
+              nouveaux comptes resteront bloqués.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowEnableConfirm(false)}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setShowEnableConfirm(false); applyToggle(true) }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Activer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
 const RESET_OPTIONS = [
   {
     key: "sales" as const,
@@ -530,6 +647,8 @@ export function SettingsManager({ userRole }: SettingsManagerProps) {
       </div>
 
       {canSeeStorage && <EmailSettingsCard />}
+
+      {userRole === "superadmin" && <ActivationSecurityCard />}
 
       {userRole === "superadmin" && <ResetTestDataCard />}
 

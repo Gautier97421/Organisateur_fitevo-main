@@ -623,6 +623,10 @@ model SystemSetting {
   id             String   @id @default("singleton")
   storageQuotaMb Int?     @map("storage_quota_mb")
   emailEnabled   Boolean  @default(true) @map("email_enabled")
+  // Exige le jeton d'activation reçu par email pour valider une première connexion.
+  // Désactivé par défaut : tant qu'aucun SMTP n'est configuré, personne ne reçoit le lien
+  // et les comptes seraient définitivement bloqués. À réactiver dès que les emails partent.
+  activationTokenRequired Boolean @default(false) @map("activation_token_required")
   updatedAt      DateTime @updatedAt @map("updated_at")
   updatedBy      String?  @map("updated_by")
 

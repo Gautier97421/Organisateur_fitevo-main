@@ -51,6 +51,28 @@ function entryMode(notes?: string | null): "Ouverture" | "Fermeture" | null {
   return null
 }
 
+// Le panneau "Informations supplémentaires" ([INFOS PENDANT]) enregistre toujours un total à 0 —
+// ce n'est pas un comptage de caisse. Sert à ne pas faire "retomber" l'affichage du total caisse
+// à 0 sur ces lignes-là (voir plus bas), sans rien changer à l'étiquette affichée ("Infos").
+function isInfoOnlyEntry(notes?: string | null): boolean {
+  return !!notes?.includes("[INFOS PENDANT]")
+}
+
+// Signature des photos jointes à une saisie (clés __photos:/__photo: de custom_values), pour
+// détecter qu'une saisie n'a rien changé côté champs affichés mais a ajouté/retiré une photo —
+// sinon la ligne n'affiche que des tirets sans qu'on comprenne pourquoi elle existe.
+function photoSignature(values: Record<string, any>): string {
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(values)) {
+    if (k.startsWith("__photos:") && Array.isArray(v)) {
+      parts.push(`${k}:${v.join(",")}`)
+    } else if (k.startsWith("__photo:") && v) {
+      parts.push(`${k}:${v}`)
+    }
+  }
+  return parts.sort().join("|")
+}
+
 // "Informations supplémentaires" (côté employé) enregistre à chaque fois le TOTAL cumulé du jour
 // (pas un delta) et peut être ré-enregistré plusieurs fois pendant la même période — sommer
 // directement toutes les saisies compterait donc plusieurs fois le même total. On ne garde que la
@@ -60,7 +82,7 @@ function latestEntryPerGroup(entries: CashRegisterEntry[]): CashRegisterEntry[] 
   const latest = new Map<string, CashRegisterEntry>()
   for (const entry of entries) {
     const day = (entry.entry_date || "").split("T")[0]
-    const type = entryMode(entry.notes) ?? (entry.notes?.includes("[INFOS PENDANT]") ? "Infos" : "Autre")
+    const type = entryMode(entry.notes) ?? "Autre"
     const key = `${entry.user_email}|${entry.period}|${day}|${type}`
     const existing = latest.get(key)
     const entryTime = new Date(entry.created_at || entry.entry_date).getTime()
@@ -201,12 +223,9 @@ export function CashRecapManager() {
 
   const currentTotals = useMemo(() => {
     const totalRegister = displayEntries.reduce((sum, item) => sum + Number(item.total_register || 0), 0)
-    const totalCash = displayEntries.reduce((sum, item) => sum + Number(item.cash_amount || 0), 0)
     return {
       totalRegister,
-      totalCash,
       count: displayEntries.length,
-      avg: displayEntries.length > 0 ? totalRegister / displayEntries.length : 0,
     }
   }, [displayEntries])
 
@@ -296,17 +315,16 @@ export function CashRecapManager() {
   }, [gyms])
 
   const perGymSummary = useMemo(() => {
-    const map = new Map<string, { name: string; count: number; total: number; cash: number }>()
+    const map = new Map<string, { name: string; count: number; total: number }>()
     for (const entry of entries) {
       const gymId = entry.gym_id || "global"
       const gymName = gymById.get(gymId) || "Toutes salles"
       if (!map.has(gymId)) {
-        map.set(gymId, { name: gymName, count: 0, total: 0, cash: 0 })
+        map.set(gymId, { name: gymName, count: 0, total: 0 })
       }
       const rec = map.get(gymId)!
       rec.count += 1
       rec.total += Number(entry.total_register || 0)
-      rec.cash += Number(entry.cash_amount || 0)
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total)
   }, [entries, gymById])
@@ -352,9 +370,12 @@ export function CashRecapManager() {
         const sorted = [...g.entries].sort((a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime())
         const openEntry = sorted.find((e) => entryMode(e.notes) === "Ouverture")
         const closeEntry = [...sorted].reverse().find((e) => entryMode(e.notes) === "Fermeture")
-        // Total caisse / liquide de référence pour la ligne résumée : la fermeture fait foi une
-        // fois faite (comptage final), sinon l'ouverture, sinon la dernière saisie disponible.
-        const reference = closeEntry || openEntry || sorted[sorted.length - 1]
+        // Total caisse de référence pour la ligne résumée : la fermeture fait foi une fois faite
+        // (comptage final), sinon le dernier comptage réel (ouverture ou recomptage volontaire) —
+        // jamais une saisie "Infos", qui a toujours un total à 0 et ferait sembler l'argent
+        // "disparaître" si elle est simplement la dernière saisie chronologique.
+        const lastRealCount = [...sorted].reverse().find((e) => !isInfoOnlyEntry(e.notes))
+        const reference = closeEntry || lastRealCount || sorted[sorted.length - 1]
         // Valeurs des champs personnalisés : la dernière valeur non vide gagne, dans l'ordre
         // chronologique (les recomptages "Informations" successifs remplacent les précédents).
         const customValues: Record<string, any> = {}
@@ -364,13 +385,21 @@ export function CashRecapManager() {
             if (v !== undefined && v !== null && v !== "") customValues[k] = v
           }
         }
+        // Total caisse affiché par saisie : une saisie "Infos" reprend le dernier total réellement
+        // compté au lieu d'afficher 0 — sinon la caisse semble se vider entre deux comptages alors
+        // que rien ne s'est passé financièrement.
+        let carriedTotal = 0
+        const entriesWithTotal = sorted.map((e) => {
+          if (!isInfoOnlyEntry(e.notes)) carriedTotal = Number(e.total_register || 0)
+          return { entry: e, displayTotal: carriedTotal }
+        })
         return {
           ...g,
           entries: sorted,
+          entriesWithTotal,
           openEntry,
           closeEntry,
           totalRegister: Number(reference?.total_register || 0),
-          cashAmount: Number(reference?.cash_amount || 0),
           customValues,
         }
       })
@@ -442,12 +471,11 @@ export function CashRecapManager() {
     // Tableau principal
     const columns = [
       "Date", "Période", "Type", "Salle", "Employé",
-      "Total caisse", "Liquide", "Écart",
+      "Total caisse",
       ...fields.map((f) => f.label),
     ]
     const tableRows = filteredEntries.map((entry) => {
       const customValues = (entry.custom_values || {}) as Record<string, any>
-      const diff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
       return [
         new Date(entry.entry_date).toLocaleDateString("fr-FR"),
         periodLabel(entry.period),
@@ -455,8 +483,6 @@ export function CashRecapManager() {
         entry.gym_id ? (gymById.get(entry.gym_id) || "Salle") : "Toutes",
         entry.user_name || entry.user_email,
         `${Number(entry.total_register || 0).toFixed(2)} EUR`,
-        `${Number(entry.cash_amount || 0).toFixed(2)} EUR`,
-        `${diff >= 0 ? "+" : ""}${diff.toFixed(2)} EUR`,
         ...fields.map((f) => {
           const v = customValues[f.id]
           return v === undefined || v === null || v === "" ? "-" : String(v)
@@ -474,12 +500,6 @@ export function CashRecapManager() {
       alternateRowStyles: { fillColor: [249, 250, 251] },
       didParseCell: (data) => {
         if (data.section !== "body") return
-        // Écart : vert si positif, rouge si négatif
-        if (data.column.index === 7) {
-          const val = String(data.cell.raw ?? "")
-          data.cell.styles.textColor = val.startsWith("+") ? [22, 163, 74] : val.startsWith("-") ? [220, 38, 38] : [17, 24, 39]
-          data.cell.styles.fontStyle = "bold"
-        }
         // Type Ouverture/Fermeture
         if (data.column.index === 2) {
           const val = String(data.cell.raw ?? "")
@@ -552,13 +572,10 @@ export function CashRecapManager() {
                     <th className="text-left p-2 font-medium text-gray-600">Salle</th>
                     <th className="text-right p-2 font-medium text-gray-600">Saisies</th>
                     <th className="text-right p-2 font-medium text-gray-600">Total caisse</th>
-                    <th className="text-right p-2 font-medium text-gray-600">Espèces</th>
-                    <th className="text-right p-2 font-medium text-gray-600">Écart</th>
                   </tr>
                 </thead>
                 <tbody>
                   {perGymSummary.map((row) => {
-                    const diff = row.cash - row.total
                     const isSelected = gymFilter !== "all" && gymById.get(gymFilter) === row.name
                     return (
                       <tr
@@ -568,10 +585,6 @@ export function CashRecapManager() {
                         <td className="p-2 font-medium">{row.name}</td>
                         <td className="p-2 text-right text-gray-600">{row.count}</td>
                         <td className="p-2 text-right font-semibold">{row.total.toFixed(2)} EUR</td>
-                        <td className="p-2 text-right">{row.cash.toFixed(2)} EUR</td>
-                        <td className={`p-2 text-right font-medium ${diff >= 0 ? "text-green-700" : "text-red-700"}`}>
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)} EUR
-                        </td>
                       </tr>
                     )
                   })}
@@ -582,17 +595,6 @@ export function CashRecapManager() {
                       <td className="p-2">Total</td>
                       <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.count, 0)}</td>
                       <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.total, 0).toFixed(2)} EUR</td>
-                      <td className="p-2 text-right">{perGymSummary.reduce((s, r) => s + r.cash, 0).toFixed(2)} EUR</td>
-                      <td className="p-2 text-right">
-                        {(() => {
-                          const d = perGymSummary.reduce((s, r) => s + (r.cash - r.total), 0)
-                          return (
-                            <span className={d >= 0 ? "text-green-700" : "text-red-700"}>
-                              {d >= 0 ? "+" : ""}{d.toFixed(2)} EUR
-                            </span>
-                          )
-                        })()}
-                      </td>
                     </tr>
                   </tfoot>
                 )}
@@ -759,8 +761,6 @@ export function CashRecapManager() {
                     <th className="text-left p-2">Salle</th>
                     <th className="text-left p-2">Employé</th>
                     <th className="text-right p-2">Total caisse</th>
-                    <th className="text-right p-2">Liquide</th>
-                    <th className="text-right p-2">Écart</th>
                     {fields.map((field) => (
                       <th key={field.id} className="text-left p-2">{field.label}</th>
                     ))}
@@ -768,7 +768,6 @@ export function CashRecapManager() {
                 </thead>
                 <tbody>
                   {periodGroups.map((g) => {
-                    const diff = g.cashAmount - g.totalRegister
                     const expanded = expandedPeriods.has(g.key)
                     return (
                       <Fragment key={g.key}>
@@ -797,10 +796,6 @@ export function CashRecapManager() {
                         <td className="p-2">{g.gymId ? (gymById.get(g.gymId) || "Salle") : "Toutes"}</td>
                         <td className="p-2">{g.userName}</td>
                         <td className="p-2 text-right font-medium">{g.totalRegister.toFixed(2)} EUR</td>
-                        <td className="p-2 text-right">{g.cashAmount.toFixed(2)} EUR</td>
-                        <td className={`p-2 text-right font-medium ${diff >= 0 ? "text-green-700" : "text-red-700"}`}>
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)} EUR
-                        </td>
                         {fields.map((field) => (
                           <td key={field.id} className="p-2">
                             {g.customValues[field.id] === undefined || g.customValues[field.id] === null || g.customValues[field.id] === ""
@@ -809,10 +804,35 @@ export function CashRecapManager() {
                           </td>
                         ))}
                       </tr>
-                      {expanded && g.entries.map((entry) => {
+                      {expanded && g.entriesWithTotal.map(({ entry, displayTotal }, idx) => {
                         const customValues = (entry.custom_values || {}) as Record<string, any>
-                        const entryDiff = Number(entry.cash_amount || 0) - Number(entry.total_register || 0)
+                        // Chaque recomptage "Informations" ré-enregistre TOUS les champs, pas
+                        // seulement celui qui a changé — sans ça, la même valeur ("true", "jsp"...)
+                        // se répète sur chaque ligne et noie le champ réellement modifié. On
+                        // n'affiche donc que ce qui diffère de la saisie précédente.
+                        const previousValues = idx > 0 ? ((g.entries[idx - 1].custom_values || {}) as Record<string, any>) : {}
                         const m = entryMode(entry.notes)
+                        const infoOnly = isInfoOnlyEntry(entry.notes)
+
+                        const fieldDisplays = fields.map((field) => {
+                          const raw = customValues[field.id]
+                          const display = raw === undefined || raw === null || raw === "" ? null : String(raw)
+                          const prevRaw = previousValues[field.id]
+                          const prevDisplay = prevRaw === undefined || prevRaw === null || prevRaw === "" ? null : String(prevRaw)
+                          const unchanged = idx > 0 && display === prevDisplay
+                          return { field, unchanged, display }
+                        })
+                        const allFieldsUnchanged = fields.length > 0 && fieldDisplays.every((f) => f.unchanged)
+                        const photoChanged = idx === 0
+                          ? photoSignature(customValues) !== ""
+                          : photoSignature(customValues) !== photoSignature(previousValues)
+
+                        // Une saisie "Infos" (jamais de vrai comptage) qui ne change ni les champs
+                        // affichés ni les photos n'apporte rien à ce récap — on ne l'affiche pas
+                        // pour éviter une ligne de tirets sans explication. Un vrai comptage
+                        // (ouverture/fermeture/recomptage) reste toujours affiché.
+                        if (infoOnly && idx > 0 && allFieldsUnchanged && !photoChanged) return null
+
                         return (
                           <tr key={entry.id} className="border-b bg-gray-50/70 text-xs">
                             <td className="p-2" />
@@ -831,18 +851,16 @@ export function CashRecapManager() {
                             </td>
                             <td className="p-2" />
                             <td className="p-2 text-gray-500">{entry.user_name || entry.user_email}</td>
-                            <td className="p-2 text-right">{Number(entry.total_register || 0).toFixed(2)} EUR</td>
-                            <td className="p-2 text-right">{Number(entry.cash_amount || 0).toFixed(2)} EUR</td>
-                            <td className={`p-2 text-right ${entryDiff >= 0 ? "text-green-700" : "text-red-700"}`}>
-                              {entryDiff >= 0 ? "+" : ""}{entryDiff.toFixed(2)} EUR
-                            </td>
-                            {fields.map((field) => (
-                              <td key={field.id} className="p-2 text-gray-500">
-                                {customValues[field.id] === undefined || customValues[field.id] === null || customValues[field.id] === ""
-                                  ? "-"
-                                  : String(customValues[field.id])}
-                              </td>
-                            ))}
+                            <td className="p-2 text-right">{displayTotal.toFixed(2)} EUR</td>
+                            {allFieldsUnchanged && photoChanged ? (
+                              <td colSpan={fields.length} className="p-2 text-indigo-600 italic">📷 Photo ajoutée</td>
+                            ) : (
+                              fieldDisplays.map(({ field, unchanged, display }) => (
+                                <td key={field.id} className="p-2 text-gray-500">
+                                  {unchanged ? "-" : (display ?? "-")}
+                                </td>
+                              ))
+                            )}
                           </tr>
                         )
                       })}
