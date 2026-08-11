@@ -23,8 +23,21 @@ import {
 import {
   ShoppingBag, Plus, Edit2, Trash2, TrendingUp, Package,
   Euro, AlertTriangle, CalendarDays, User, Building2, X, History, Gift, Download,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, BarChart3, PieChart as PieChartIcon,
 } from "lucide-react"
+import {
+  Bar,
+  BarChart as RechartsBarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 import { toast } from "sonner"
 import { PromotionsManager } from "@/components/admin/promotions-manager"
 
@@ -79,6 +92,54 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+/** Format court ("août 26"), pour l'axe du graphe où 6 libellés doivent tenir. */
+function monthLabel(month: string): string {
+  const [year, monthNumber] = month.split("-")
+  const date = new Date(Number(year), Number(monthNumber) - 1, 1)
+  return date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" })
+}
+
+/** Format long ("août 2026"), pour les titres. */
+function monthLabelLong(month: string): string {
+  const [year, monthNumber] = month.split("-")
+  const date = new Date(Number(year), Number(monthNumber) - 1, 1)
+  return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+}
+
+/** Les `count` derniers mois jusqu'à `month` inclus, du plus ancien au plus récent. */
+function recentMonths(month: string, count: number): string[] {
+  const [year, monthNumber] = month.split("-")
+  const endDate = new Date(Number(year), Number(monthNumber) - 1, 1)
+  const months: string[] = []
+
+  for (let index = count - 1; index >= 0; index--) {
+    const date = new Date(endDate)
+    date.setMonth(endDate.getMonth() - index)
+    months.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`)
+  }
+
+  return months
+}
+
+const MONTHS_TO_COMPARE = 6
+
+/** Nombre d'articles détaillés dans les graphes ; le reste est cumulé dans « Autres ». */
+const TOP_ARTICLES = 8
+
+const OTHERS_KEY = "others"
+const OTHERS_LABEL = "Autres"
+
+const chartColors = [
+  "#dc2626",
+  "#2563eb",
+  "#16a34a",
+  "#ea580c",
+  "#0891b2",
+  "#7c3aed",
+  "#db2777",
+  "#4f46e5",
+]
+
 export function VentesStockManager() {
   const [tab, setTab] = useState<Tab>("articles")
 
@@ -103,11 +164,15 @@ export function VentesStockManager() {
 
   // Sales & Dashboard
   const [sales, setSales] = useState<Sale[]>([])
+  const [salesByMonth, setSalesByMonth] = useState<Record<string, Sale[]>>({})
   const [loadingSales, setLoadingSales] = useState(false)
   const [filterMonth, setFilterMonth] = useState(currentMonth())
   const [filterGym, setFilterGym] = useState("")
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [gyms, setGyms] = useState<Gym[]>([])
+  // Mesure des graphes du tableau de bord. Le CA seul masque les articles offerts
+  // (total à 0 €) alors qu'ils ont bien été vendus : la vue quantité les révèle.
+  const [chartMetric, setChartMetric] = useState<"total" | "quantity">("total")
 
   useEffect(() => {
     loadProducts()
@@ -132,11 +197,27 @@ export function VentesStockManager() {
   const loadSales = async () => {
     setLoadingSales(true)
     try {
-      const params = new URLSearchParams({ month: filterMonth })
-      if (filterGym) params.set("gym_id", filterGym)
-      const res = await fetch(`/api/sales?${params}`)
-      const json = res.ok ? await res.json() : { data: [] }
-      setSales(Array.isArray(json.data) ? json.data : [])
+      const salesForMonth = async (month: string): Promise<Sale[]> => {
+        const params = new URLSearchParams({ month })
+        if (filterGym) params.set("gym_id", filterGym)
+        const res = await fetch(`/api/sales?${params}`)
+        const json = res.ok ? await res.json() : { data: [] }
+        return Array.isArray(json.data) ? json.data : []
+      }
+
+      // Les mois antérieurs n'alimentent que la comparaison du tableau de bord :
+      // inutile de les charger pour l'onglet Historique.
+      const months =
+        tab === "dashboard" ? recentMonths(filterMonth, MONTHS_TO_COMPARE) : [filterMonth]
+      const results = await Promise.all(months.map(salesForMonth))
+
+      const byMonth: Record<string, Sale[]> = {}
+      months.forEach((month, index) => {
+        byMonth[month] = results[index]
+      })
+
+      setSalesByMonth(byMonth)
+      setSales(byMonth[filterMonth] ?? [])
     } finally {
       setLoadingSales(false)
     }
@@ -285,6 +366,154 @@ export function VentesStockManager() {
   }, [])
 
   const gymById = useMemo(() => new Map(gyms.map((g) => [g.id, g.name])), [gyms])
+
+  // ── Comparaison multi-mois et répartition, par article ──
+  const monthsToCompare = useMemo(
+    () => recentMonths(filterMonth, MONTHS_TO_COMPARE),
+    [filterMonth],
+  )
+
+  /**
+   * Une série par article, classée sur la mesure affichée (CA ou quantité) sur toute
+   * la fenêtre de comparaison. Au-delà de `TOP_ARTICLES`, les articles restants sont
+   * cumulés dans « Autres » : un catalogue de plusieurs dizaines de références
+   * rendrait sinon l'histogramme et le camembert illisibles.
+   *
+   * Le classement retient tout article ayant au moins une vente, y compris à 0 € :
+   * un article offert a un CA nul mais une quantité non nulle, et disparaîtrait
+   * sinon complètement des deux graphes.
+   *
+   * Ce classement unique sert aux deux graphes, pour qu'un article y garde la même
+   * couleur et que « Autres » y recouvre exactement le même ensemble.
+   *
+   * Les clés du jeu de données sont synthétiques (`art0`, `art1`…) car Recharts
+   * résout `dataKey` comme un chemin : un nom d'article contenant un point serait
+   * interprété comme un accès imbriqué.
+   */
+  const articleSeries = useMemo(() => {
+    const totals = new Map<string, { label: string; total: number; quantity: number }>()
+
+    for (const month of monthsToCompare) {
+      for (const sale of salesByMonth[month] ?? []) {
+        const current = totals.get(sale.productId)
+        if (current) {
+          current.total += sale.total
+          current.quantity += sale.quantity
+        } else {
+          // Le nom est celui figé sur la vente : un article renommé garde son
+          // libellé d'origine sur l'historique déjà enregistré.
+          totals.set(sale.productId, {
+            label: sale.productName,
+            total: sale.total,
+            quantity: sale.quantity,
+          })
+        }
+      }
+    }
+
+    // À CA égal (deux articles offerts, par exemple), la quantité départage.
+    const ranked = Array.from(totals.entries()).sort((a, b) => {
+      const primary = b[1][chartMetric] - a[1][chartMetric]
+      if (primary !== 0) return primary
+      return b[1].quantity - a[1].quantity
+    })
+
+    const series = ranked
+      .slice(0, TOP_ARTICLES)
+      .map(([productId, entry], index) => ({ key: `art${index}`, productId, label: entry.label }))
+
+    if (ranked.length > TOP_ARTICLES) {
+      series.push({ key: OTHERS_KEY, productId: OTHERS_KEY, label: OTHERS_LABEL })
+    }
+
+    return series
+  }, [salesByMonth, monthsToCompare, chartMetric])
+
+  /** productId → clé de série, « Autres » servant de repli quand la série existe. */
+  const seriesKeyByProductId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const serie of articleSeries) {
+      if (serie.productId !== OTHERS_KEY) map.set(serie.productId, serie.key)
+    }
+    return map
+  }, [articleSeries])
+
+  const hasOthersSeries = useMemo(
+    () => articleSeries.some((s) => s.key === OTHERS_KEY),
+    [articleSeries],
+  )
+
+  const monthlyComparisonData = useMemo(() => {
+    return monthsToCompare.map((month) => {
+      const row: Record<string, any> = { month, monthLabel: monthLabel(month) }
+      for (const serie of articleSeries) row[serie.key] = 0
+
+      for (const sale of salesByMonth[month] ?? []) {
+        const key = seriesKeyByProductId.get(sale.productId) ?? (hasOthersSeries ? OTHERS_KEY : null)
+        if (key) row[key] += sale[chartMetric]
+      }
+
+      for (const serie of articleSeries) {
+        row[serie.key] = Number(row[serie.key].toFixed(2))
+      }
+      return row
+    })
+  }, [salesByMonth, monthsToCompare, articleSeries, seriesKeyByProductId, hasOthersSeries, chartMetric])
+
+  // On garde toute série présente dans le classement : un article offert affiche une
+  // barre nulle en vue CA, mais reste dans la légende et réapparaît en vue quantité.
+  const seriesWithData = articleSeries
+
+  /** Couleur par article, indexée sur le classement stable de `articleSeries`. */
+  const colorBySeriesKey = useMemo(() => {
+    const map = new Map<string, string>()
+    articleSeries.forEach((serie, index) => {
+      map.set(serie.key, chartColors[index % chartColors.length])
+    })
+    return map
+  }, [articleSeries])
+
+  /**
+   * Répartition du mois sélectionné, par article. `value` porte la mesure affichée
+   * (elle alimente le camembert), `total` et `quantity` sont conservés pour que la
+   * légende détaille toujours les deux — un article offert y apparaît ainsi avec
+   * sa quantité et un CA à 0 €, au lieu d'être invisible.
+   */
+  const articleBreakdown = useMemo(() => {
+    const totals = new Map<string, { total: number; quantity: number }>()
+
+    for (const sale of sales) {
+      const key = seriesKeyByProductId.get(sale.productId) ?? (hasOthersSeries ? OTHERS_KEY : null)
+      if (!key) continue
+      const current = totals.get(key) ?? { total: 0, quantity: 0 }
+      current.total += sale.total
+      current.quantity += sale.quantity
+      totals.set(key, current)
+    }
+
+    return articleSeries
+      .map((serie) => {
+        const entry = totals.get(serie.key) ?? { total: 0, quantity: 0 }
+        return {
+          key: serie.key,
+          label: serie.label,
+          total: Number(entry.total.toFixed(2)),
+          quantity: entry.quantity,
+          value: chartMetric === "total" ? Number(entry.total.toFixed(2)) : entry.quantity,
+        }
+      })
+      .filter((item) => item.quantity > 0)
+      .sort((a, b) => b.value - a.value || b.quantity - a.quantity)
+  }, [sales, articleSeries, seriesKeyByProductId, hasOthersSeries, chartMetric])
+
+  const articleBreakdownTotal = useMemo(
+    () => articleBreakdown.reduce((sum, item) => sum + item.value, 0),
+    [articleBreakdown],
+  )
+
+  /** Formate une valeur selon la mesure affichée : montant en euros ou nombre d'unités. */
+  const formatMetric = (value: number) =>
+    chartMetric === "total" ? fmt(value) : `${value} unité${value > 1 ? "s" : ""}`
 
   // Regroupe les lignes d'une même vente (un panier validé peut produire plusieurs lignes, une par
   // article) : toutes les lignes créées par un même checkout partagent exactement le même horodatage.
@@ -607,6 +836,27 @@ export function VentesStockManager() {
                 {gyms.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {/* Mesure appliquée aux deux graphes ci-dessous */}
+            <div className="flex w-full sm:w-auto rounded-xl border border-gray-200 overflow-hidden">
+              {([
+                { value: "total" as const, label: "Chiffre d'affaires" },
+                { value: "quantity" as const, label: "Quantité" },
+              ]).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setChartMetric(option.value)}
+                  className={[
+                    "flex-1 sm:flex-none px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                    chartMetric === option.value
+                      ? "bg-red-600 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Stat cards */}
@@ -713,6 +963,113 @@ export function VentesStockManager() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Comparaison multi-mois */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <BarChart3 className="w-4 h-4 text-red-600 flex-shrink-0" />
+                Comparaison multi-mois par article ({monthsToCompare.length} mois) —{" "}
+                {chartMetric === "total" ? "chiffre d'affaires" : "quantités vendues"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingSales ? (
+                <p className="text-sm text-gray-400">Chargement…</p>
+              ) : seriesWithData.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  Aucune vente sur les {monthsToCompare.length} derniers mois.
+                </p>
+              ) : (
+                <div className="h-[300px] sm:h-[360px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={monthlyComparisonData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip formatter={(value: any) => formatMetric(Number(value))} />
+                      <Legend />
+                      {seriesWithData.map((serie) => (
+                        <Bar
+                          key={serie.key}
+                          dataKey={serie.key}
+                          name={serie.label}
+                          fill={colorBySeriesKey.get(serie.key) ?? chartColors[0]}
+                          radius={[4, 4, 0, 0]}
+                        />
+                      ))}
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Répartition du mois par article */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <PieChartIcon className="w-4 h-4 text-red-600 flex-shrink-0" />
+                Répartition par article ({monthLabelLong(filterMonth)}) —{" "}
+                {chartMetric === "total" ? "chiffre d'affaires" : "quantités vendues"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingSales ? (
+                <p className="text-sm text-gray-400">Chargement…</p>
+              ) : articleBreakdown.length === 0 ? (
+                <p className="text-sm text-gray-400">Aucune vente ce mois-ci.</p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                  <div className="h-[280px] sm:h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={articleBreakdown}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius="80%"
+                          label={({ percent }) => `${((percent || 0) * 100).toFixed(0)}%`}
+                        >
+                          {articleBreakdown.map((item) => (
+                            <Cell key={item.key} fill={colorBySeriesKey.get(item.key) ?? chartColors[0]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: any) => formatMetric(Number(value))} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="space-y-2">
+                    {articleBreakdown.map((item) => {
+                      const share = articleBreakdownTotal > 0 ? (item.value / articleBreakdownTotal) * 100 : 0
+                      return (
+                        <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span
+                              className="inline-block h-3 w-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: colorBySeriesKey.get(item.key) ?? chartColors[0] }}
+                            />
+                            <span className="font-medium text-gray-900 truncate">{item.label}</span>
+                          </div>
+                          {/* Les deux mesures sont toujours détaillées : un article
+                              offert affiche 0 € mais garde sa quantité visible. */}
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-gray-900">
+                              {item.quantity} vendu{item.quantity > 1 ? "s" : ""} · {fmt(item.total)}
+                            </p>
+                            <p className="text-xs text-gray-500">{share.toFixed(1)}% des {chartMetric === "total" ? "ventes" : "unités"}</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
