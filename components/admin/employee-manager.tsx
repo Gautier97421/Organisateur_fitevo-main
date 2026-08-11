@@ -258,9 +258,12 @@ export function EmployeeManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           data: {
+            // Pas de mot de passe : le compte part sans identifiants et l'API envoie
+            // un lien d'activation à usage unique par email. Un mot de passe temporaire
+            // partagé bloquait cet envoi (condition `!result.password` côté API) et
+            // laissait quiconque connaît l'adresse s'approprier le compte.
             name: newEmployee.name,
             email: newEmployee.email,
-            password: 'temppass123', // Mot de passe temporaire
             role: 'employee',
             remote_work_enabled: newEmployee.remoteWork,
             role_id: roleId && roleId !== "new" ? roleId : null,
@@ -1444,9 +1447,10 @@ export function EmployeeManager() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             data: {
+                              // Idem création employé : pas de mot de passe, l'API
+                              // envoie un lien d'activation à usage unique par email.
                               name: newAdmin.name,
                               email: newAdmin.email,
-                              password: 'temppass123',
                               role: newAdmin.isSuperAdmin ? 'superadmin' : 'admin',
                               active: true
                             }

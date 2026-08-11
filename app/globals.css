@@ -13,6 +13,31 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   display: none;
 }
 
+/* Champs date / heure : sur mobile (WebKit, iOS) le widget natif garde une
+   largeur intrinsèque plus grande que son conteneur et déborde des dialogs.
+   On neutralise l'apparence native pour qu'ils respectent width:100%. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 0;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

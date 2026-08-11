@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { sendPasswordResetEmail } from "@/lib/email"
 import logger from "@/lib/logger"
 import { isValidEmail } from "@/lib/validation"
+import { getAppBaseUrl } from "@/lib/utils"
 
 // Rate limiting : 3 demandes par email par 15 minutes
 const resetAttempts = new Map<string, { count: number; firstAttempt: number }>()
@@ -81,8 +82,7 @@ export async function POST(request: NextRequest) {
       data: { token, userId: user.id, expiresAt },
     })
 
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000"
-    const resetUrl = `${baseUrl}/reset-password?token=${token}`
+    const resetUrl = `${getAppBaseUrl()}/reset-password?token=${token}`
 
     await sendPasswordResetEmail(user.email, resetUrl)
 

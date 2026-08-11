@@ -25,12 +25,12 @@ export const logger = {
     }
   },
   
-  // Warning - loggé en production aussi (sans détails sensibles)
+  // Warning - loggé en production aussi (sans détails sensibles).
+  // Le filtrage sur isDevelopment rendait les avertissements invisibles là où ils
+  // servent le plus : une anomalie de configuration silencieuse en production
+  // (SMTP absent, planificateur inactif...) n'apparaissait dans aucun log.
   warn: (...args: any[]) => {
-    if (isDevelopment) {
-      console.warn('[WARN]', ...args)
-    }
-    // En production, on pourrait envoyer à un service de monitoring
+    console.warn('[WARN]', ...args)
   },
   
   // Erreur - toujours loggée mais sans exposer de détails sensibles

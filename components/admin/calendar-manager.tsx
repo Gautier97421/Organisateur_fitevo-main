@@ -109,7 +109,7 @@ export function CalendarManager() {
   const [reminderSettings, setReminderSettings] = useState({
     reminder_date: "",
     reminder_time: "09:00",
-    recipient_type: "all" as "all" | "admins" | "employees",
+    recipient_type: "all" as "all" | "admins" | "employees" | "creator",
     custom_message: "",
   })
 
@@ -1819,7 +1819,7 @@ export function CalendarManager() {
                 onValueChange={(value) =>
                   setReminderSettings({
                     ...reminderSettings,
-                    recipient_type: value as "all" | "admins" | "employees",
+                    recipient_type: value as "all" | "admins" | "employees" | "creator",
                   })
                 }
               >
@@ -1827,6 +1827,7 @@ export function CalendarManager() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="creator">Moi uniquement</SelectItem>
                   <SelectItem value="all">Tout le monde</SelectItem>
                   <SelectItem value="admins">Administrateurs seulement</SelectItem>
                   <SelectItem value="employees">Employés seulement</SelectItem>

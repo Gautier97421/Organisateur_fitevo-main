@@ -42,7 +42,9 @@ async function dispatch(to: string | string[], subject: string, html: string): P
   try {
     const setting = await prisma.systemSetting.findUnique({ where: { id: "singleton" } })
     if (setting?.emailEnabled === false) {
-      logger.info(`Envoi d'emails désactivé dans les paramètres — email ignoré (${subject})`)
+      // warn et non info : c'est une désactivation volontaire, mais elle doit rester
+      // visible en production pour expliquer l'absence d'emails.
+      logger.warn(`Envoi d'emails désactivé dans les paramètres — email ignoré (${subject})`)
       return
     }
   } catch (settingError) {
@@ -54,9 +56,14 @@ async function dispatch(to: string | string[], subject: string, html: string): P
   const recipients = Array.isArray(to) ? to.join(", ") : to
 
   if (!transporter) {
-    logger.info(`=== EMAIL (SMTP non configuré) — ${subject} ===`)
-    logger.info(`To: ${recipients}`)
-    logger.info("================================================")
+    // Niveau warn (et non info) : en production `logger.info` n'écrit rien, donc
+    // une configuration SMTP absente faisait disparaître les emails sans aucune
+    // trace — l'utilisateur voyait « email envoyé » et rien n'était parti.
+    const missing = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"].filter((key) => !process.env[key])
+    logger.warn(
+      `Email non envoyé, SMTP non configuré (variables manquantes : ${missing.join(", ")}) — ` +
+        `sujet: ${subject}, destinataire(s): ${recipients}`
+    )
     return
   }
 

@@ -47,6 +47,9 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - APP_URL=${APP_URL}
+      # Sans CRON_SECRET, le planificateur interne ne peut pas déclencher
+      # l'envoi des rappels d'événement.
+      - CRON_SECRET=${CRON_SECRET}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}

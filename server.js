@@ -246,7 +246,54 @@ app.prepare().then(async () => {
 
   wss.on('close', () => clearInterval(heartbeat))
 
+  // ── Planificateur des rappels email ────────────────────────────
+  // Les rappels d'événement et les alertes de validation en retard étaient
+  // uniquement déclenchés par la page admin ouverte dans un navigateur :
+  // sans admin connecté, aucun email ne partait. On les traite ici, côté
+  // serveur. Le traitement est idempotent (colonnes sent_at /
+  // validation_notified_at), un tick manqué ou doublé est sans conséquence.
+  const REMINDER_INTERVAL_MS = 60_000
+  let reminderTimer = null
+
+  function startReminderScheduler() {
+    const secret = process.env.CRON_SECRET
+    if (!secret) {
+      console.warn(
+        '> CRON_SECRET absent : les rappels email ne seront pas envoyés automatiquement.'
+      )
+      return
+    }
+
+    const run = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/reminders/process`, {
+          method: 'POST',
+          headers: { 'x-cron-secret': secret },
+        })
+        if (!res.ok) {
+          console.error(`> Planificateur rappels : réponse HTTP ${res.status}`)
+        }
+      } catch (err) {
+        console.error('> Planificateur rappels : échec de la requête', err.message)
+      }
+    }
+
+    reminderTimer = setInterval(run, REMINDER_INTERVAL_MS)
+    // Laisse le process se terminer normalement malgré le timer
+    if (typeof reminderTimer.unref === 'function') reminderTimer.unref()
+    run()
+  }
+
   server.listen(port, hostname, () => {
     console.log(`> Fitevo prêt sur http://${hostname}:${port} (WS: /api/ws)`)
+    startReminderScheduler()
   })
+
+  const shutdown = () => {
+    if (reminderTimer) clearInterval(reminderTimer)
+    clearInterval(heartbeat)
+    server.close(() => process.exit(0))
+  }
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
 })

@@ -119,13 +119,10 @@ export default function AdminPage() {
     if (userRole) loadCustomPages()
   }, [userRole])
 
-  useEffect(() => {
-    if (!userEmail) return
-    const run = () => fetch("/api/reminders/process", { method: "POST" }).catch(() => {})
-    run()
-    const iv = setInterval(run, 60_000)
-    return () => clearInterval(iv)
-  }, [userEmail])
+  // Le traitement des rappels est désormais planifié côté serveur (server.js) :
+  // il tourne même sans admin connecté. Plus besoin de le déclencher depuis le
+  // navigateur, ce qui évitait aussi que plusieurs onglets ouverts le lancent
+  // en parallèle.
 
   const handleLogout = () => {
     setShowLogoutConfirmDialog(true)

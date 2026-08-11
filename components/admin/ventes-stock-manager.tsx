@@ -454,7 +454,7 @@ export function VentesStockManager() {
           {/* Filtres */}
           <div className="flex flex-wrap gap-3">
             <Select value={filterArticleCategory || "_all"} onValueChange={(v) => setFilterArticleCategory(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Toutes les catégories" />
               </SelectTrigger>
               <SelectContent>
@@ -463,7 +463,7 @@ export function VentesStockManager() {
               </SelectContent>
             </Select>
             <Select value={filterArticleGym || "_all"} onValueChange={(v) => setFilterArticleGym(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Toutes les salles" />
               </SelectTrigger>
               <SelectContent>
@@ -493,26 +493,26 @@ export function VentesStockManager() {
           ) : (
             <div className="grid gap-3">
               {activeProducts.map((p) => (
-                <Card key={p.id} className="border">
-                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <Card key={p.id} className="border overflow-hidden">
+                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900">{p.name}</h3>
-                        {p.category && <Badge variant="outline" className="text-xs">{p.category}</Badge>}
+                        <h3 className="font-semibold text-gray-900 break-words min-w-0">{p.name}</h3>
+                        {p.category && <Badge variant="outline" className="text-xs max-w-full truncate">{p.category}</Badge>}
                         {p.gymId && (
-                          <Badge variant="outline" className="text-xs text-blue-700 border-blue-200">
+                          <Badge variant="outline" className="text-xs text-blue-700 border-blue-200 max-w-full truncate">
                             {gymById.get(p.gymId) || p.gymId}
                           </Badge>
                         )}
                         {p.trackStock && p.stock <= 5 && (
-                          <Badge className="text-xs bg-amber-100 text-amber-700">
-                            <AlertTriangle className="w-3 h-3 mr-1" />
+                          <Badge className="text-xs bg-amber-100 text-amber-700 whitespace-nowrap">
+                            <AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" />
                             Stock faible ({p.stock})
                           </Badge>
                         )}
                       </div>
-                      {p.description && <p className="text-xs text-gray-500 mt-1 truncate">{p.description}</p>}
-                      <div className="flex items-center gap-4 mt-2 text-sm">
+                      {p.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{p.description}</p>}
+                      <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
                         <span className="font-bold text-red-600">{fmt(p.price)}</span>
                         {p.trackStock ? (
                           <span className="text-gray-500">Stock : <strong className="text-gray-700">{p.stock}</strong></span>
@@ -521,23 +521,23 @@ export function VentesStockManager() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto">
                       <Button
                         onClick={() => handleToggleActive(p)}
                         variant="outline"
                         size="sm"
-                        className="border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
+                        className="flex-1 sm:flex-none border-2 border-gray-300 rounded-xl bg-white hover:bg-gray-50 text-gray-900"
                       >
                         Désactiver
                       </Button>
-                      <Button onClick={() => openEdit(p)} variant="outline" size="sm">
+                      <Button onClick={() => openEdit(p)} variant="outline" size="sm" className="flex-shrink-0">
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
                         onClick={() => { setProductToDelete(p.id); setShowDeleteConfirm(true) }}
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-50"
+                        className="flex-shrink-0 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -587,7 +587,7 @@ export function VentesStockManager() {
           {/* Filtres */}
           <div className="flex flex-wrap gap-3">
             <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -599,7 +599,7 @@ export function VentesStockManager() {
               </SelectContent>
             </Select>
             <Select value={filterGym || "_all"} onValueChange={(v) => setFilterGym(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -610,43 +610,43 @@ export function VentesStockManager() {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <Card className="min-w-0">
+              <CardHeader className="pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">CA aujourd'hui</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-red-600">{fmt(stats.totalDay)}</p>
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <p className="text-xl sm:text-2xl font-bold text-red-600 break-words">{fmt(stats.totalDay)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{stats.countDay} article(s) vendu(s)</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-2">
+            <Card className="min-w-0">
+              <CardHeader className="pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">CA du mois</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-gray-900">{fmt(stats.totalMonth)}</p>
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{fmt(stats.totalMonth)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{stats.countMonth} article(s) vendu(s)</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-2">
+            <Card className="min-w-0">
+              <CardHeader className="pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">Articles actifs</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-gray-900">{activeProducts.length}</p>
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{activeProducts.length}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{products.length} au total</p>
               </CardContent>
             </Card>
-            <Card className={stats.lowStock.length > 0 ? "border-amber-300" : ""}>
-              <CardHeader className="pb-2">
+            <Card className={`min-w-0 ${stats.lowStock.length > 0 ? "border-amber-300" : ""}`}>
+              <CardHeader className="pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
                 <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                  {stats.lowStock.length > 0 && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                  {stats.lowStock.length > 0 && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />}
                   Stock faible
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className={`text-2xl font-bold ${stats.lowStock.length > 0 ? "text-amber-600" : "text-gray-900"}`}>
+              <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <p className={`text-xl sm:text-2xl font-bold ${stats.lowStock.length > 0 ? "text-amber-600" : "text-gray-900"}`}>
                   {stats.lowStock.length}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">article(s) ≤ 5 unités</p>
@@ -721,7 +721,7 @@ export function VentesStockManager() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
             <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -733,7 +733,7 @@ export function VentesStockManager() {
               </SelectContent>
             </Select>
             <Select value={filterGym || "_all"} onValueChange={(v) => setFilterGym(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -745,7 +745,7 @@ export function VentesStockManager() {
               onClick={exportSalesPDF}
               disabled={sales.length === 0}
               variant="outline"
-              className="ml-auto border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-900 flex items-center gap-2"
+              className="w-full sm:w-auto sm:ml-auto border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-900 flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" /> Télécharger PDF
             </Button>

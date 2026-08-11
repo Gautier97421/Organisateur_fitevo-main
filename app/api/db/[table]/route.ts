@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/password-utils'
 import { sendWelcomeEmail } from '@/lib/email'
+import { getAppBaseUrl } from '@/lib/utils'
 import logger from '@/lib/logger'
 import { validateTableData } from '@/lib/validation'
 import { verifyAuthWithRole } from '@/lib/auth-middleware'
@@ -779,8 +780,7 @@ export async function POST(
               expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
           })
-          const appUrl = process.env.APP_URL || 'http://localhost:3000'
-          const activationUrl = `${appUrl}/first-login?email=${encodeURIComponent(result.email)}&token=${activationToken}`
+          const activationUrl = `${getAppBaseUrl()}/first-login?email=${encodeURIComponent(result.email)}&token=${activationToken}`
           sendWelcomeEmail(result.email, activationUrl).catch((emailError) => {
             logger.error('Échec envoi email de bienvenue', emailError)
           })

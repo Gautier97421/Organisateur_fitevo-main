@@ -919,10 +919,10 @@ export function WorkScheduleManager() {
 
       {/* Dialog d'ajout de planning */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800">
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800 p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center space-x-2 text-gray-900 dark:text-white">
-              <CalendarDays className="h-6 w-6 text-red-600 dark:text-red-400" />
+            <DialogTitle className="text-xl sm:text-2xl flex items-center gap-2 pr-6 text-gray-900 dark:text-white">
+              <CalendarDays className="h-6 w-6 flex-shrink-0 text-red-600 dark:text-red-400" />
               <span>Ajouter un planning</span>
             </DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-300">
@@ -934,8 +934,8 @@ export function WorkScheduleManager() {
               })}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
+          <div className="space-y-4 min-w-0">
+            <div className="min-w-0">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Type <span className="text-red-500">*</span></label>
               <div className="flex gap-2">
                 <button
@@ -1014,8 +1014,8 @@ export function WorkScheduleManager() {
             )}
             {newSchedule.label === "travail" ? (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                       Heure de début <span className="text-red-500">*</span>
                     </label>
@@ -1023,12 +1023,12 @@ export function WorkScheduleManager() {
                       type="time"
                       value={newSchedule.start_time}
                       onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
-                      className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                      className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
                         attemptedSubmit && !newSchedule.start_time ? "border-red-500 focus:border-red-600" : ""
                       }`}
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                       Heure de fin <span className="text-red-500">*</span>
                     </label>
@@ -1036,14 +1036,14 @@ export function WorkScheduleManager() {
                       type="time"
                       value={newSchedule.end_time}
                       onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
-                      className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                      className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
                         attemptedSubmit && !newSchedule.end_time ? "border-red-500 focus:border-red-600" : ""
                       }`}
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                       Pause (minutes)
                     </label>
@@ -1051,11 +1051,11 @@ export function WorkScheduleManager() {
                       type="number"
                       value={newSchedule.break_duration || ""}
                       onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
-                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       min="0"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                       Début de pause
                     </label>
@@ -1063,13 +1063,13 @@ export function WorkScheduleManager() {
                       type="time"
                       value={newSchedule.break_start_time || ""}
                       onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
-                      className="border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
               </>
             ) : (
-              <div>
+              <div className="min-w-0">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">La date de début est la date sélectionnée sur le calendrier.</p>
                 <Input
@@ -1077,7 +1077,7 @@ export function WorkScheduleManager() {
                   value={newSchedule.end_date}
                   min={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
-                  className={`border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                  className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
                     attemptedSubmit && !newSchedule.end_date ? "border-red-500" : ""
                   }`}
                 />
