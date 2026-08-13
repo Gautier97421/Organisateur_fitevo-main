@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import * as Y from "yjs"
 import { WebsocketProvider } from "y-websocket"
 import { useEditor, EditorContent, type Editor } from "@tiptap/react"
@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { odtToHtml, tiptapJsonToOdt } from "./odf-utils"
 import { tiptapJsonToDocx } from "./docx-utils"
+import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
 
 interface CollabEditorDialogProps {
   docId: string
@@ -114,6 +115,10 @@ function EditorInner({
   const [connected, setConnected] = useState(false)
   const [peerCount, setPeerCount] = useState(1)
   const [title, setTitle] = useState(docName)
+  const [pendingSave, setPendingSave] = useState(false)
+  const [savingNow, setSavingNow] = useState(false)
+  const [askClose, setAskClose] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -223,41 +228,71 @@ function EditorInner({
     return () => { setup.provider.off("sync", seed) }
   }, [editor, kind, docId, setup.provider])
 
-  // Sauvegarde (anti-rebond) :
-  //  - doc collaboratif : export HTML  - .txt : texte brut  - .odt : fichier ODF régénéré.
+  // Sauvegarde :
+  //  - doc collaboratif : export HTML  - .txt : texte brut  - .odt/.docx : fichier régénéré.
+  // Renvoie true si l'écriture a abouti, pour que « Enregistrer et fermer » sache s'il peut
+  // fermer l'éditeur.
+  const saveNow = useCallback(async (): Promise<boolean> => {
+    if (!editor || readOnly) return true
+    setSavingNow(true)
+    try {
+      if (kind === "odt" || kind === "docx") {
+        const blob = kind === "docx"
+          ? await tiptapJsonToDocx(editor.getJSON())
+          : await tiptapJsonToOdt(editor.getJSON())
+        const ext = kind === "docx" ? "docx" : "odt"
+        const fd = new FormData()
+        fd.append("file", new File([new Blob([blob as BlobPart])], `document.${ext}`))
+        const res = await fetch(`/api/communication/files/${docId}`, { method: "PUT", body: fd, credentials: "same-origin" })
+        if (!res.ok) return false
+      } else {
+        const body = kind === "text" ? { text: editor.getText() } : { html: editor.getHTML() }
+        const res = await fetch(`/api/communication/docs/${docId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) return false
+      }
+      setPendingSave(false)
+      return true
+    } catch {
+      return false
+    } finally {
+      setSavingNow(false)
+    }
+  }, [editor, readOnly, docId, kind])
+
+  // Enregistrement différé après chaque frappe (anti-rebond).
   useEffect(() => {
     if (!editor || readOnly) return
-    const save = async () => {
-      if (kind === "odt" || kind === "docx") {
-        try {
-          const blob = kind === "docx"
-            ? await tiptapJsonToDocx(editor.getJSON())
-            : await tiptapJsonToOdt(editor.getJSON())
-          const ext = kind === "docx" ? "docx" : "odt"
-          const fd = new FormData()
-          fd.append("file", new File([new Blob([blob as BlobPart])], `document.${ext}`))
-          await fetch(`/api/communication/files/${docId}`, { method: "PUT", body: fd, credentials: "same-origin" })
-        } catch { /* best-effort */ }
-        return
-      }
-      const body = kind === "text" ? { text: editor.getText() } : { html: editor.getHTML() }
-      fetch(`/api/communication/docs/${docId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(body),
-      }).catch(() => { /* best-effort */ })
-    }
     const onUpdate = () => {
+      setPendingSave(true)
       if (saveTimer.current) clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(save, 1500)
+      saveTimer.current = setTimeout(() => { void saveNow() }, 1500)
     }
     editor.on("update", onUpdate)
     return () => {
       editor.off("update", onUpdate)
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-  }, [editor, readOnly, docId, kind])
+  }, [editor, readOnly, saveNow])
+
+  // Fermeture : tant qu'une frappe n'a pas été enregistrée, on demande confirmation — sinon
+  // le minuteur en cours est annulé au démontage et la dernière saisie est perdue.
+  const requestClose = () => {
+    if (pendingSave && !readOnly) setAskClose(true)
+    else onClose()
+  }
+
+  const saveAndClose = async () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    setSaveError(null)
+    const ok = await saveNow()
+    if (ok) onClose()
+    else setSaveError("L'enregistrement a échoué. Réessayez ou fermez sans enregistrer.")
+  }
 
   return (
     <>
@@ -285,7 +320,7 @@ function EditorInner({
             {peerCount > 1 ? `${peerCount} en ligne` : "Vous"}
           </span>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="text-gray-500 hover:text-gray-900 dark:hover:text-white p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
             aria-label="Fermer"
           >
@@ -328,6 +363,17 @@ function EditorInner({
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      {askClose && (
+        <UnsavedChangesDialog
+          fileName={kind === "doc" ? title : docName}
+          saving={savingNow}
+          error={saveError}
+          onSaveAndClose={saveAndClose}
+          onDiscard={onClose}
+          onCancel={() => { setAskClose(false); setSaveError(null) }}
+        />
+      )}
     </>
   )
 }

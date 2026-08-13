@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties } from "react"
 import {
   Loader2, X, AlertTriangle, Save, Plus, Minus, Undo2, Redo2,
-  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, PaintBucket, Baseline, Eraser,
+  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, PaintBucket, Baseline, Eraser, Sigma, Trash2,
 } from "lucide-react"
 import { loadXlsx, saveXlsx, mergeInfo } from "./xlsx-style"
+import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
 
 interface SpreadsheetEditorDialogProps {
   fileId: string
@@ -23,6 +24,60 @@ interface SheetData {
 
 // Plage de sélection : (r1,c1) = ancre, (r2,c2) = cellule active courante
 interface CellRange { r1: number; c1: number; r2: number; c2: number }
+
+// Bleu de sélection (liseré de plage + cellule active) et sa teinte de remplissage.
+const SELECTION_BLUE = "#2563eb"
+const SELECTION_TINT = "rgba(37,99,235,0.12)"
+
+// Couleurs des références d'une formule en cours d'écriture : chaque référence citée reçoit
+// la sienne, comme dans Excel, pour qu'on voie d'un coup d'œil quelles cellules sont visées.
+const FORMULA_REF_COLORS = [
+  { border: "#7c3aed", tint: "rgba(124,58,237,0.14)" },
+  { border: "#059669", tint: "rgba(5,150,105,0.14)" },
+  { border: "#d97706", tint: "rgba(217,119,6,0.16)" },
+  { border: "#db2777", tint: "rgba(219,39,119,0.14)" },
+  { border: "#0891b2", tint: "rgba(8,145,178,0.14)" },
+]
+
+interface RefRange { top: number; left: number; bottom: number; right: number }
+
+function colIndex(label: string): number {
+  let n = 0
+  for (const ch of label.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64)
+  return n - 1
+}
+
+/**
+ * Extrait les références citées par une formule ("=SOMME(A1:B4)+C2" → A1:B4, C2).
+ *
+ * Le voisinage de chaque correspondance est vérifié pour ne pas prendre un nom de fonction
+ * pour une cellule : dans "LOG10(5)", "LOG10" est suivi d'une parenthèse, donc écarté.
+ */
+function parseFormulaRefs(raw: string): RefRange[] {
+  if (!raw.startsWith("=")) return []
+  const re = /(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7})(?:\s*:\s*(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7}))?/g
+  const out: RefRange[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw)) !== null) {
+    const before = raw[m.index - 1]
+    const after = raw[m.index + m[0].length]
+    if (before && /[A-Za-z0-9_$]/.test(before)) continue
+    if (after === "(") continue
+
+    const r1 = Number(m[4]) - 1
+    const c1 = colIndex(m[2])
+    const r2 = m[8] !== undefined ? Number(m[8]) - 1 : r1
+    const c2 = m[6] !== undefined ? colIndex(m[6]) : c1
+    if (r1 < 0 || c1 < 0 || r2 < 0 || c2 < 0) continue
+    out.push({
+      top: Math.min(r1, r2),
+      bottom: Math.max(r1, r2),
+      left: Math.min(c1, c2),
+      right: Math.max(c1, c2),
+    })
+  }
+  return out
+}
 
 function colLabel(index: number): string {
   let s = ""
@@ -126,6 +181,9 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null)
   const [selection, setSelection] = useState<CellRange | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null)
+  const [askClose, setAskClose] = useState(false)
+  // Menu contextuel des onglets de feuille (clic droit), avec confirmation en deux temps.
+  const [sheetMenu, setSheetMenu] = useState<{ x: number; y: number; index: number; confirm: boolean } | null>(null)
   const [fillAnchor, setFillAnchor] = useState<{ r: number; c: number } | null>(null)
   const [fillTarget, setFillTarget] = useState<{ r: number; c: number } | null>(null)
   const xlsxRef = useRef<any>(null)
@@ -211,13 +269,13 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     return () => { cancelled = true }
   }, [fileId, fileName])
 
-  // Fermeture menu contextuel au clic extérieur
+  // Fermeture des menus contextuels au clic extérieur
   useEffect(() => {
-    if (!contextMenu) return
-    const handler = () => setContextMenu(null)
+    if (!contextMenu && !sheetMenu) return
+    const handler = () => { setContextMenu(null); setSheetMenu(null) }
     window.addEventListener("mousedown", handler)
     return () => window.removeEventListener("mousedown", handler)
-  }, [contextMenu])
+  }, [contextMenu, sheetMenu])
 
   // Curseur crosshair pendant le fill drag
   useEffect(() => {
@@ -239,6 +297,23 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     () => (FormulaParser && current ? computeDisplay(current.rows, FormulaParser) : null),
     [FormulaParser, current],
   )
+
+  // Plages citées par la formule en cours d'édition (recalculées à chaque frappe et à chaque
+  // référence insérée à la souris).
+  const formulaRefs = useMemo(() => {
+    if (!isFormulaMode || !editing || !current) return [] as RefRange[]
+    return parseFormulaRefs(String(current.rows[editing.r]?.[editing.c] ?? ""))
+  }, [isFormulaMode, editing, current])
+
+  const formulaRefAt = (r: number, c: number) => {
+    for (let i = 0; i < formulaRefs.length; i++) {
+      const ref = formulaRefs[i]
+      if (r >= ref.top && r <= ref.bottom && c >= ref.left && c <= ref.right) {
+        return { ref, color: FORMULA_REF_COLORS[i % FORMULA_REF_COLORS.length] }
+      }
+    }
+    return null
+  }
 
   // Clone profond pour mutations
   const cloneSheets = (arr: SheetData[]): SheetData[] =>
@@ -317,6 +392,19 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     setEditing({ r, c })
     editDirtyRef.current = false
     if (initial !== undefined) setCell(r, c, initial)
+  }
+
+  // Clic droit → « Formule » : amorce la cellule avec « = » et place le curseur juste après,
+  // prêt à recevoir les références qu'on ira cliquer dans la grille.
+  const beginFormula = (r: number, c: number) => {
+    setContextMenu(null)
+    const cur = current?.rows[r]?.[c] ?? ""
+    const value = cur.startsWith("=") ? cur : "="
+    beginEdit(r, c, value)
+    requestAnimationFrame(() => {
+      const t = textareaRef.current
+      if (t) { t.focus(); t.setSelectionRange(value.length, value.length) }
+    })
   }
 
   const moveSelection = (dr: number, dc: number) => {
@@ -505,8 +593,11 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   // ── Interactions cellules ───────────────────────────────────────
   const handleCellMouseDown = (e: React.MouseEvent, r: number, c: number) => {
     formulaRefInserted.current = false
+    // Clic dans la cellule qu'on est en train d'éditer : c'est au textarea de placer le
+    // curseur, on ne doit ni sortir de l'édition ni réinitialiser la sélection.
+    if (editing && editing.r === r && editing.c === c) return
     // Mode formule : cliquer (ou glisser) insère une référence
-    if (isFormulaMode && editing && !(editing.r === r && editing.c === c)) {
+    if (isFormulaMode && editing) {
       e.preventDefault() // garde le focus dans le textarea
       startFormulaRef(r, c)
       return
@@ -623,6 +714,32 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
     })
   }
 
+  const addSheet = () => {
+    let n = sheets.length + 1
+    while (sheets.some((s) => s.name === `Feuille${n}`)) n++
+    const name = `Feuille${n}`
+    mutate((prev) => [
+      ...cloneSheets(prev),
+      { name, rows: Array.from({ length: 20 }, () => Array.from({ length: 8 }, () => "")), merges: [] },
+    ])
+    setActive(sheets.length)
+    setEditing(null)
+    setSelection(null)
+  }
+
+  const deleteSheet = (index: number) => {
+    setSheetMenu(null)
+    if (sheets.length <= 1) return
+    mutate((prev) => prev.filter((_, i) => i !== index))
+    // L'onglet actif se décale si la feuille supprimée était avant lui (ou était lui-même).
+    setActive((cur) => {
+      const next = cur > index ? cur - 1 : cur
+      return Math.min(next, sheets.length - 2)
+    })
+    setEditing(null)
+    setSelection(null)
+  }
+
   const addCol = () => {
     mutate((prev) => {
       const next = cloneSheets(prev)
@@ -634,9 +751,10 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
 
   const fileExt = (fileName.split(".").pop() || "").toLowerCase()
 
-  const save = async () => {
+  /** Renvoie true si l'enregistrement a abouti (utilisé par « Enregistrer et fermer »). */
+  const save = async (): Promise<boolean> => {
     const XLSX = xlsxRef.current
-    if (!XLSX) return
+    if (!XLSX) return false
     setSaving(true)
     try {
       // .xlsx : réécriture fidèle via ExcelJS (styles édités inclus).
@@ -651,7 +769,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
         }
         setDirty(false)
         setSaving(false)
-        return
+        return true
       }
 
       // .ods : générateur OpenDocument avec styles + fusions.
@@ -673,7 +791,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
         }
         setDirty(false)
         setSaving(false)
-        return
+        return true
       }
 
       // .csv / .xls : valeurs uniquement (le CSV ne peut pas stocker de styles).
@@ -710,11 +828,25 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
         throw new Error(j.error || "Échec de l'enregistrement")
       }
       setDirty(false)
+      return true
     } catch (e: any) {
       setError(e?.message || "Échec de l'enregistrement")
+      return false
     } finally {
       setSaving(false)
     }
+  }
+
+  // Fermeture : on ne perd pas de modifications sur un clic malheureux.
+  const requestClose = () => {
+    if (dirty && !loading && !error) setAskClose(true)
+    else onClose()
+  }
+
+  const saveAndClose = async () => {
+    const ok = await save()
+    if (ok) onClose()
+    else setAskClose(false)
   }
 
   // Barre de formule (affiche le contenu brut de la cellule active)
@@ -750,7 +882,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-white dark:bg-gray-900" onClick={() => setContextMenu(null)}>
+    <div className="fixed inset-0 z-[200] flex flex-col bg-white dark:bg-gray-900" onClick={() => { setContextMenu(null); setSheetMenu(null) }}>
       {/* En-tête */}
       <div className="flex items-center justify-between gap-3 px-4 h-12 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -779,7 +911,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Enregistrer
           </button>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-900 dark:hover:text-white p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Fermer">
+          <button onClick={requestClose} className="text-gray-500 hover:text-gray-900 dark:hover:text-white p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Fermer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -891,14 +1023,44 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                           // La couleur de fond est posée sur le <td> pour remplir toute la cellule.
                           const tdStyle: CSSProperties = {}
                           if (st?.backgroundColor) tdStyle.backgroundColor = st.backgroundColor as string
+
+                          // Surlignage type Excel : la plage entière est teintée en bleu et
+                          // cerclée d'un liseré bleu ; la cellule active garde son fond, comme
+                          // dans Excel où elle reste lisible au milieu de la sélection.
+                          const shadows: string[] = []
                           if (selectedHere && !isActive) {
-                            if (st?.backgroundColor) tdStyle.boxShadow = "inset 0 0 0 2px rgba(59,130,246,0.45)"
-                            else tdStyle.backgroundColor = "rgba(59,130,246,0.10)"
+                            tdStyle.backgroundColor = st?.backgroundColor
+                              ? `color-mix(in srgb, ${st.backgroundColor as string} 80%, ${SELECTION_BLUE})`
+                              : SELECTION_TINT
+                          }
+                          // Sur une cellule seule, le contour de la cellule active suffit :
+                          // le liseré de plage ne sert qu'à cerner une sélection multiple.
+                          if (selectedHere && sel && !(sel.top === sel.bottom && sel.left === sel.right)) {
+                            if (r === sel.top) shadows.push(`inset 0 2px 0 0 ${SELECTION_BLUE}`)
+                            if (r === sel.bottom) shadows.push(`inset 0 -2px 0 0 ${SELECTION_BLUE}`)
+                            if (c === sel.left) shadows.push(`inset 2px 0 0 0 ${SELECTION_BLUE}`)
+                            if (c === sel.right) shadows.push(`inset -2px 0 0 0 ${SELECTION_BLUE}`)
                           }
                           if (isFilling) {
-                            if (st?.backgroundColor) tdStyle.boxShadow = "inset 0 0 0 2px rgba(37,99,235,0.6)"
-                            else tdStyle.backgroundColor = "rgba(37,99,235,0.18)"
+                            shadows.push(`inset 0 0 0 2px ${SELECTION_BLUE}`)
+                            if (!st?.backgroundColor) tdStyle.backgroundColor = SELECTION_TINT
                           }
+
+                          // Cellules citées par la formule en cours d'écriture : cerclées et
+                          // teintées de la couleur de leur référence.
+                          const refHit = formulaRefAt(r, c)
+                          if (refHit) {
+                            const { ref, color } = refHit
+                            if (r === ref.top) shadows.push(`inset 0 2px 0 0 ${color.border}`)
+                            if (r === ref.bottom) shadows.push(`inset 0 -2px 0 0 ${color.border}`)
+                            if (c === ref.left) shadows.push(`inset 2px 0 0 0 ${color.border}`)
+                            if (c === ref.right) shadows.push(`inset -2px 0 0 0 ${color.border}`)
+                            tdStyle.backgroundColor = st?.backgroundColor
+                              ? `color-mix(in srgb, ${st.backgroundColor as string} 75%, ${color.border})`
+                              : color.tint
+                          }
+
+                          if (shadows.length) tdStyle.boxShadow = shadows.join(", ")
 
                           return (
                             <td
@@ -908,7 +1070,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                               style={tdStyle}
                               className={[
                                 "border border-gray-200 dark:border-gray-700 p-0 relative min-w-[7rem] max-w-[20rem] align-top",
-                                isActive ? "outline outline-2 outline-red-500 -outline-offset-1 z-[5]" : "",
+                                isActive ? "outline outline-2 outline-blue-600 -outline-offset-1 z-[5]" : "",
                                 isEditing ? "z-[6]" : "",
                               ].join(" ")}
                               onMouseDown={(e) => handleCellMouseDown(e, r, c)}
@@ -921,6 +1083,11 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                                   ref={textareaRef}
                                   autoFocus
                                   value={raw}
+                                  // Le tableau est en `select-none` et intercepte les clics des
+                                  // cellules : on rend la main au textarea pour que la souris
+                                  // place le curseur et sélectionne le texte normalement.
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onDoubleClick={(e) => e.stopPropagation()}
                                   onChange={(e) => setCell(r, c, e.target.value)}
                                   onBlur={() => { if (!formulaSelectingRef.current) setEditing(null) }}
                                   onKeyDown={(e) => {
@@ -940,7 +1107,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                                   }}
                                   rows={Math.min(8, Math.max(1, raw.split("\n").length))}
                                   style={st}
-                                  className="w-full px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-red-500 whitespace-pre-wrap"
+                                  className="w-full px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-600 whitespace-pre-wrap select-text cursor-text"
                                 />
                               ) : (
                                 <div
@@ -954,7 +1121,7 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
                               {/* Poignée de remplissage (coin bas-droite de la sélection) */}
                               {isFillCorner && !fillAnchor && (
                                 <div
-                                  className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-red-600 border border-white z-10 cursor-crosshair"
+                                  className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-600 border border-white z-10 cursor-crosshair"
                                   style={{ transform: "translate(50%, 50%)" }}
                                   onMouseDown={(e) => {
                                     e.stopPropagation()
@@ -979,11 +1146,33 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           <div className="flex items-center justify-between gap-2 px-3 h-10 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-x-auto">
             <div className="flex items-center gap-1">
               {sheets.map((s, i) => (
-                <button key={i} onClick={() => { setActive(i); setEditing(null); setSelection(null) }}
+                <button
+                  key={i}
+                  onClick={() => { setActive(i); setEditing(null); setSelection(null) }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setContextMenu(null)
+                    setSheetMenu({
+                      x: Math.min(e.clientX, window.innerWidth - 220),
+                      y: Math.min(e.clientY, window.innerHeight - 100),
+                      index: i,
+                      confirm: false,
+                    })
+                  }}
+                  title="Clic droit pour supprimer la feuille"
                   className={`px-3 py-1 text-xs rounded-md whitespace-nowrap ${i === active ? "bg-red-50 text-red-600 dark:bg-red-900/30 font-medium" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>
                   {s.name}
                 </button>
               ))}
+              <button
+                onClick={addSheet}
+                disabled={fileExt === "csv"}
+                title={fileExt === "csv" ? "Un fichier .csv ne contient qu'une seule feuille" : "Ajouter une feuille"}
+                aria-label="Ajouter une feuille"
+                className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:hover:bg-transparent flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button onClick={addRow} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md">
@@ -1004,6 +1193,10 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          <button onClick={() => beginFormula(contextMenu.r, contextMenu.c)} className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-200">
+            <Sigma className="w-3.5 h-3.5 text-blue-600" /> Formule (=)
+          </button>
+          <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
           <button onClick={() => insertRowAbove(contextMenu.r)} className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-200">
             <Plus className="w-3.5 h-3.5 text-green-500" /> Insérer ligne au-dessus
           </button>
@@ -1025,6 +1218,59 @@ export function SpreadsheetEditorDialog({ fileId, fileName, onClose }: Spreadshe
             <Minus className="w-3.5 h-3.5" /> Supprimer la colonne
           </button>
         </div>
+      )}
+
+      {/* Menu contextuel d'un onglet de feuille */}
+      {sheetMenu && (
+        <div
+          className="fixed z-[300] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 text-sm min-w-[210px]"
+          style={{ left: sheetMenu.x, top: sheetMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+          // Sans ça, le clic remonterait au fond de l'éditeur qui referme les menus — l'étape
+          // de confirmation disparaîtrait aussitôt affichée.
+          onClick={(e) => e.stopPropagation()}
+        >
+          {sheets.length <= 1 ? (
+            <p className="px-3 py-2 text-xs text-gray-500">
+              Un classeur doit garder au moins une feuille.
+            </p>
+          ) : sheetMenu.confirm ? (
+            <>
+              <p className="px-3 py-2 text-xs text-gray-500">
+                Supprimer « {sheets[sheetMenu.index]?.name} » et son contenu ?
+              </p>
+              <button
+                onClick={() => deleteSheet(sheetMenu.index)}
+                className="w-full text-left px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Confirmer la suppression
+              </button>
+              <button
+                onClick={() => setSheetMenu(null)}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+              >
+                Annuler
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setSheetMenu({ ...sheetMenu, confirm: true })}
+              className="w-full text-left px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Supprimer la feuille
+            </button>
+          )}
+        </div>
+      )}
+
+      {askClose && (
+        <UnsavedChangesDialog
+          fileName={title}
+          saving={saving}
+          onSaveAndClose={saveAndClose}
+          onDiscard={onClose}
+          onCancel={() => setAskClose(false)}
+        />
       )}
     </div>
   )

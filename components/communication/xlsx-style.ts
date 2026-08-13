@@ -203,7 +203,9 @@ export async function saveXlsx(
   sheets: { name: string; rows: string[][]; styles?: (CSSProperties | null)[][] }[],
 ): Promise<Uint8Array> {
   sheets.forEach((sheet) => {
-    const ws = wb.getWorksheet(sheet.name)
+    // Une feuille ajoutée dans l'éditeur n'existe pas encore dans le classeur d'origine :
+    // sans cette création, elle serait silencieusement perdue à l'enregistrement.
+    const ws = wb.getWorksheet(sheet.name) || wb.addWorksheet(sheet.name)
     if (!ws) return
     // Ne pas écrire dans les cellules masquées par une fusion (sinon on écrase la maîtresse).
     const { slaves } = mergeInfo(Array.isArray(ws.model?.merges) ? ws.model.merges : [])
@@ -226,6 +228,13 @@ export async function saveXlsx(
       })
     })
   })
+  // Feuilles supprimées dans l'éditeur : sans ce retrait, elles survivraient dans le
+  // classeur d'origine et réapparaîtraient à la réouverture.
+  const kept = new Set(sheets.map((s) => s.name))
+  for (const ws of [...wb.worksheets]) {
+    if (!kept.has(ws.name)) wb.removeWorksheet(ws.id)
+  }
+
   const out = await wb.xlsx.writeBuffer()
   return new Uint8Array(out)
 }
