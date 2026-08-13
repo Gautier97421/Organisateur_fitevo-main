@@ -59,8 +59,12 @@ export function CashRegisterBlotter({ period, gymId, gymName, userEmail, userNam
       }
       const latest = source[source.length - 1]
       const custom = (latest.custom_values || {}) as Record<string, any>
-      const coinCounts = (custom.__coinCounts && typeof custom.__coinCounts === "object")
-        ? custom.__coinCounts as Record<string, number>
+      // Le comptage d'ouverture a longtemps été enregistré sous "_coinCounts" (la clé brute
+      // renvoyée par le formulaire), les recomptages sous "__coinCounts" : on lit les deux,
+      // sinon le détail des pièces d'une ouverture repart à zéro à la modification.
+      const rawCoinCounts = custom.__coinCounts ?? custom._coinCounts
+      const coinCounts = (rawCoinCounts && typeof rawCoinCounts === "object")
+        ? rawCoinCounts as Record<string, number>
         : undefined
       setCashInitialData({
         coinCounts,

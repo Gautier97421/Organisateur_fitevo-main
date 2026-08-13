@@ -8,6 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Plus, CalendarDays, Edit2, Trash2, AlertTriangle } from "lucide-react"
 import { getUserId, getUserEmail } from "@/lib/current-user"
 import {
+  displayDayKey,
+  formatScheduleDate,
+  formatScheduleEndDate,
+  isScheduleEditable,
+  scheduleCoversDay,
+  scheduleDayRange,
+  toDateKey,
+  todayKey,
+} from "@/lib/work-schedule-rules"
+import { employeeColorAt } from "@/lib/employee-colors"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -75,19 +86,6 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   })
   const [isManager, setIsManager] = useState(false)
   const [currentUserInfo, setCurrentUserInfo] = useState<{ email: string; name: string } | null>(null)
-
-  const employeeColors = [
-    "bg-red-600",
-    "bg-gray-600",
-    "bg-red-500",
-    "bg-gray-500",
-    "bg-red-700",
-    "bg-gray-700",
-    "bg-red-800",
-    "bg-gray-800",
-    "bg-red-400",
-    "bg-gray-400",
-  ]
 
   useEffect(() => {
     const loadCurrentUser = async () => {
@@ -348,7 +346,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
           const employeesWithColors = filteredEmployees.map((emp: any, index: number) => ({
             email: emp.email,
             name: emp.name,
-            color: employeeColors[index % employeeColors.length],
+            color: employeeColorAt(index),
           }))
 
           setEmployees(employeesWithColors)
@@ -382,7 +380,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
       setErrorMessage("⚠️ Pour des congés, la date de fin est obligatoire")
       return
     }
-    if (newSchedule.label === "conges" && newSchedule.end_date < selectedDate.toISOString().split("T")[0]) {
+    // La date de fin vient du sélecteur (date brute) : on la compare au jour affiché.
+    if (newSchedule.label === "conges" && newSchedule.end_date < displayDayKey(selectedDate)) {
       setErrorMessage("⚠️ La date de fin des congés doit être égale ou postérieure à la date de début")
       return
     }
@@ -532,21 +531,10 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
   }
 
   const getSchedulesForDate = (date: Date) => {
-    const dateString = date.toISOString().split("T")[0]
-    return schedules.filter((schedule) => {
-      const scheduleDate = schedule.work_date
-        ? (typeof schedule.work_date === 'string'
-            ? schedule.work_date.split("T")[0]
-            : new Date(schedule.work_date).toISOString().split("T")[0])
-        : ''
-      if ((schedule.label || "travail") === "conges" && schedule.end_date) {
-        const endDate = typeof schedule.end_date === 'string'
-          ? schedule.end_date.split("T")[0]
-          : new Date(schedule.end_date).toISOString().split("T")[0]
-        return scheduleDate <= dateString && endDate >= dateString
-      }
-      return scheduleDate === dateString
-    })
+    // Les deux bornes d'un congé ne sont pas enregistrées dans la même convention (clé
+    // décalée pour le début, date brute du sélecteur pour la fin) : `scheduleCoversDay` les
+    // ramène au jour affiché, sinon le congé déborde d'une journée après sa date de fin.
+    return schedules.filter((schedule) => schedule.work_date && scheduleCoversDay(schedule, date))
   }
 
   const handleEditSchedule = async () => {
@@ -737,7 +725,8 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
             {getDaysInMonth().map((dayInfo, index) => {
               const daySchedules = getSchedulesForDate(dayInfo.date)
               const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
-              const isPast = dayInfo.date < new Date() && dayInfo.isCurrentMonth
+              // Comparaison sur la journée : le jour même reste ouvert jusqu'à minuit.
+              const isPast = toDateKey(dayInfo.date) < todayKey() && dayInfo.isCurrentMonth
               const hasConflict = conflicts.includes(dayInfo.date.toISOString().split("T")[0])
 
               return (
@@ -1006,7 +995,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 <Input
                   type="date"
                   value={newSchedule.end_date}
-                  min={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
+                  min={selectedDate ? displayDayKey(selectedDate) : ""}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
                   className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_date ? 'border-red-500' : ''}`}
                 />
@@ -1099,9 +1088,9 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                   {daySchedules.map((schedule) => {
                     const userEmail = getUserEmail()
                     const isOwnSchedule = schedule.employee_email === userEmail
-                    const today = new Date().toISOString().split('T')[0]
-                    const isPast = schedule.work_date < today
-                    const canModify = isOwnSchedule && !isPast && hasWorkScheduleAccess
+                    // Un manager encadre l'équipe : il modifie aussi le planning des autres.
+                    const canModify =
+                      (isOwnSchedule || isManager) && isScheduleEditable(schedule) && hasWorkScheduleAccess
 
                     return (
                       <Card
@@ -1132,7 +1121,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                               <div className="flex items-center gap-2">
                                 <span className="text-base">🏖️</span>
                                 <span className="font-medium text-green-700">
-                                  Congés{schedule.end_date ? ` jusqu'au ${new Date(schedule.end_date + (schedule.end_date.includes("T") ? "" : "T00:00:00")).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                                  Congés{schedule.end_date ? ` jusqu'au ${formatScheduleEndDate(schedule.end_date)}` : ""}
                                 </span>
                               </div>
                             ) : (
@@ -1141,11 +1130,13 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                                   <Clock className="h-4 w-4" />
                                   <span className="font-medium">{schedule.start_time} - {schedule.end_time}</span>
                                 </div>
-                                {schedule.break_start_time && schedule.break_duration && (
+                                {/* L'heure de début de pause est facultative : la durée s'affiche seule. */}
+                                {schedule.break_duration ? (
                                   <p className="text-gray-600 text-xs mt-1">
-                                    🕐 Pause : {schedule.break_start_time} ({schedule.break_duration} min)
+                                    🕐 Pause : {schedule.break_duration} min
+                                    {schedule.break_start_time ? ` à partir de ${schedule.break_start_time}` : ""}
                                   </p>
-                                )}
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -1222,7 +1213,13 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
               <span>Modifier le planning</span>
             </DialogTitle>
             <DialogDescription className="text-sm text-gray-600">
-              {scheduleToEdit && `${scheduleToEdit.employee_name} — ${new Date(scheduleToEdit.work_date + 'T00:00:00').toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
+              {/* Sur un congé de plusieurs jours, on annonce la journée que l'utilisateur a
+                  ouverte, pas la date de début de la période. */}
+              {scheduleToEdit && `${scheduleToEdit.employee_name} — ${
+                selectedDayForDetails
+                  ? selectedDayForDetails.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+                  : formatScheduleDate(scheduleToEdit.work_date)
+              }`}
             </DialogDescription>
           </DialogHeader>
 
@@ -1305,7 +1302,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 <Input
                   type="date"
                   value={newSchedule.end_date}
-                  min={scheduleToEdit ? scheduleToEdit.work_date.split("T")[0] : ""}
+                  min={scheduleToEdit ? scheduleDayRange(scheduleToEdit).start : ""}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
                   className={`border-2 rounded-xl bg-white text-gray-900 ${attemptedSubmit && !newSchedule.end_date ? 'border-red-500' : ''}`}
                 />
@@ -1338,7 +1335,7 @@ export function WorkScheduleCalendar({ hasWorkScheduleAccess = true }: WorkSched
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                   <p className="font-medium text-gray-900">{scheduleToDelete.employee_name}</p>
                   <p className="text-sm text-gray-600">
-                    {new Date(scheduleToDelete.work_date + 'T00:00:00').toLocaleDateString("fr-FR")} - {scheduleToDelete.start_time} à {scheduleToDelete.end_time}
+                    {formatScheduleDate(scheduleToDelete.work_date, { day: "numeric", month: "numeric", year: "numeric" })} - {scheduleToDelete.start_time} à {scheduleToDelete.end_time}
                   </p>
                 </div>
               )}

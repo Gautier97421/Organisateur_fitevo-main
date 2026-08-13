@@ -19,6 +19,34 @@ import {
   findAssignedEventConflict,
 } from '@/lib/db-access-control'
 
+/**
+ * Un planning reste modifiable tant que son dernier jour n'est pas passé (date de fin pour
+ * un congé, jour travaillé sinon).
+ *
+ * La date enregistrée est un minuit local converti en UTC par le client : sa valeur dépend
+ * donc du fuseau du navigateur, que le serveur ne connaît pas (en UTC+2, le 13 août est
+ * stocké au 12). Le contrôle exact à la journée est fait côté client ; ici on garde une
+ * tolérance d'un jour pour ne jamais refuser une modification légitime du jour même, tout
+ * en bloquant la réécriture d'un planning franchement passé.
+ */
+function isScheduleStillEditable(record: { date: Date; endDate?: Date | null; label?: string | null }): boolean {
+  const dayKey = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+
+  const limit = new Date()
+  limit.setUTCDate(limit.getUTCDate() - 1)
+  const earliestEditableDay = dayKey(limit)
+
+  const start = dayKey(record.date)
+  let lastDay = start
+  if ((record.label || 'travail') === 'conges' && record.endDate) {
+    const end = dayKey(record.endDate)
+    if (end > start) lastDay = end
+  }
+
+  return lastDay >= earliestEditableDay
+}
+
 // Mapper les champs du client vers le schéma Prisma
 function mapFieldsFromClient(table: string, data: any): any {
   const mapped = { ...data }
@@ -484,6 +512,30 @@ export async function PUT(
 
     // Mapper les champs du client vers Prisma
     const mappedData = mapFieldsFromClient(table, body)
+
+    // Le passé ne se réécrit pas : une journée déjà terminée est figée, y compris pour un
+    // manager ou un admin. Le jour même reste ouvert (comparaison à la journée près).
+    // Ne concerne que les champs de planification : marquer un planning comme terminé ou
+    // mettre à jour l'avancement des tâches reste possible après coup.
+    if (table === 'work_schedules') {
+      const PLANNING_FIELDS = [
+        'label', 'startTime', 'endTime', 'date', 'endDate',
+        'breakDuration', 'breakStartTime', 'gymId', 'employeeEmail', 'employeeName', 'userId',
+      ]
+      if (PLANNING_FIELDS.some((field) => mappedData[field] !== undefined)) {
+        if (!existingRecord) {
+          existingRecord = await (prisma as any)[prismaModel].findUnique({ where: { id } })
+        }
+        // Les périodes temporaires sont les pointages en temps réel (une garde de nuit peut
+        // se clôturer après minuit) : elles ne sont pas concernées par ce verrou.
+        if (existingRecord && !existingRecord.isTemporary && !isScheduleStillEditable(existingRecord)) {
+          return NextResponse.json(
+            { error: "Cette journée est passée : le planning n'est plus modifiable." },
+            { status: 409 }
+          )
+        }
+      }
+    }
 
     // Un employé ne peut pas transformer un planning en congé (ou étendre un congé) qui
     // chevaucherait un événement planifié auquel il est assigné.

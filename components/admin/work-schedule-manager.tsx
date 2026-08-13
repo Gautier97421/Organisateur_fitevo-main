@@ -6,8 +6,19 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2, CalendarDays, Plus, XCircle, Clock, Building2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, User, AlertTriangle, CheckCircle, Trash2, CalendarDays, Plus, XCircle, Clock, Building2, Edit2, Lock } from "lucide-react"
 import { getUserEmail, getUserRole } from "@/lib/current-user"
+import {
+  displayDayKey,
+  formatScheduleDate,
+  formatScheduleEndDate,
+  isScheduleEditable,
+  scheduleCoversDay,
+  scheduleDayRange,
+  toDateKey,
+  todayKey,
+} from "@/lib/work-schedule-rules"
+import { employeeColorAt } from "@/lib/employee-colors"
 import {
   Dialog,
   DialogContent,
@@ -27,6 +38,8 @@ interface WorkSchedule {
   gym_id?: string
   break_duration?: number
   break_start_time?: string
+  label?: "travail" | "conges"
+  end_date?: string | null
   status: "scheduled" | "confirmed" | "completed"
   created_at: string
 }
@@ -63,6 +76,8 @@ export function WorkScheduleManager() {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
   const [scheduleToDelete, setScheduleToDelete] = useState<string | null>(null)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [scheduleToEdit, setScheduleToEdit] = useState<WorkSchedule | null>(null)
   const [employeeGyms, setEmployeeGyms] = useState<Gym[]>([])
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [newSchedule, setNewSchedule] = useState({
@@ -73,19 +88,6 @@ export function WorkScheduleManager() {
     break_duration: 0,
     break_start_time: ""
   })
-
-  const employeeColors = [
-    "bg-blue-500",
-    "bg-green-500",
-    "bg-purple-500",
-    "bg-orange-500",
-    "bg-pink-500",
-    "bg-cyan-500",
-    "bg-red-500",
-    "bg-yellow-500",
-    "bg-indigo-500",
-    "bg-teal-500",
-  ]
 
   useEffect(() => {
     const role = getUserRole()
@@ -225,7 +227,7 @@ export function WorkScheduleManager() {
           email: emp.email,
           name: emp.name,
           role: emp.role,
-          color: employeeColors[index % employeeColors.length],
+          color: employeeColorAt(index),
         }))
 
         setEmployees(employeesWithColors)
@@ -342,6 +344,100 @@ export function WorkScheduleManager() {
     }
   }
 
+  const openEditDialog = (schedule: WorkSchedule) => {
+    setScheduleToEdit(schedule)
+    setAttemptedSubmit(false)
+    setErrorMessage("")
+    setNewSchedule({
+      label: (schedule.label || "travail") as "travail" | "conges",
+      start_time: schedule.start_time || "",
+      end_time: schedule.end_time || "",
+      end_date: schedule.end_date ? String(schedule.end_date).split("T")[0] : "",
+      break_duration: schedule.break_duration || 0,
+      break_start_time: schedule.break_start_time || "",
+    })
+    setAddDialogGymId(schedule.gym_id || "all")
+    loadEmployeeGyms(schedule.employee_email)
+    setShowDetailsDialog(false)
+    setShowDayDetailsDialog(false)
+    setShowEditDialog(true)
+  }
+
+  const editSchedule = async () => {
+    if (!scheduleToEdit) return
+
+    setAttemptedSubmit(true)
+    setErrorMessage("")
+
+    if (newSchedule.label === "travail") {
+      if (!newSchedule.start_time || !newSchedule.end_time) {
+        setErrorMessage("⚠️ Pour un jour de travail, les heures de début et de fin sont obligatoires")
+        return
+      }
+      if (newSchedule.start_time >= newSchedule.end_time) {
+        setErrorMessage("⚠️ L'heure de début doit être avant l'heure de fin")
+        return
+      }
+      if (addDialogGymId === "all") {
+        setErrorMessage("⚠️ Veuillez sélectionner une salle spécifique pour ce planning")
+        return
+      }
+    } else {
+      if (!newSchedule.end_date) {
+        setErrorMessage("⚠️ Pour des congés, la date de fin est obligatoire")
+        return
+      }
+      // La date de fin est une date brute du sélecteur : on la compare au jour de début
+      // affiché, pas à la clé décalée enregistrée.
+      if (newSchedule.end_date < scheduleDayRange(scheduleToEdit).start) {
+        setErrorMessage("⚠️ La date de fin des congés doit être égale ou postérieure à la date de début")
+        return
+      }
+    }
+
+    // Le jour même reste modifiable, mais un planning déjà passé pendant que le dialog
+    // était ouvert (minuit franchi) ne doit pas pouvoir être réécrit.
+    if (!isScheduleEditable(scheduleToEdit)) {
+      setErrorMessage("⚠️ Ce planning est passé : il n'est plus modifiable")
+      return
+    }
+
+    try {
+      const patchData: any = {
+        label: newSchedule.label,
+        start_time: newSchedule.label === "travail" ? newSchedule.start_time : "",
+        end_time: newSchedule.label === "travail" ? newSchedule.end_time : "",
+        end_date: newSchedule.label === "conges" ? newSchedule.end_date : null,
+        break_duration: newSchedule.label === "travail" ? (newSchedule.break_duration || 0) : 0,
+        break_start_time: newSchedule.label === "travail" ? (newSchedule.break_start_time || null) : null,
+        gym_id: newSchedule.label === "travail" ? addDialogGymId : null,
+      }
+
+      const response = await fetch(`/api/db/work_schedules/${scheduleToEdit.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchData),
+      })
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => null)
+        setErrorMessage(result?.error ? `❌ ${result.error}` : "❌ Erreur lors de la modification")
+        return
+      }
+
+      await loadSchedules()
+      setShowEditDialog(false)
+      setScheduleToEdit(null)
+      setSelectedSchedule(null)
+      setAttemptedSubmit(false)
+      setErrorMessage("")
+      setEmployeeGyms([])
+      setAddDialogGymId("all")
+    } catch (error) {
+      setErrorMessage("❌ Erreur lors de la modification")
+    }
+  }
+
   const handleAddClick = (date: Date) => {
     setSelectedDate(date)
     setAttemptedSubmit(false)
@@ -421,7 +517,8 @@ export function WorkScheduleManager() {
       setErrorMessage("⚠️ Pour des congés, la date de fin est obligatoire")
       return
     }
-    if (newSchedule.label === "conges" && newSchedule.end_date < selectedDate.toISOString().split("T")[0]) {
+    // La date de fin vient du sélecteur (date brute) : on la compare au jour affiché.
+    if (newSchedule.label === "conges" && newSchedule.end_date < displayDayKey(selectedDate)) {
       setErrorMessage("⚠️ La date de fin des congés doit être égale ou postérieure à la date de début")
       return
     }
@@ -567,32 +664,9 @@ export function WorkScheduleManager() {
   }
 
   const getSchedulesForDate = (date: Date) => {
-    const dateString = date.toISOString().split("T")[0]
-    const filtered = schedules.filter((schedule) => {
-      // Vérifier que work_date existe
-      if (!schedule.work_date) {
-        return false
-      }
-      
-      // Normaliser work_date au format YYYY-MM-DD
-      let scheduleDate: string
-      const workDate = schedule.work_date as any
-      
-      if (typeof workDate === 'string') {
-        // Si c'est une string ISO "2026-02-10T00:00:00.000Z" ou "2026-02-10"
-        scheduleDate = workDate.split("T")[0]
-      } else if (workDate && typeof workDate === 'object' && workDate.toISOString) {
-        // Si c'est un objet Date
-        scheduleDate = workDate.toISOString().split("T")[0]
-      } else {
-        return false
-      }
-      
-      const matches = scheduleDate === dateString
-      return matches
-    })
-    
-    return filtered
+    // Un congé couvre toute sa période : il doit apparaître sur chacun de ses jours, pas
+    // uniquement sur sa date de début.
+    return schedules.filter((schedule) => schedule.work_date && scheduleCoversDay(schedule, date))
   }
 
   const getEmployeeColor = (employeeEmail: string) => {
@@ -719,6 +793,8 @@ export function WorkScheduleManager() {
             {getDaysInMonth().map((dayInfo, index) => {
               const daySchedules = getSchedulesForDate(dayInfo.date)
               const isToday = dayInfo.date.toDateString() === new Date().toDateString() && dayInfo.isCurrentMonth
+              // Journée révolue : on peut encore la consulter, mais plus y planifier quoi que ce soit.
+              const isPastDay = toDateKey(dayInfo.date) < todayKey()
               const hasConflict = conflicts.includes(dayInfo.date.toISOString().split("T")[0])
 
               return (
@@ -752,7 +828,7 @@ export function WorkScheduleManager() {
                       </div>
                       {hasConflict && <AlertTriangle className="h-3 w-3 text-red-600" />}
                     </div>
-                    {dayInfo.isCurrentMonth && (
+                    {dayInfo.isCurrentMonth && !isPastDay && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -854,49 +930,60 @@ export function WorkScheduleManager() {
                     <strong>Employé :</strong> {(selectedSchedule as any).employee_name || 'N/A'}
                   </p>
                   <p>
-                    <strong>Date :</strong> {new Date(selectedSchedule.work_date).toLocaleDateString("fr-FR")}
+                    <strong>Date :</strong> {formatScheduleDate(selectedSchedule.work_date)}
                   </p>
-                  <p>
-                    <strong>Horaires :</strong> {(selectedSchedule as any).start_time || 'N/A'} - {(selectedSchedule as any).end_time || 'N/A'}
-                  </p>
-                  <p>
-                    <strong>Salle :</strong> {gyms.find(g => g.id === selectedSchedule.gym_id)?.name || 'Non spécifiée'}
-                  </p>
-                  <p>
-                    <strong>Pause :</strong> {(selectedSchedule as any).break_duration || 0} min
-                    {(selectedSchedule as any).break_start_time && ` à ${(selectedSchedule as any).break_start_time}`}
-                  </p>
-                  <p>
-                    <strong>Statut :</strong>
-                    <Badge
-                      className={`ml-2 ${
-                        selectedSchedule.status === "confirmed"
-                          ? "bg-green-100 text-green-800"
-                          : selectedSchedule.status === "completed"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {selectedSchedule.status === "confirmed"
-                        ? "Confirmé"
-                        : selectedSchedule.status === "completed"
-                          ? "Terminé"
-                          : "Programmé"}
-                    </Badge>
-                  </p>
+                  {(selectedSchedule.label || "travail") === "conges" ? (
+                    <p className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium">
+                      <span className="text-base">🏖️</span>
+                      Congés
+                      {selectedSchedule.end_date ? ` jusqu'au ${formatScheduleEndDate(selectedSchedule.end_date)}` : ""}
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        <strong>Horaires :</strong> {(selectedSchedule as any).start_time || 'N/A'} - {(selectedSchedule as any).end_time || 'N/A'}
+                      </p>
+                      <p>
+                        <strong>Salle :</strong> {gyms.find(g => g.id === selectedSchedule.gym_id)?.name || 'Non spécifiée'}
+                      </p>
+                      <p>
+                        <strong>Pause :</strong> {(selectedSchedule as any).break_duration || 0} min
+                        {(selectedSchedule as any).break_start_time && ` à partir de ${(selectedSchedule as any).break_start_time}`}
+                      </p>
+                      <p>
+                        <strong>Statut :</strong>
+                        <Badge
+                          className={`ml-2 ${
+                            selectedSchedule.status === "confirmed"
+                              ? "bg-green-100 text-green-800"
+                              : selectedSchedule.status === "completed"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {selectedSchedule.status === "confirmed"
+                            ? "Confirmé"
+                            : selectedSchedule.status === "completed"
+                              ? "Terminé"
+                              : "Programmé"}
+                        </Badge>
+                      </p>
+                    </>
+                  )}
                 </div>
               </DialogDescription>
             )}
           </DialogHeader>
           <DialogFooter className="flex flex-col sm:flex-col sm:space-x-0 gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowDetailsDialog(false)}
-              className="w-full text-base sm:text-lg px-4 sm:px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-            >
-              Fermer
-            </Button>
-            {selectedSchedule && selectedSchedule.status === "scheduled" && (
+            {selectedSchedule && isScheduleEditable(selectedSchedule) && (
+              <Button
+                onClick={() => openEditDialog(selectedSchedule)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
+              >
+                <Edit2 className="h-4 w-4 sm:h-5 sm:w-5" /> Modifier
+              </Button>
+            )}
+            {selectedSchedule && (selectedSchedule.label || "travail") !== "conges" && selectedSchedule.status === "scheduled" && (
               <Button
                 onClick={() => updateScheduleStatus(selectedSchedule.id, "confirmed")}
                 className="w-full bg-green-600 hover:bg-green-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
@@ -912,6 +999,12 @@ export function WorkScheduleManager() {
               >
                 <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" /> Supprimer
               </Button>
+            )}
+            {selectedSchedule && !isScheduleEditable(selectedSchedule) && (
+              <p className="w-full flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <Lock className="h-4 w-4 flex-shrink-0" />
+                Journée passée : ce planning n'est plus modifiable
+              </p>
             )}
           </DialogFooter>
         </DialogContent>
@@ -1075,7 +1168,7 @@ export function WorkScheduleManager() {
                 <Input
                   type="date"
                   value={newSchedule.end_date}
-                  min={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
+                  min={selectedDate ? displayDayKey(selectedDate) : ""}
                   onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
                   className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
                     attemptedSubmit && !newSchedule.end_date ? "border-red-500" : ""
@@ -1109,6 +1202,178 @@ export function WorkScheduleManager() {
               className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
             >
               <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Ajouter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de modification de planning */}
+      <Dialog
+        open={showEditDialog}
+        onOpenChange={(open) => {
+          setShowEditDialog(open)
+          if (!open) {
+            setScheduleToEdit(null)
+            setAttemptedSubmit(false)
+            setErrorMessage("")
+            setEmployeeGyms([])
+            setAddDialogGymId("all")
+          }
+        }}
+      >
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white dark:bg-gray-800 p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl sm:text-2xl flex items-center gap-2 pr-6 text-gray-900 dark:text-white">
+              <Edit2 className="h-6 w-6 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>Modifier le planning</span>
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-300">
+              {/* Sur un congé de plusieurs jours, on annonce la journée que l'utilisateur a
+                  ouverte, pas la date de début de la période. */}
+              {scheduleToEdit && `${scheduleToEdit.employee_name} — ${
+                selectedDate
+                  ? selectedDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+                  : formatScheduleDate(scheduleToEdit.work_date)
+              }`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 min-w-0">
+            <div className="min-w-0">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Type <span className="text-red-500">*</span></label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "travail" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "travail" ? "bg-red-600 border-red-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-red-400 dark:bg-gray-700 dark:text-gray-300"}`}
+                >
+                  Travail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewSchedule({ ...newSchedule, label: "conges" })}
+                  className={`flex-1 py-2 px-4 rounded-xl border-2 text-sm font-medium transition-all ${newSchedule.label === "conges" ? "bg-green-600 border-green-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-green-400 dark:bg-gray-700 dark:text-gray-300"}`}
+                >
+                  Congés
+                </button>
+              </div>
+            </div>
+            {newSchedule.label === "travail" && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                  Salle <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={addDialogGymId}
+                  onChange={(e) => setAddDialogGymId(e.target.value)}
+                  disabled={employeeGyms.length === 0}
+                  className={`w-full border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2 ${
+                    attemptedSubmit && addDialogGymId === "all" ? "border-red-500 focus:border-red-600" : "border-gray-300 dark:border-gray-600"
+                  } ${employeeGyms.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <option value="all" disabled>Sélectionner une salle</option>
+                  {employeeGyms.map((gym) => (
+                    <option key={gym.id} value={gym.id}>
+                      {gym.name}
+                    </option>
+                  ))}
+                </select>
+                {employeeGyms.length === 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Cet employé n'a accès à aucune salle
+                  </p>
+                )}
+              </div>
+            )}
+            {newSchedule.label === "travail" ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Heure de début <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.start_time}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                      className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                        attemptedSubmit && !newSchedule.start_time ? "border-red-500" : ""
+                      }`}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Heure de fin <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.end_time}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                      className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                        attemptedSubmit && !newSchedule.end_time ? "border-red-500" : ""
+                      }`}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Pause (minutes)
+                    </label>
+                    <Input
+                      type="number"
+                      value={newSchedule.break_duration || ""}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, break_duration: parseInt(e.target.value) || 0 })}
+                      className="w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      min="0"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                      Début de pause
+                    </label>
+                    <Input
+                      type="time"
+                      value={newSchedule.break_start_time || ""}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, break_start_time: e.target.value })}
+                      className="w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Date de fin des congés <span className="text-red-500">*</span></label>
+                <Input
+                  type="date"
+                  value={newSchedule.end_date}
+                  min={scheduleToEdit ? scheduleDayRange(scheduleToEdit).start : ""}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, end_date: e.target.value })}
+                  className={`w-full min-w-0 border-2 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                    attemptedSubmit && !newSchedule.end_date ? "border-red-500" : ""
+                  }`}
+                />
+              </div>
+            )}
+          </div>
+          {errorMessage && (
+            <div className="flex items-center gap-2 p-3 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-lg text-sm">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              className="w-full sm:w-auto text-base sm:text-lg px-4 sm:px-6 py-2 border border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center gap-2"
+            >
+              <XCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Annuler
+            </Button>
+            <Button
+              onClick={editSchedule}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-base sm:text-lg px-4 sm:px-6 py-2 flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> Enregistrer
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1164,53 +1429,70 @@ export function WorkScheduleManager() {
                         const endTime = scheduleData.end_time || ''
                         const employeeEmail = scheduleData.employee_email || ''
                         const status = schedule.status
-                        
+                        const isConges = (scheduleData.label || 'travail') === 'conges'
+
                         return (
                           <div
                             key={schedule.id}
-                            className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                            style={{ borderColor: getEmployeeColor(employeeEmail).replace('bg-', '#') }}
+                            className={`p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer ${
+                              isConges ? 'border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800' : ''
+                            }`}
                             onClick={() => {
                               setSelectedSchedule(schedule)
                               setShowDayDetailsDialog(false)
                               setShowDetailsDialog(true)
                             }}
                           >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2">
-                                  <div className={`w-3 h-3 rounded-full ${getEmployeeColor(employeeEmail)}`}></div>
+                                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isConges ? 'bg-green-600' : getEmployeeColor(employeeEmail)}`}></div>
                                   <span className="font-semibold text-lg text-gray-900 dark:text-white">
                                     {employeeName}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
-                                  <div className="flex items-center gap-1">
-                                    <CheckCircle className="h-4 w-4" />
-                                    <span className="text-sm">{startTime} - {endTime}</span>
-                                  </div>
-                                  {scheduleData.break_duration && (
-                                    <span className="text-sm">
-                                      • Pause: {scheduleData.break_duration} min
+                                {isConges ? (
+                                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                                    <span className="text-base">🏖️</span>
+                                    <span className="text-sm font-medium">
+                                      Congés
+                                      {scheduleData.end_date ? ` jusqu'au ${formatScheduleEndDate(scheduleData.end_date)}` : ''}
                                     </span>
-                                  )}
-                                </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-4 w-4" />
+                                      <span className="text-sm">{startTime} - {endTime}</span>
+                                    </div>
+                                    {scheduleData.break_duration ? (
+                                      <span className="text-sm">
+                                        • Pause : {scheduleData.break_duration} min
+                                        {scheduleData.break_start_time ? ` à partir de ${scheduleData.break_start_time}` : ''}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                )}
                               </div>
-                              <Badge
-                                className={`${
-                                  status === 'completed'
-                                    ? 'bg-red-600 text-white'
+                              {isConges ? (
+                                <Badge className="bg-green-600 text-white flex-shrink-0">Congés</Badge>
+                              ) : (
+                                <Badge
+                                  className={`flex-shrink-0 ${
+                                    status === 'completed'
+                                      ? 'bg-red-600 text-white'
+                                      : status === 'confirmed'
+                                      ? 'bg-green-600 text-white'
+                                      : 'bg-amber-500 text-white'
+                                  }`}
+                                >
+                                  {status === 'completed'
+                                    ? 'Terminé'
                                     : status === 'confirmed'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-amber-500 text-white'
-                                }`}
-                              >
-                                {status === 'completed'
-                                  ? 'Terminé'
-                                  : status === 'confirmed'
-                                  ? 'Confirmé'
-                                  : 'Programmé'}
-                              </Badge>
+                                    ? 'Confirmé'
+                                    : 'Programmé'}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         )

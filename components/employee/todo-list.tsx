@@ -673,11 +673,16 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         cashAmount: Number(cashData.cash_amount || 0),
         coinsDetail: cashData.coins_detail || "",
         notes: mergedNotes,
-        customValues: Object.fromEntries(
-          Object.entries(cashData).filter(([key]) =>
-            !["cash_amount", "total_register", "coins_detail", "notes"].includes(key)
-          )
-        ),
+        customValues: {
+          ...Object.fromEntries(
+            Object.entries(cashData).filter(([key]) =>
+              !["cash_amount", "total_register", "coins_detail", "notes", "_coinCounts"].includes(key)
+            )
+          ),
+          // Clé canonique du détail des pièces : c'est celle que relit l'onglet Caisse pour
+          // préremplir un recomptage, et que les panneaux d'infos ignorent (préfixe "__").
+          ...(cashData._coinCounts ? { __coinCounts: cashData._coinCounts } : {}),
+        },
       }),
     })
 
