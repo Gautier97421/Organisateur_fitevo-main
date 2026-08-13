@@ -43,13 +43,26 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   try {
     const { id } = await params
-    await prisma.product.update({
-      where: { id },
-      data: { isActive: false },
+
+    await prisma.$transaction(async (tx) => {
+      // Une promo qui vise cet article n'a plus d'objet une fois l'article supprimé :
+      // la garder reviendrait à laisser une règle qui s'applique à « un article » vide.
+      await tx.promotion.deleteMany({
+        where: {
+          OR: [{ buyProductId: id }, { getProductId: id }, { targetProductId: id }],
+        },
+      })
+
+      // Les ventes déjà encaissées survivent : sales.product_id passe à NULL
+      // (contrainte ON DELETE SET NULL), le nom et les montants restent figés dessus.
+      await tx.product.delete({ where: { id } })
     })
 
-    return NextResponse.json({ message: "Produit archivé" })
+    return NextResponse.json({ message: "Produit supprimé" })
   } catch (error) {
+    if ((error as { code?: string })?.code === "P2025") {
+      return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
+    }
     logger.error("Erreur suppression produit", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }

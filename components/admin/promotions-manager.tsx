@@ -231,9 +231,12 @@ export function PromotionsManager() {
   const handleDelete = async () => {
     if (!promoToDelete) return
     try {
-      await fetch(`/api/promotions/${promoToDelete}`, { method: "DELETE" })
-      toast.success("Promotion désactivée")
+      const res = await fetch(`/api/promotions/${promoToDelete}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast.success("Promotion supprimée")
       load()
+    } catch {
+      toast.error("Erreur lors de la suppression")
     } finally {
       setShowDeleteConfirm(false)
       setPromoToDelete(null)
@@ -320,14 +323,24 @@ export function PromotionsManager() {
                     <span className="text-sm text-gray-500 line-through">{promo.name}</span>
                     <span className="ml-2 text-xs text-gray-400">{describePromotion(promo)}</span>
                   </div>
-                  <Button
-                    onClick={() => handleToggleActive(promo)}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs flex-shrink-0"
-                  >
-                    Réactiver
-                  </Button>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button
+                      onClick={() => handleToggleActive(promo)}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                    >
+                      Réactiver
+                    </Button>
+                    <Button
+                      onClick={() => { setPromoToDelete(promo.id); setShowDeleteConfirm(true) }}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -506,19 +519,26 @@ export function PromotionsManager() {
 
       {/* Dialog confirmation suppression */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="sm:max-w-sm bg-white">
+        <DialogContent className="sm:max-w-md bg-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-gray-900">
-              <AlertTriangle className="h-5 w-5 text-red-600" /> Désactiver la promotion
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600" /> Supprimer la promotion
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600">La promotion ne s'appliquera plus aux nouvelles ventes, mais l'historique est conservé.</p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setPromoToDelete(null) }}>
-              <X className="mr-2 h-4 w-4" /> Annuler
+          <p className="text-sm text-gray-600">
+            Cette promotion sera définitivement supprimée. Les ventes déjà enregistrées sont conservées (montants et remises inchangés).
+            Pour la retirer temporairement, utilisez plutôt « Désactiver ».
+          </p>
+          <DialogFooter className="gap-2 sm:flex-wrap sm:justify-center">
+            <Button
+              variant="outline"
+              onClick={() => { setShowDeleteConfirm(false); setPromoToDelete(null) }}
+              className="whitespace-nowrap"
+            >
+              <X className="mr-2 h-4 w-4 flex-shrink-0" /> Annuler
             </Button>
-            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
-              <Trash2 className="mr-2 h-4 w-4" /> Désactiver
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap">
+              <Trash2 className="mr-2 h-4 w-4 flex-shrink-0" /> Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

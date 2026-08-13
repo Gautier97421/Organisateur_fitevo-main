@@ -55,7 +55,8 @@ interface Product {
 
 interface Sale {
   id: string
-  productId: string
+  /** null quand l'article a été supprimé du catalogue — la vente, elle, reste. */
+  productId: string | null
   productName: string
   quantity: number
   unitPrice: number
@@ -90,6 +91,17 @@ function fmt(n: number) {
 function currentMonth() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
+/**
+ * Clé de regroupement d'une vente par article, pour les stats et les graphes.
+ *
+ * L'article supprimé du catalogue n'a plus d'id sur ses ventes : on retombe alors sur
+ * le nom figé sur la vente, sinon toutes les ventes d'articles supprimés fusionneraient
+ * dans un même bloc.
+ */
+function saleProductKey(sale: Sale): string {
+  return sale.productId ?? `name:${sale.productName}`
 }
 
 /** Format court ("août 26"), pour l'axe du graphe où 6 libellés doivent tenir. */
@@ -305,9 +317,13 @@ export function VentesStockManager() {
   const handleDelete = async () => {
     if (!productToDelete) return
     try {
-      await fetch(`/api/products/${productToDelete}`, { method: "DELETE" })
-      toast.success("Article archivé")
+      const res = await fetch(`/api/products/${productToDelete}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast.success("Article supprimé")
       loadProducts()
+      loadSales()
+    } catch {
+      toast.error("Erreur lors de la suppression")
     } finally {
       setShowDeleteConfirm(false)
       setProductToDelete(null)
@@ -326,9 +342,10 @@ export function VentesStockManager() {
     // Top produits du mois
     const byProduct: Record<string, { name: string; qty: number; total: number }> = {}
     sales.forEach((s) => {
-      if (!byProduct[s.productId]) byProduct[s.productId] = { name: s.productName, qty: 0, total: 0 }
-      byProduct[s.productId].qty += s.quantity
-      byProduct[s.productId].total += s.total
+      const key = saleProductKey(s)
+      if (!byProduct[key]) byProduct[key] = { name: s.productName, qty: 0, total: 0 }
+      byProduct[key].qty += s.quantity
+      byProduct[key].total += s.total
     })
     const topProducts = Object.values(byProduct).sort((a, b) => b.total - a.total).slice(0, 5)
 
@@ -395,14 +412,15 @@ export function VentesStockManager() {
 
     for (const month of monthsToCompare) {
       for (const sale of salesByMonth[month] ?? []) {
-        const current = totals.get(sale.productId)
+        const productKey = saleProductKey(sale)
+        const current = totals.get(productKey)
         if (current) {
           current.total += sale.total
           current.quantity += sale.quantity
         } else {
           // Le nom est celui figé sur la vente : un article renommé garde son
           // libellé d'origine sur l'historique déjà enregistré.
-          totals.set(sale.productId, {
+          totals.set(productKey, {
             label: sale.productName,
             total: sale.total,
             quantity: sale.quantity,
@@ -420,20 +438,20 @@ export function VentesStockManager() {
 
     const series = ranked
       .slice(0, TOP_ARTICLES)
-      .map(([productId, entry], index) => ({ key: `art${index}`, productId, label: entry.label }))
+      .map(([productKey, entry], index) => ({ key: `art${index}`, productKey, label: entry.label }))
 
     if (ranked.length > TOP_ARTICLES) {
-      series.push({ key: OTHERS_KEY, productId: OTHERS_KEY, label: OTHERS_LABEL })
+      series.push({ key: OTHERS_KEY, productKey: OTHERS_KEY, label: OTHERS_LABEL })
     }
 
     return series
   }, [salesByMonth, monthsToCompare, chartMetric])
 
-  /** productId → clé de série, « Autres » servant de repli quand la série existe. */
-  const seriesKeyByProductId = useMemo(() => {
+  /** clé article → clé de série, « Autres » servant de repli quand la série existe. */
+  const seriesKeyByProductKey = useMemo(() => {
     const map = new Map<string, string>()
     for (const serie of articleSeries) {
-      if (serie.productId !== OTHERS_KEY) map.set(serie.productId, serie.key)
+      if (serie.productKey !== OTHERS_KEY) map.set(serie.productKey, serie.key)
     }
     return map
   }, [articleSeries])
@@ -449,7 +467,7 @@ export function VentesStockManager() {
       for (const serie of articleSeries) row[serie.key] = 0
 
       for (const sale of salesByMonth[month] ?? []) {
-        const key = seriesKeyByProductId.get(sale.productId) ?? (hasOthersSeries ? OTHERS_KEY : null)
+        const key = seriesKeyByProductKey.get(saleProductKey(sale)) ?? (hasOthersSeries ? OTHERS_KEY : null)
         if (key) row[key] += sale[chartMetric]
       }
 
@@ -458,7 +476,7 @@ export function VentesStockManager() {
       }
       return row
     })
-  }, [salesByMonth, monthsToCompare, articleSeries, seriesKeyByProductId, hasOthersSeries, chartMetric])
+  }, [salesByMonth, monthsToCompare, articleSeries, seriesKeyByProductKey, hasOthersSeries, chartMetric])
 
   // On garde toute série présente dans le classement : un article offert affiche une
   // barre nulle en vue CA, mais reste dans la légende et réapparaît en vue quantité.
@@ -483,7 +501,7 @@ export function VentesStockManager() {
     const totals = new Map<string, { total: number; quantity: number }>()
 
     for (const sale of sales) {
-      const key = seriesKeyByProductId.get(sale.productId) ?? (hasOthersSeries ? OTHERS_KEY : null)
+      const key = seriesKeyByProductKey.get(saleProductKey(sale)) ?? (hasOthersSeries ? OTHERS_KEY : null)
       if (!key) continue
       const current = totals.get(key) ?? { total: 0, quantity: 0 }
       current.total += sale.total
@@ -504,7 +522,7 @@ export function VentesStockManager() {
       })
       .filter((item) => item.quantity > 0)
       .sort((a, b) => b.value - a.value || b.quantity - a.quantity)
-  }, [sales, articleSeries, seriesKeyByProductId, hasOthersSeries, chartMetric])
+  }, [sales, articleSeries, seriesKeyByProductKey, hasOthersSeries, chartMetric])
 
   const articleBreakdownTotal = useMemo(
     () => articleBreakdown.reduce((sum, item) => sum + item.value, 0),
@@ -780,7 +798,7 @@ export function VentesStockManager() {
           {inactiveProducts.length > 0 && (
             <details className="mt-4">
               <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
-                {inactiveProducts.length} article(s) archivé(s)
+                {inactiveProducts.length} article(s) désactivé(s)
               </summary>
               <div className="grid gap-2 mt-2">
                 {inactiveProducts.map((p) => (
@@ -790,14 +808,24 @@ export function VentesStockManager() {
                         <span className="text-sm text-gray-500 line-through">{p.name}</span>
                         <span className="ml-2 text-xs text-gray-400">{fmt(p.price)}</span>
                       </div>
-                      <Button
-                        onClick={() => handleToggleActive(p)}
-                        variant="outline"
-                        size="sm"
-                        className="text-xs flex-shrink-0"
-                      >
-                        Restaurer
-                      </Button>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Button
+                          onClick={() => handleToggleActive(p)}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          Réactiver
+                        </Button>
+                        <Button
+                          onClick={() => { setProductToDelete(p.id); setShowDeleteConfirm(true) }}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -1307,19 +1335,27 @@ export function VentesStockManager() {
 
       {/* Dialog confirmation suppression */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="sm:max-w-sm bg-white">
+        <DialogContent className="sm:max-w-md bg-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-gray-900">
-              <AlertTriangle className="h-5 w-5 text-red-600" /> Archiver l'article
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600" /> Supprimer l'article
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600">L'article sera masqué des ventes mais son historique sera conservé.</p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setProductToDelete(null) }}>
-              <X className="mr-2 h-4 w-4" /> Annuler
+          <p className="text-sm text-gray-600">
+            Cet article sera définitivement supprimé du catalogue, ainsi que les promotions qui le concernent.
+            Les ventes déjà enregistrées restent dans l'historique et le chiffre d'affaires.
+            Pour le retirer temporairement, utilisez plutôt « Désactiver ».
+          </p>
+          <DialogFooter className="gap-2 sm:flex-wrap sm:justify-center">
+            <Button
+              variant="outline"
+              onClick={() => { setShowDeleteConfirm(false); setProductToDelete(null) }}
+              className="whitespace-nowrap"
+            >
+              <X className="mr-2 h-4 w-4 flex-shrink-0" /> Annuler
             </Button>
-            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
-              <Trash2 className="mr-2 h-4 w-4" /> Archiver
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap">
+              <Trash2 className="mr-2 h-4 w-4 flex-shrink-0" /> Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -56,13 +56,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   try {
     const { id } = await params
-    await prisma.promotion.update({
-      where: { id },
-      data: { isActive: false },
-    })
+    // Les ventes liées conservent leur historique : sales.promotion_id passe à NULL
+    // (contrainte ON DELETE SET NULL).
+    await prisma.promotion.delete({ where: { id } })
 
-    return NextResponse.json({ message: "Promotion désactivée" })
+    return NextResponse.json({ message: "Promotion supprimée" })
   } catch (error) {
+    if ((error as { code?: string })?.code === "P2025") {
+      return NextResponse.json({ error: "Promotion introuvable" }, { status: 404 })
+    }
     logger.error("Erreur suppression promotion", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
