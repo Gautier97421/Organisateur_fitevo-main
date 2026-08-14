@@ -10,14 +10,25 @@ import logger from '@/lib/logger'
 
 export const runtime = 'nodejs'
 
-// Types éditables en place (remplacement du contenu) : tableurs + texte ODF.
+// Types éditables en place (remplacement du contenu) : tableurs + texte ODF/Word.
 const EDITABLE_IN_PLACE_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
   'application/vnd.ms-excel', // .xls
   'application/vnd.oasis.opendocument.spreadsheet', // .ods
   'text/csv', // .csv
   'application/vnd.oasis.opendocument.text', // .odt
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
 ])
+
+// Certains fichiers arrivent avec un type générique (application/octet-stream)
+// selon le navigateur ou l'OS : on retombe alors sur l'extension, comme le fait
+// l'interface pour proposer le bouton « Modifier ».
+const EDITABLE_IN_PLACE_EXTS = new Set(['.xlsx', '.xls', '.ods', '.csv', '.odt', '.docx'])
+
+function isEditableInPlace(mimeType: string, fileName: string): boolean {
+  if (EDITABLE_IN_PLACE_MIMES.has(mimeType)) return true
+  return EDITABLE_IN_PLACE_EXTS.has(path.extname(fileName).toLowerCase())
+}
 
 /**
  * GET /api/communication/files/[id]
@@ -105,8 +116,8 @@ export async function PUT(
     const attachment = await prisma.attachment.findUnique({ where: { id } })
     if (!attachment) return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
 
-    // Seuls les tableurs et documents ODF texte sont éditables en place ici.
-    if (!EDITABLE_IN_PLACE_MIMES.has(attachment.mimeType)) {
+    // Seuls les tableurs et documents texte ODF/Word sont éditables en place ici.
+    if (!isEditableInPlace(attachment.mimeType, attachment.fileName)) {
       return NextResponse.json({ error: 'Type de fichier non éditable' }, { status: 400 })
     }
 
@@ -128,7 +139,7 @@ export async function PUT(
 
     return NextResponse.json({ data: { size: buffer.length }, error: null })
   } catch (error) {
-    logger.error('Erreur sauvegarde tableur', error)
+    logger.error('Erreur sauvegarde fichier éditable', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

@@ -23,6 +23,7 @@ export interface Employee {
   has_work_schedule_access?: boolean;
   has_work_period_access?: boolean;
   has_manager_access?: boolean;
+  has_user_management_access?: boolean; // Accès délégué à la page Utilisateurs
   gym_ids?: string[]; // IDs des salles assignées
   gyms?: Gym[]; // Salles complètes (optionnel)
   profile_photo?: string | null;

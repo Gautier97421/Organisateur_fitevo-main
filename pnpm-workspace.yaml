@@ -1,6 +1,27 @@
 packages:
   - "."
 
+# Réglages pnpm. Depuis pnpm 11, c'est ce fichier qui fait foi : les clés
+# équivalentes de .npmrc (node-linker, shamefully-hoist, auto-install-peers…)
+# n'y sont plus lues. .npmrc est conservé pour les postes encore en pnpm 10.
+nodeLinker: hoisted
+shamefullyHoist: true
+autoInstallPeers: true
+strictPeerDependencies: false
+
+# Scripts d'installation autorisés (pnpm 11). Les valeurs doivent être des
+# booléens : laissées en texte (« set this to true or false »), pnpm considère
+# l'approbation comme non résolue, ignore les builds et échoue avec
+# ERR_PNPM_IGNORED_BUILDS — ce qui cassait l'installation dans l'image Docker.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  core-js: true
+  esbuild: true
+  prisma: true
+  sharp: true
+
+# Équivalent pour pnpm 10, qui ne connaît pas allowBuilds.
 onlyBuiltDependencies:
   - sharp
   - "@prisma/client"

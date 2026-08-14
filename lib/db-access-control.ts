@@ -69,12 +69,25 @@ export const PROTECTED_USER_FIELDS = [
   'role',
   'active',
   'hasManagerAccess',
+  'hasUserManagementAccess',
   'hasCalendarAccess',
   'hasEventProposalAccess',
   'hasWorkScheduleAccess',
   'hasWorkPeriodAccess',
   'roleId',
   'isSuperAdmin',
+]
+
+// Champs qu'un manager délégué (employé avec hasManagerAccess + hasUserManagementAccess)
+// peut modifier sur le compte d'un autre EMPLOYÉ depuis la page Utilisateurs.
+// Volontairement limité aux accès applicatifs : ni identité, ni rôle, ni activation,
+// et surtout pas `hasUserManagementAccess` (seul un admin délègue ce droit).
+export const DELEGATED_USER_EDITABLE_FIELDS = [
+  'hasManagerAccess',
+  'hasCalendarAccess',
+  'hasEventProposalAccess',
+  'hasWorkScheduleAccess',
+  'hasWorkPeriodAccess',
 ]
 
 // Champs du workflow d'approbation des événements calendrier — seul un manager/admin peut les définir,
@@ -92,10 +105,30 @@ export function isAdminRole(role: string): boolean {
   return role === 'admin' || role === 'superadmin'
 }
 
+/**
+ * Employé autorisé par un admin à gérer les accès des autres employés (page Utilisateurs).
+ * Suppose déjà l'accès manager : la délégation n'a de sens que pour un manager.
+ */
+export async function isDelegatedUserManager(userId: string, role: string): Promise<boolean> {
+  if (role !== 'employee') return false
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { hasManagerAccess: true, hasUserManagementAccess: true },
+  })
+  return !!user?.hasManagerAccess && !!user?.hasUserManagementAccess
+}
+
 /** Retire les champs indiqués d'un objet, en place. */
 export function stripFields(obj: Record<string, any>, fields: string[]): void {
   for (const f of fields) {
     if (f in obj) delete obj[f]
+  }
+}
+
+/** Ne garde que les champs autorisés d'un objet, en place. */
+export function keepFields(obj: Record<string, any>, allowed: string[]): void {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.includes(key)) delete obj[key]
   }
 }
 

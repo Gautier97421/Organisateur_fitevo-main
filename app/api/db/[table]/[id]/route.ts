@@ -12,9 +12,12 @@ import {
   OWNER_TABLES,
   PROTECTED_USER_FIELDS,
   PROTECTED_EVENT_FIELDS,
+  DELEGATED_USER_EDITABLE_FIELDS,
   isAdminRole,
   isManagerTier,
+  isDelegatedUserManager,
   stripFields,
+  keepFields,
   omitPassword,
   findAssignedEventConflict,
 } from '@/lib/db-access-control'
@@ -87,6 +90,10 @@ function mapFieldsFromClient(table: string, data: any): any {
     if (mapped.has_manager_access !== undefined) {
       mapped.hasManagerAccess = mapped.has_manager_access
       delete mapped.has_manager_access
+    }
+    if (mapped.has_user_management_access !== undefined) {
+      mapped.hasUserManagementAccess = mapped.has_user_management_access
+      delete mapped.has_user_management_access
     }
     if (mapped.role_id !== undefined) {
       mapped.roleId = mapped.role_id
@@ -262,6 +269,10 @@ function mapFieldsToClient(table: string, data: any): any {
       mapped.has_manager_access = mapped.hasManagerAccess
       delete mapped.hasManagerAccess
     }
+    if (mapped.hasUserManagementAccess !== undefined) {
+      mapped.has_user_management_access = mapped.hasUserManagementAccess
+      delete mapped.hasUserManagementAccess
+    }
     if (mapped.roleId !== undefined) {
       mapped.role_id = mapped.roleId
       delete mapped.roleId
@@ -400,17 +411,26 @@ function mapFieldsToClient(table: string, data: any): any {
 interface RouteCheckResult {
   denied?: NextResponse
   managerTier: boolean
+  /** Manager délégué (non admin) autorisé à modifier les accès d'un employé. */
+  delegatedUserEdit?: boolean
 }
 
 async function checkTableAccess(
   table: string,
-  auth: { userId: string; role: string }
+  auth: { userId: string; role: string },
+  opts: { allowDelegatedUserEdit?: boolean } = {}
 ): Promise<RouteCheckResult> {
   if (ADMIN_ONLY_TABLES.has(table) && !isAdminRole(auth.role)) {
     return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier: false }
   }
+  let delegatedUserEdit = false
   if (USER_TABLES.has(table) && !isAdminRole(auth.role)) {
-    return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier: false }
+    // Seule la modification des accès d'un employé peut être déléguée à un manager :
+    // la création, la suppression et le changement de rôle restent réservées aux admins.
+    delegatedUserEdit = !!opts.allowDelegatedUserEdit && (await isDelegatedUserManager(auth.userId, auth.role))
+    if (!delegatedUserEdit) {
+      return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier: false }
+    }
   }
   const managerTier = MANAGER_TABLES.has(table) || OWNER_TABLES.has(table)
     ? await isManagerTier(auth.userId, auth.role)
@@ -418,7 +438,7 @@ async function checkTableAccess(
   if (MANAGER_TABLES.has(table) && !managerTier) {
     return { denied: NextResponse.json({ error: 'Accès refusé' }, { status: 403 }), managerTier }
   }
-  return { managerTier }
+  return { managerTier, delegatedUserEdit }
 }
 
 // GET - Récupérer une entrée par ID
@@ -491,7 +511,7 @@ export async function PUT(
   if (!isKnownTable(table)) {
     return NextResponse.json({ error: 'Table inconnue' }, { status: 400 })
   }
-  const access = await checkTableAccess(table, auth)
+  const access = await checkTableAccess(table, auth, { allowDelegatedUserEdit: true })
   if (access.denied) return access.denied
 
   try {
@@ -566,7 +586,23 @@ export async function PUT(
     // Un simple employé/manager ne peut jamais toucher aux champs de permission d'un compte,
     // et seul un superadmin peut attribuer le rôle superadmin.
     if (USER_TABLES.has(table)) {
-      if (!isAdminRole(auth.role)) stripFields(mappedData, PROTECTED_USER_FIELDS)
+      if (access.delegatedUserEdit) {
+        // Manager délégué : uniquement les accès applicatifs, uniquement sur un employé.
+        // Sans ce contrôle, il pourrait retirer l'accès d'un admin ou modifier son identité.
+        const target = await prisma.user.findUnique({ where: { id }, select: { role: true } })
+        if (!target) {
+          return NextResponse.json({ error: 'Entrée non trouvée' }, { status: 404 })
+        }
+        if (target.role !== 'employee') {
+          return NextResponse.json({ error: 'Seuls les comptes employés sont modifiables' }, { status: 403 })
+        }
+        keepFields(mappedData, DELEGATED_USER_EDITABLE_FIELDS)
+        if (Object.keys(mappedData).length === 0) {
+          return NextResponse.json({ error: 'Aucun champ modifiable' }, { status: 403 })
+        }
+      } else if (!isAdminRole(auth.role)) {
+        stripFields(mappedData, PROTECTED_USER_FIELDS)
+      }
       if (mappedData.role === 'superadmin' && auth.role !== 'superadmin') {
         return NextResponse.json({ error: 'Seul un superadmin peut attribuer ce rôle' }, { status: 403 })
       }

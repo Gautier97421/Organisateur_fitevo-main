@@ -121,6 +121,8 @@ function EditorInner({
   const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
+  // Dernier message d'erreur renvoyé par le serveur, affiché à la fermeture.
+  const lastSaveError = useRef<string | null>(null)
 
   // Insertion d'image (encodée en base64, intégrée au document).
   const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,6 +237,12 @@ function EditorInner({
   const saveNow = useCallback(async (): Promise<boolean> => {
     if (!editor || readOnly) return true
     setSavingNow(true)
+    lastSaveError.current = null
+    const readError = async (res: Response) => {
+      const json = await res.json().catch(() => null)
+      lastSaveError.current = json?.error || null
+      return false
+    }
     try {
       if (kind === "odt" || kind === "docx") {
         const blob = kind === "docx"
@@ -244,7 +252,7 @@ function EditorInner({
         const fd = new FormData()
         fd.append("file", new File([new Blob([blob as BlobPart])], `document.${ext}`))
         const res = await fetch(`/api/communication/files/${docId}`, { method: "PUT", body: fd, credentials: "same-origin" })
-        if (!res.ok) return false
+        if (!res.ok) return readError(res)
       } else {
         const body = kind === "text" ? { text: editor.getText() } : { html: editor.getHTML() }
         const res = await fetch(`/api/communication/docs/${docId}`, {
@@ -253,7 +261,7 @@ function EditorInner({
           credentials: "same-origin",
           body: JSON.stringify(body),
         })
-        if (!res.ok) return false
+        if (!res.ok) return readError(res)
       }
       setPendingSave(false)
       return true
@@ -291,7 +299,11 @@ function EditorInner({
     setSaveError(null)
     const ok = await saveNow()
     if (ok) onClose()
-    else setSaveError("L'enregistrement a échoué. Réessayez ou fermez sans enregistrer.")
+    else setSaveError(
+      lastSaveError.current
+        ? `L'enregistrement a échoué : ${lastSaveError.current}`
+        : "L'enregistrement a échoué. Réessayez ou fermez sans enregistrer.",
+    )
   }
 
   return (

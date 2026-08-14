@@ -45,7 +45,14 @@ interface Role {
   color: string
 }
 
-export function EmployeeManager() {
+/**
+ * `restricted` : vue déléguée pour un manager (employé avec accès à la gestion des
+ * utilisateurs). Elle n'expose que les employés et la modification de leurs accès —
+ * ni création, ni suppression, ni désactivation, ni promotion en admin, ni onglet
+ * Administrateurs. Les mêmes limites sont appliquées côté serveur
+ * (voir DELEGATED_USER_EDITABLE_FIELDS dans lib/db-access-control.ts).
+ */
+export function EmployeeManager({ restricted = false }: { restricted?: boolean } = {}) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [admins, setAdmins] = useState<Admin[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
@@ -63,6 +70,7 @@ export function EmployeeManager() {
     hasWorkScheduleAccess: true,
     hasWorkPeriodAccess: true,
     hasManagerAccess: false,
+    hasUserManagementAccess: false,
   })
   const [newAdmin, setNewAdmin] = useState({ name: "", email: "", isSuperAdmin: false })
   const [isAddingAdmin, setIsAddingAdmin] = useState(false)
@@ -96,6 +104,7 @@ export function EmployeeManager() {
     hasWorkScheduleAccess: boolean;
     hasWorkPeriodAccess: boolean;
     hasManagerAccess: boolean;
+    hasUserManagementAccess: boolean;
   } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"employees" | "admins">("employees")
@@ -272,6 +281,7 @@ export function EmployeeManager() {
             has_work_schedule_access: newEmployee.hasWorkScheduleAccess,
             has_work_period_access: newEmployee.hasWorkPeriodAccess,
             has_manager_access: newEmployee.hasManagerAccess,
+            has_user_management_access: newEmployee.hasManagerAccess && newEmployee.hasUserManagementAccess,
             active: true
           }
         })
@@ -307,6 +317,7 @@ export function EmployeeManager() {
         hasWorkScheduleAccess: true,
         hasWorkPeriodAccess: true,
         hasManagerAccess: false,
+        hasUserManagementAccess: false,
       })
       setIsAddingEmployee(false)
     } catch (error) {
@@ -345,6 +356,7 @@ export function EmployeeManager() {
       hasWorkScheduleAccess: employee.has_work_schedule_access !== false,
       hasWorkPeriodAccess: employee.has_work_period_access !== false,
       hasManagerAccess: employee.has_manager_access === true,
+      hasUserManagementAccess: employee.has_user_management_access === true,
     })
     setShowEditFormConflict(false)
     setIsEditingEmployee(true)
@@ -352,12 +364,37 @@ export function EmployeeManager() {
 
   const saveEditEmployee = async () => {
     if (!editEmployee) return
-    
+
+    // Manager délégué : seuls les accès applicatifs sont modifiables (identité, rôle
+    // et salles restent à l'admin). Le serveur applique la même liste blanche.
+    if (restricted) {
+      try {
+        const response = await fetch(`/api/db/users/${editEmployee.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            has_calendar_access: editEmployee.hasCalendarAccess,
+            has_event_proposal_access: editEmployee.hasEventProposalAccess,
+            has_work_schedule_access: editEmployee.hasWorkScheduleAccess,
+            has_work_period_access: editEmployee.hasWorkPeriodAccess,
+            has_manager_access: editEmployee.hasManagerAccess,
+          }),
+        })
+        if (!response.ok) throw new Error('Erreur lors de la modification')
+        await loadData()
+        setIsEditingEmployee(false)
+        setEditEmployee(null)
+      } catch {
+        toast({ title: "Erreur", description: "Les accès n'ont pas pu être enregistrés.", variant: "destructive" })
+      }
+      return
+    }
+
     // Validation des champs obligatoires
     const errors: {[key: string]: boolean} = {}
     if (!editEmployee.name) errors.name = true
     if (!editEmployee.roleId) errors.roleId = true
-    
+
     if (Object.keys(errors).length > 0) {
       setEditValidationErrors(errors)
       // Scroll vers le premier champ en erreur
@@ -417,6 +454,7 @@ export function EmployeeManager() {
           has_work_schedule_access: editEmployee.hasWorkScheduleAccess,
           has_work_period_access: editEmployee.hasWorkPeriodAccess,
           has_manager_access: editEmployee.hasManagerAccess,
+          has_user_management_access: editEmployee.hasManagerAccess && editEmployee.hasUserManagementAccess,
         })
       })
 
@@ -630,11 +668,19 @@ export function EmployeeManager() {
     <div className="space-y-6">
       <div className="flex items-center gap-2.5">
         <Users className="w-6 h-6 text-red-600 flex-shrink-0" />
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des Utilisateurs</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestion des Utilisateurs</h2>
+          {restricted && (
+            <p className="text-sm text-gray-500">
+              Gérez les accès des employés. La création, la suppression et les comptes administrateurs
+              restent réservés aux administrateurs.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Navigation entre employés et admins */}
-      <div className="flex space-x-1 md:space-x-2 border-b border-gray-200 overflow-x-auto">
+      <div className={`flex space-x-1 md:space-x-2 border-b border-gray-200 overflow-x-auto ${restricted ? "hidden" : ""}`}>
         <button
           onClick={() => setActiveTab("employees")}
           className={`flex items-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
@@ -750,7 +796,7 @@ export function EmployeeManager() {
       {/* Section Employés */}
       {activeTab === "employees" && (
         <div className="space-y-6">
-          <div className="flex justify-end">
+          <div className={`flex justify-end ${restricted ? "hidden" : ""}`}>
             <Button
               onClick={() => {
                 if (isEditingEmployee) {
@@ -773,7 +819,7 @@ export function EmployeeManager() {
             </Button>
           </div>
 
-          {isAddingEmployee && (
+          {isAddingEmployee && !restricted && (
             <Card ref={addFormRef} className="border border-gray-200 bg-white">
               <CardHeader className="border-b border-gray-200 bg-gray-50">
                 <CardTitle className="text-lg font-medium text-gray-900">Nouvel employé</CardTitle>
@@ -958,7 +1004,11 @@ export function EmployeeManager() {
                       <Checkbox
                         id="perm-manager"
                         checked={newEmployee.hasManagerAccess}
-                        onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasManagerAccess: checked as boolean })}
+                        onCheckedChange={(checked) => setNewEmployee({
+                          ...newEmployee,
+                          hasManagerAccess: checked as boolean,
+                          hasUserManagementAccess: checked ? newEmployee.hasUserManagementAccess : false,
+                        })}
                       />
                       <Label htmlFor="perm-manager" className="text-sm text-gray-700">
                         Accès manager
@@ -969,6 +1019,25 @@ export function EmployeeManager() {
                         ? "L'employé pourra gérer les plannings des autres employés"
                         : "L'employé n'aura pas accès à la gestion des plannings des autres employés"}
                     </div>
+                    {newEmployee.hasManagerAccess && (
+                      <>
+                        <div className="flex items-center space-x-2 ml-6">
+                          <Checkbox
+                            id="perm-users"
+                            checked={newEmployee.hasUserManagementAccess}
+                            onCheckedChange={(checked) => setNewEmployee({ ...newEmployee, hasUserManagementAccess: checked as boolean })}
+                          />
+                          <Label htmlFor="perm-users" className="text-sm text-gray-700">
+                            Accès à la page Utilisateurs
+                          </Label>
+                        </div>
+                        <div className="ml-12 text-xs text-gray-500">
+                          {newEmployee.hasUserManagementAccess
+                            ? "Le manager pourra accorder ou retirer l'accès manager aux autres employés. Il ne pourra ni créer, ni supprimer un compte, ni promouvoir en administrateur."
+                            : "Le manager n'aura pas accès à la gestion des utilisateurs"}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1022,6 +1091,18 @@ export function EmployeeManager() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 p-6">
+                {restricted && (
+                  <div className="rounded border border-gray-200 bg-gray-50 p-3">
+                    <p className="text-sm font-medium text-gray-900">{editEmployee.name}</p>
+                    <p className="text-xs text-gray-500">{editEmployee.email}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Vous pouvez modifier les accès de cet employé. Son identité, son rôle et ses salles
+                      restent gérés par un administrateur.
+                    </p>
+                  </div>
+                )}
+                {!restricted && (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="edit-name">Nom complet <span className="text-red-600">*</span></Label>
@@ -1152,6 +1233,8 @@ export function EmployeeManager() {
                     </div>
                   )}
                 </div>
+                </>
+                )}
 
                 <div className="space-y-3 p-3 border border-gray-200 rounded">
                   <Label className="text-sm font-semibold">Permissions d'accès</Label>
@@ -1195,12 +1278,36 @@ export function EmployeeManager() {
                       <Checkbox
                         id="edit-perm-manager"
                         checked={editEmployee.hasManagerAccess}
-                        onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasManagerAccess: checked as boolean })}
+                        onCheckedChange={(checked) => setEditEmployee({
+                          ...editEmployee,
+                          hasManagerAccess: checked as boolean,
+                          // Retirer l'accès manager retire aussi la délégation qui en dépend.
+                          hasUserManagementAccess: checked ? editEmployee.hasUserManagementAccess : false,
+                        })}
                       />
                       <Label htmlFor="edit-perm-manager" className="text-sm text-gray-700">
                         Accès manager (gérer les plannings des autres employés)
                       </Label>
                     </div>
+                    {!restricted && editEmployee.hasManagerAccess && (
+                      <>
+                        <div className="flex items-center space-x-2 ml-6">
+                          <Checkbox
+                            id="edit-perm-users"
+                            checked={editEmployee.hasUserManagementAccess}
+                            onCheckedChange={(checked) => setEditEmployee({ ...editEmployee, hasUserManagementAccess: checked as boolean })}
+                          />
+                          <Label htmlFor="edit-perm-users" className="text-sm text-gray-700">
+                            Accès à la page Utilisateurs
+                          </Label>
+                        </div>
+                        <div className="ml-12 text-xs text-gray-500">
+                          {editEmployee.hasUserManagementAccess
+                            ? "Le manager pourra accorder ou retirer l'accès manager aux autres employés. Il ne pourra ni créer, ni supprimer un compte, ni promouvoir en administrateur."
+                            : "Le manager n'aura pas accès à la gestion des utilisateurs"}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1251,7 +1358,7 @@ export function EmployeeManager() {
                 <CardContent className="p-12 text-center">
                   <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-sm text-gray-500">Aucun employé</p>
-                  <p className="text-xs text-gray-400 mt-1">Ajoutez votre premier employé</p>
+                  {!restricted && <p className="text-xs text-gray-400 mt-1">Ajoutez votre premier employé</p>}
                 </CardContent>
               </Card>
             ) : (
@@ -1260,6 +1367,11 @@ export function EmployeeManager() {
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2">
                       <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        {restricted ? (
+                          <div className="flex-shrink-0">
+                            <UserAvatar userId={employee.id} name={employee.name} size="md" hasPhoto={!!employee.profile_photo} />
+                          </div>
+                        ) : (
                         <label className="relative cursor-pointer group/avatar flex-shrink-0" title="Changer la photo">
                           <input
                             type="file"
@@ -1284,6 +1396,7 @@ export function EmployeeManager() {
                             <Camera className="w-4 h-4 text-white" />
                           </div>
                         </label>
+                        )}
                         <div className="min-w-0 flex-1">
                           <h3 className="font-medium text-sm text-gray-900 truncate">{employee.name}</h3>
                           <p className="text-xs text-gray-500 truncate">{employee.email}</p>
@@ -1315,6 +1428,11 @@ export function EmployeeManager() {
                                 Télétravail
                               </Badge>
                             )}
+                            {employee.has_manager_access && (
+                              <Badge className="bg-amber-100 text-amber-700 text-xs px-2 py-0">
+                                Manager
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1328,7 +1446,7 @@ export function EmployeeManager() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        {isSuperAdmin && (
+                        {isSuperAdmin && !restricted && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1339,21 +1457,25 @@ export function EmployeeManager() {
                             <ArrowUp className="h-4 w-4" />
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => confirmStatusChange(employee.id, employee.name, "employee")}
-                        >
-                          {employee.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => confirmDelete(employee.id, employee.name, "employee")}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {!restricted && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmStatusChange(employee.id, employee.name, "employee")}
+                          >
+                            {employee.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                          </Button>
+                        )}
+                        {!restricted && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmDelete(employee.id, employee.name, "employee")}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -1365,7 +1487,7 @@ export function EmployeeManager() {
       )}
 
       {/* Section Admins */}
-      {activeTab === "admins" && (
+      {activeTab === "admins" && !restricted && (
         <div className="space-y-6">
           {isSuperAdmin && (
             <div className="flex justify-end">

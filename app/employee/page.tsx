@@ -16,13 +16,14 @@ import { VentesStockManager } from "@/components/admin/ventes-stock-manager"
 import { CashRecapManager } from "@/components/admin/cash-recap-manager"
 import { CashRegisterFieldManager } from "@/components/admin/cash-register-field-manager"
 import { TaskManager } from "@/components/admin/task-manager"
+import { EmployeeManager } from "@/components/admin/employee-manager"
 import { EndPeriodDialog } from "@/components/employee/end-period-dialog"
 import { SettingsPanel } from "@/components/employee/settings-panel"
 import { NewMemberInstructionsDialog } from "@/components/employee/new-member-instructions-dialog"
 import { CustomPageDialog } from "@/components/employee/custom-page-dialog"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power, ShoppingBag, BarChart3 } from "lucide-react"
+import { MessageCircle, UserPlus, CheckCircle, XCircle, Building, MapPin, AlertTriangle, Lock, Sunrise, Sunset, Sun, CalendarDays, ChevronDown, ChevronRight, ClipboardList, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Home, Banknote, Settings, Power, ShoppingBag, BarChart3, Users } from "lucide-react"
 import * as Icons from "lucide-react"
 import {
   DropdownMenu,
@@ -61,7 +62,8 @@ export default function EmployeePage() {
   const [hasCalendarAccess, setHasCalendarAccess] = useState(false)
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings" | "ventes-stock" | "tableau-bord" | "champs-caisse" | "taches-manager">("menu")
+  const [hasUserManagementAccess, setHasUserManagementAccess] = useState(false)
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings" | "ventes-stock" | "tableau-bord" | "champs-caisse" | "taches-manager" | "utilisateurs">("menu")
   const [endPeriodDialogOpen, setEndPeriodDialogOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
@@ -234,6 +236,8 @@ export default function EmployeePage() {
 setHasCalendarAccess(data.has_calendar_access !== false)
           setHasWorkPeriodAccess(data.has_work_period_access !== false)
           setHasManagerAccess(data.has_manager_access === true)
+          // Délégation admin : accès à la page Utilisateurs (accès manager requis).
+          setHasUserManagementAccess(data.has_manager_access === true && data.has_user_management_access === true)
           
           // Sauvegarder le roleId pour le filtrage des tâches
           if (data.role_id) {
@@ -801,6 +805,7 @@ setHasCalendarAccess(data.has_calendar_access !== false)
       { id: "ventes-stock", label: "Ventes & Stock",   active: currentView === "ventes-stock" },
       { id: "tableau-bord", label: "Tableau de bord",  active: currentView === "tableau-bord" },
       { id: "champs-caisse",label: "Infos supp",    active: currentView === "champs-caisse" },
+      { id: "utilisateurs", label: "Utilisateurs",   active: currentView === "utilisateurs" },
       { id: "caisse",       label: "Caisse",           active: currentView === "caisse" },
       { id: "infos",        label: "Informations",     active: currentView === "infos" },
       { id: "vente",        label: "Vente",            active: currentView === "vente" },
@@ -956,6 +961,10 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                   { id: "ventes-stock", label: "Ventes & Stock", icon: ShoppingBag, active: currentView === "ventes-stock", onClick: () => { setCurrentView("ventes-stock"); setMobileOpen(false) } },
                   { id: "tableau-bord", label: "Tableau de bord", icon: BarChart3, active: currentView === "tableau-bord", onClick: () => { setCurrentView("tableau-bord"); setMobileOpen(false) } },
                   { id: "champs-caisse", label: "Infos supp", icon: Banknote, active: currentView === "champs-caisse", onClick: () => { setCurrentView("champs-caisse"); setMobileOpen(false) } },
+                  // Accès délégué par un admin : gestion des accès des employés.
+                  ...(hasUserManagementAccess
+                    ? [{ id: "utilisateurs", label: "Utilisateurs", icon: Users, active: currentView === "utilisateurs", onClick: () => { setCurrentView("utilisateurs"); setMobileOpen(false) } }]
+                    : []),
                 ]
 
                 return (
@@ -1308,6 +1317,15 @@ setHasCalendarAccess(data.has_calendar_access !== false)
               <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
                   <CashRegisterFieldManager />
+                </div>
+              </div>
+            )}
+
+            {/* ── VUE UTILISATEURS (manager délégué) ───────────────── */}
+            {currentView === "utilisateurs" && hasUserManagementAccess && (
+              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
+                  <EmployeeManager restricted />
                 </div>
               </div>
             )}

@@ -34,6 +34,10 @@ model User {
   hasWorkScheduleAccess Boolean  @default(true) @map("has_work_schedule_access")
   hasWorkPeriodAccess   Boolean  @default(true) @map("has_work_period_access")
   hasManagerAccess      Boolean  @default(false) @map("has_manager_access")
+  // Délégation accordée à un manager : accéder à la page Utilisateurs (employés
+  // uniquement) pour accorder/retirer l'accès manager. Sans droit de création,
+  // de suppression, ni de promotion en admin.
+  hasUserManagementAccess Boolean @default(false) @map("has_user_management_access")
   profilePhoto          String?  @map("profile_photo")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")

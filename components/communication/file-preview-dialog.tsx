@@ -1,21 +1,24 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, X, Download, FileText, AlertTriangle } from "lucide-react"
+import { Loader2, X, Download, FileText, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react"
 import type { FolderFile } from "./types"
 import { odtToHtml } from "./odf-utils"
 import { mergeInfo } from "./xlsx-style"
+import type { LoadedPresentation } from "./presentation-utils"
+import { SlideView } from "./slide-view"
 
 interface FilePreviewDialogProps {
   file: FolderFile
   onClose: () => void
 }
 
-type PreviewKind = "image" | "pdf" | "text" | "spreadsheet" | "docx" | "odt" | "unsupported"
+type PreviewKind = "image" | "pdf" | "text" | "spreadsheet" | "docx" | "odt" | "pptx" | "odp" | "unsupported"
 
 function ext(name: string): string {
   return (name.split(".").pop() || "").toLowerCase()
 }
+
 
 function previewKind(file: FolderFile): PreviewKind {
   const mt = (file.mimeType || "").toLowerCase()
@@ -25,6 +28,8 @@ function previewKind(file: FolderFile): PreviewKind {
   if (["xlsx", "xls", "ods", "csv"].includes(e) || mt.includes("spreadsheet") || mt === "application/vnd.ms-excel" || mt === "text/csv") return "spreadsheet"
   if (e === "docx" || mt === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return "docx"
   if (e === "odt" || mt === "application/vnd.oasis.opendocument.text") return "odt"
+  if (e === "pptx" || mt === "application/vnd.openxmlformats-officedocument.presentationml.presentation") return "pptx"
+  if (e === "odp" || mt === "application/vnd.oasis.opendocument.presentation") return "odp"
   if (mt === "text/plain" || e === "txt") return "text"
   return "unsupported"
 }
@@ -38,14 +43,22 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
   const [sheets, setSheets] = useState<{ name: string; rows: string[][]; styles?: (React.CSSProperties | null)[][]; merges?: string[] }[] | null>(null)
   const [activeSheet, setActiveSheet] = useState(0)
   const [docHtml, setDocHtml] = useState<string | null>(null)
-  const [loading, setLoading] = useState(kind === "text" || kind === "spreadsheet" || kind === "docx" || kind === "odt")
+  const [deck, setDeck] = useState<LoadedPresentation | null>(null)
+  const [activeSlide, setActiveSlide] = useState(0)
+  const [loading, setLoading] = useState(kind === "text" || kind === "spreadsheet" || kind === "docx" || kind === "odt" || kind === "pptx" || kind === "odp")
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+      // Navigation au clavier entre les diapositives d'une présentation.
+      if (!deck) return
+      if (e.key === "ArrowRight" || e.key === "PageDown") setActiveSlide((i) => Math.min(deck.slides.length - 1, i + 1))
+      if (e.key === "ArrowLeft" || e.key === "PageUp") setActiveSlide((i) => Math.max(0, i - 1))
+    }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
+  }, [onClose, deck])
 
   useEffect(() => {
     let cancelled = false
@@ -96,6 +109,14 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
           const buf = await res.arrayBuffer()
           const html = await odtToHtml(buf)
           if (!cancelled) { setDocHtml(html); setLoading(false) }
+        } else if (kind === "pptx" || kind === "odp") {
+          const res = await fetch(inlineUrl, { credentials: "same-origin" })
+          if (!res.ok) throw new Error()
+          const buf = await res.arrayBuffer()
+          const { loadPptx, loadOdp } = await import("./presentation-utils")
+          const loaded = kind === "pptx" ? await loadPptx(buf) : await loadOdp(buf)
+          if (!loaded.slides.length) throw new Error("Aucune diapositive")
+          if (!cancelled) { setDeck(loaded); setLoading(false) }
         }
       } catch {
         if (!cancelled) { setError("Impossible de charger l'aperçu."); setLoading(false) }
@@ -224,6 +245,39 @@ export function FilePreviewDialog({ file, onClose }: FilePreviewDialogProps) {
                       {s.name}
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!loading && !error && (kind === "pptx" || kind === "odp") && deck && (
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+                <div className="max-w-4xl w-full">
+                  <SlideView slide={deck.slides[activeSlide]} width={deck.width} height={deck.height} />
+                </div>
+              </div>
+              {deck.slides.length > 1 && (
+                <div className="flex items-center justify-center gap-3 px-3 h-12 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <button
+                    onClick={() => setActiveSlide((i) => Math.max(0, i - 1))}
+                    disabled={activeSlide === 0}
+                    title="Diapositive précédente"
+                    className="p-1.5 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 tabular-nums">
+                    Diapositive {activeSlide + 1} / {deck.slides.length}
+                  </span>
+                  <button
+                    onClick={() => setActiveSlide((i) => Math.min(deck.slides.length - 1, i + 1))}
+                    disabled={activeSlide === deck.slides.length - 1}
+                    title="Diapositive suivante"
+                    className="p-1.5 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
                 </div>
               )}
             </div>

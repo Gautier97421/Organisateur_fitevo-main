@@ -271,9 +271,8 @@ export function FoldersPanel({ currentUser }: Props) {
           toast.info(`Tableur importé au format .${ext} : formules et mise en forme conservées.`)
         } else {
           toast.info(
-            `Tableur importé au format .${ext} : seules les valeurs sont conservées (pas les formules). ` +
-            `Exportez plutôt en .xlsx ou .ods (ex. depuis Google Sheets : Fichier → Télécharger → Microsoft Excel) pour garder les formules.`,
-            { duration: 8000 },
+            `Tableur importé au format .${ext} : seules les valeurs sont conservées (pas les formules).`,
+            { duration: 6000 },
           )
         }
       }
@@ -604,6 +603,19 @@ export function FoldersPanel({ currentUser }: Props) {
           </div>
         )}
       </ScrollArea>
+
+      {/* Rappel du format de tableur conseillé (visible dans un dossier) */}
+      {!inRoot && (
+        <div
+          className="flex justify-end items-center gap-1.5 px-3 py-1.5 border-t border-gray-200 dark:border-gray-700 text-[11px] text-gray-400 dark:text-gray-500"
+          title="Depuis Google Sheets : Fichier → Télécharger → Microsoft Excel (.xlsx) pour conserver les formules et la mise en forme."
+        >
+          <Info className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="text-right">
+            Tableurs : préférez le <span className="font-medium">.xlsx</span> ou le <span className="font-medium">.ods</span> (le .csv perd les formules)
+          </span>
+        </div>
+      )}
 
       {infoFolder && (
         <Dialog open={!!infoFolder} onOpenChange={(v) => { if (!v) setInfoFolder(null) }}>
