@@ -140,9 +140,6 @@ function PointagePage() {
               Rescannez le QR code en partant pour enregistrer votre départ.
             </p>
           )}
-          <Button onClick={restart} variant="outline" className="w-full mt-2 border-2 rounded-xl">
-            Pointer pour quelqu'un d'autre
-          </Button>
         </div>
       </Shell>
     )

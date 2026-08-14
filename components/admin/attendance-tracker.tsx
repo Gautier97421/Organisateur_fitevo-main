@@ -6,8 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CalendarDays, Clock, Download, Loader2, QrCode, Users } from "lucide-react"
+import { AlertTriangle, CalendarDays, Clock, Download, Loader2, QrCode, Trash2, Users, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { getIsSuperAdmin, getUserRole } from "@/lib/current-user"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
 
 interface TimeEntry {
   id: string
@@ -68,6 +72,13 @@ export function AttendanceTracker() {
   const [to, setTo] = useState(dayKey(new Date()))
   const [gymId, setGymId] = useState("all")
   const [employee, setEmployee] = useState("all")
+  // La suppression d'un pointage est une donnée de temps de travail : superadmin uniquement
+  // (l'API applique la même règle, l'affichage ne fait que suivre).
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [entryToDelete, setEntryToDelete] = useState<TimeEntry | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => { setIsSuperAdmin(getUserRole() === "superadmin" || getIsSuperAdmin()) }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -134,6 +145,29 @@ export function AttendanceTracker() {
     }
     return Array.from(map.values()).sort((a, b) => b.ms - a.ms)
   }, [filtered])
+
+  const deleteEntry = async () => {
+    if (!entryToDelete) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/time-entries/${entryToDelete.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        toast.error(json.error || "Suppression impossible.")
+        return
+      }
+      toast.success("Pointage supprimé.")
+      setEntryToDelete(null)
+      await load()
+    } catch {
+      toast.error("Suppression impossible.")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const exportPdf = async () => {
     if (filtered.length === 0) {
@@ -281,6 +315,7 @@ export function AttendanceTracker() {
                     <th className="text-left font-medium px-4 py-2.5">Arrivée</th>
                     <th className="text-left font-medium px-4 py-2.5">Départ</th>
                     <th className="text-left font-medium px-4 py-2.5">Durée</th>
+                    {isSuperAdmin && <th className="w-10 px-2 py-2.5" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -305,6 +340,18 @@ export function AttendanceTracker() {
                             ? <span className="text-amber-600 font-medium">En cours</span>
                             : <span className="font-semibold text-gray-900">{formatDuration(d)}</span>}
                         </td>
+                        {isSuperAdmin && (
+                          <td className="px-2 py-2.5">
+                            <button
+                              onClick={() => setEntryToDelete(e)}
+                              title="Supprimer ce pointage"
+                              aria-label="Supprimer ce pointage"
+                              className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -314,6 +361,39 @@ export function AttendanceTracker() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!entryToDelete} onOpenChange={(open) => { if (!open) setEntryToDelete(null) }}>
+        <DialogContent className="max-w-[90vw] sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600" /> Supprimer ce pointage
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Cette suppression est définitive et retire le temps de travail correspondant du suivi.
+            </DialogDescription>
+          </DialogHeader>
+          {entryToDelete && (
+            <div className="rounded-lg bg-gray-50 p-3 text-sm">
+              <p className="font-medium text-gray-900">{entryToDelete.employeeName}</p>
+              <p className="text-gray-600">
+                {jour(entryToDelete.checkInTime)} · {entryToDelete.gym?.name || "—"} ·{" "}
+                {heure(entryToDelete.checkInTime)} → {heure(entryToDelete.checkOutTime)}
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:flex-wrap sm:justify-center">
+            <Button variant="outline" onClick={() => setEntryToDelete(null)} className="whitespace-nowrap">
+              <XCircle className="mr-2 h-4 w-4 flex-shrink-0" /> Annuler
+            </Button>
+            <Button onClick={deleteEntry} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap">
+              {deleting
+                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                : <Trash2 className="mr-2 h-4 w-4 flex-shrink-0" />}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
