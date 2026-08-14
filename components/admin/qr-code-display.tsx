@@ -19,8 +19,10 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
     const generateQR = async () => {
       if (!canvasRef.current) return
 
-      // Construire l'URL avec l'ID de la salle
-      const url = siteUrl ? `${siteUrl}?gym=${gymId}` : `${window.location.origin}?gym=${gymId}`
+      // Page de pointage dédiée : elle s'ouvre sans compte connecté, l'employé s'identifie
+      // avec un code reçu par email.
+      const base = (siteUrl || window.location.origin).replace(/\/+$/, "")
+      const url = `${base}/pointage?gym=${gymId}`
       setQrUrl(url)
 
       try {
@@ -59,6 +61,10 @@ export function QRCodeDisplay({ gymId, gymName, siteUrl }: QRCodeDisplayProps) {
       <div className="p-2 bg-white rounded-xl border border-gray-100 shadow-sm">
         <canvas ref={canvasRef} className="rounded-lg block" />
       </div>
+      <p className="text-xs text-gray-500 text-center leading-snug">
+        À afficher en salle : les employés le scannent pour pointer leur arrivée, puis leur départ.
+      </p>
+      {qrUrl && <p className="text-[10px] text-gray-400 break-all text-center">{qrUrl}</p>}
       <Button
         onClick={downloadQRCode}
         variant="outline"

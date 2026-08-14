@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { TaskManager } from "@/components/admin/task-manager"
 import { EmployeeManager } from "@/components/admin/employee-manager"
-import { RealTimeMonitor } from "@/components/admin/real-time-monitor"
+import { MonitorSection } from "@/components/admin/monitor-section"
 import { CalendarManager } from "@/components/admin/calendar-manager"
 import { GymManager } from "@/components/admin/gym-manager"
 import { WorkScheduleManager } from "@/components/admin/work-schedule-manager"
@@ -145,7 +145,7 @@ export default function AdminPage() {
     { id: "cash-fields", label: "Infos supp", icon: Banknote,      component: <CashRegisterFieldManager /> },
     { id: "cash-recap",  label: "Tableau de bord",  icon: BarChart3,     component: <CashRecapManager /> },
     { id: "incidents",   label: "Incidents",       icon: AlertTriangle,  component: <IncidentsManager /> },
-    { id: "monitor",     label: "Suivi",           icon: Activity,       component: <RealTimeMonitor /> },
+    { id: "monitor",     label: "Suivi",           icon: Activity,       component: <MonitorSection /> },
     { id: "ventes",      label: "Ventes & Stock",  icon: ShoppingBag,    component: <VentesStockManager /> },
   ]
 

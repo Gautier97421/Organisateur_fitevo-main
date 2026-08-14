@@ -45,6 +45,7 @@ model User {
   tasks             Task[]
   workSchedules     WorkSchedule[]
   timeEntries       TimeEntry[]
+  checkInCodes      CheckInCode[]
   userGyms          UserGym[]
   resetTokens       PasswordResetToken[]
   conversationMembers ConversationMember[]
@@ -170,6 +171,7 @@ model Gym {
   tasks              Task[]
   recurringTasks     RecurringTask[]
   timeEntries        TimeEntry[]
+  checkInCodes       CheckInCode[]
   userGyms           UserGym[]
   workSchedules      WorkSchedule[]
   cashRegisterFields CashRegisterField[]
@@ -304,18 +306,39 @@ model NewMemberInstructionItem {
 }
 
 model TimeEntry {
-  id            String   @id @default(cuid())
-  userId        String   @map("user_id")
-  gymId         String   @map("gym_id")
-  employeeName  String   @map("employee_name")
-  employeeEmail String   @map("employee_email")
-  checkInTime   DateTime @map("check_in_time")
-  createdAt     DateTime @default(now()) @map("created_at")
-  
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  gymId         String    @map("gym_id")
+  employeeName  String    @map("employee_name")
+  employeeEmail String    @map("employee_email")
+  checkInTime   DateTime  @map("check_in_time")
+  checkOutTime  DateTime? @map("check_out_time") // null = pointage encore ouvert
+  source        String    @default("app") // "app" (pointage dans l'application) | "qr" (scan en salle)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   gym  Gym  @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  
+
   @@map("time_entries")
+}
+
+/// Code à usage unique envoyé par email pour valider un pointage par QR code.
+/// Le code n'est jamais stocké en clair : seul son hash permet de le vérifier.
+model CheckInCode {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  gymId     String    @map("gym_id")
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gym  Gym  @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@index([userId, gymId])
+  @@map("check_in_codes")
 }
 
 model UserGym {

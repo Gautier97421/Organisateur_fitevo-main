@@ -291,3 +291,32 @@ export async function sendWelcomeEmail(
   await dispatch(toEmail, "Bienvenue sur FitEvo — activez votre compte", html)
 }
 
+/** Code à usage unique pour valider un pointage scanné en salle. */
+export async function sendCheckInCodeEmail(data: {
+  toEmail: string
+  code: string
+  gymName: string
+  minutes: number
+  action: "in" | "out"
+}): Promise<void> {
+  const actionLabel = data.action === "out" ? "votre départ" : "votre arrivée"
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 16px">
+      <h2 style="color:#dc2626;margin-bottom:8px">Code de pointage</h2>
+      <p style="color:#374151;margin-bottom:16px">
+        Voici votre code pour enregistrer ${actionLabel} à <strong>${escapeHtml(data.gymName)}</strong>.
+        Il est valable <strong>${data.minutes} minutes</strong> et ne fonctionne qu'une seule fois.
+      </p>
+      <p style="font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;background:#f3f4f6;
+                border-radius:8px;padding:16px;text-align:center;margin:0 0 24px">
+        ${escapeHtml(data.code)}
+      </p>
+      <p style="color:#6b7280;font-size:13px">
+        Si vous n'avez pas scanné le QR code de la salle, ignorez cet email : aucun pointage ne sera enregistré.
+      </p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">Email automatique FitEvo — ne pas répondre.</p>
+    </div>
+  `
+  await dispatch(data.toEmail, `Code de pointage : ${data.code}`, html)
+}
+
