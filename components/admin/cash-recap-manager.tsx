@@ -544,18 +544,6 @@ export function CashRecapManager() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Total {monthLabel(selectedMonth)}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-gray-900">{currentTotals.totalRegister.toFixed(2)} EUR</p>
-            <p className="text-sm text-gray-600 mt-1">{currentTotals.count} saisie(s)</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {gyms.length > 0 && entries.length > 0 && (
         <Card>
           <CardHeader>

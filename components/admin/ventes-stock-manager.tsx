@@ -524,10 +524,28 @@ export function VentesStockManager() {
       .sort((a, b) => b.value - a.value || b.quantity - a.quantity)
   }, [sales, articleSeries, seriesKeyByProductKey, hasOthersSeries, chartMetric])
 
-  const articleBreakdownTotal = useMemo(
-    () => articleBreakdown.reduce((sum, item) => sum + item.value, 0),
+  /** Totaux du mois, sur les deux mesures : ils servent de dénominateur aux parts affichées. */
+  const articleBreakdownTotals = useMemo(
+    () =>
+      articleBreakdown.reduce(
+        (acc, item) => ({ total: acc.total + item.total, quantity: acc.quantity + item.quantity }),
+        { total: 0, quantity: 0 },
+      ),
     [articleBreakdown],
   )
+
+  /**
+   * Une part arrondie à « 0,0 % » laisse croire qu'un article n'a rien vendu, et « 100,0 % »
+   * qu'il a tout vendu à lui seul : un article à 1,50 € face à un article à 15 000 € tombait
+   * exactement dans ce piège. Ces deux extrêmes sont donc distingués des vraies valeurs 0 et 100.
+   */
+  const formatShare = (value: number, total: number): string => {
+    if (total <= 0) return "—"
+    const pct = (value / total) * 100
+    if (pct > 0 && pct < 0.1) return "< 0,1 %"
+    if (pct < 100 && pct >= 99.9) return "> 99,9 %"
+    return `${pct.toFixed(1).replace(".", ",")} %`
+  }
 
   /** Formate une valeur selon la mesure affichée : montant en euros ou nombre d'unités. */
   const formatMetric = (value: number) =>
@@ -1072,7 +1090,6 @@ export function VentesStockManager() {
 
                   <div className="space-y-2">
                     {articleBreakdown.map((item) => {
-                      const share = articleBreakdownTotal > 0 ? (item.value / articleBreakdownTotal) * 100 : 0
                       return (
                         <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                           <div className="flex items-center gap-3 min-w-0">
@@ -1082,13 +1099,19 @@ export function VentesStockManager() {
                             />
                             <span className="font-medium text-gray-900 truncate">{item.label}</span>
                           </div>
-                          {/* Les deux mesures sont toujours détaillées : un article
-                              offert affiche 0 € mais garde sa quantité visible. */}
+                          {/* Les deux mesures sont toujours détaillées, quantité ET chiffre
+                              d'affaires : un article offert affiche 0 € mais garde sa quantité
+                              visible, et un article bon marché garde une part d'unités lisible
+                              même quand un article cher écrase le CA du mois. */}
                           <div className="text-right flex-shrink-0">
                             <p className="font-semibold text-gray-900">
                               {item.quantity} vendu{item.quantity > 1 ? "s" : ""} · {fmt(item.total)}
                             </p>
-                            <p className="text-xs text-gray-500">{share.toFixed(1)}% des {chartMetric === "total" ? "ventes" : "unités"}</p>
+                            <p className="text-xs text-gray-500">
+                              {formatShare(item.quantity, articleBreakdownTotals.quantity)} des unités
+                              {" · "}
+                              {formatShare(item.total, articleBreakdownTotals.total)} du CA
+                            </p>
                           </div>
                         </div>
                       )

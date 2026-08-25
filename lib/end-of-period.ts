@@ -1,78 +1,50 @@
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
 
 export type Period = "matin" | "aprem" | "journee"
-
-interface LatestCashEntry {
-  total_register?: number
-  cash_amount?: number
-  coins_detail?: string
-  notes?: string
-  custom_values?: any
-}
+export type SubPeriod = "debut" | "milieu" | "fin" | null | undefined
 
 /**
- * Fetch latest [PENDANT] cash entry for today/period/user, used to mark end-of-period.
- * Returns null if no entry exists.
+ * Le comptage de caisse de fermeture n'incombe qu'aux employés qui tiennent le créneau de
+ * fermeture : le sous-créneau « Fin », ou la journée entière (qui va de l'ouverture à la
+ * fermeture). Pour les autres, ce sont les ventes qui tracent les mouvements d'argent entre
+ * l'ouverture et la fermeture — comme pour le comptage d'ouverture, fait une seule fois par jour.
  */
-export async function fetchLatestPendantEntry(params: {
-  period: Period
-  gymId?: string | null
-}): Promise<LatestCashEntry | null> {
-  const userEmail = getUserEmail()
-  if (!userEmail) return null
-
-  const now = new Date()
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-  const todayStr = now.toISOString().split("T")[0]
-  const qs = new URLSearchParams({ month })
-  if (params.gymId) qs.set("gym_id", params.gymId)
-
-  try {
-    const response = await fetch(`/api/db/cash-register-entries?${qs.toString()}`, {
-      credentials: "same-origin",
-    })
-    if (!response.ok) return null
-    const data = await response.json()
-    const entries = Array.isArray(data.data) ? data.data : []
-
-    const pendantEntries = entries.filter((e: any) => {
-      if (e.user_email !== userEmail) return false
-      if (e.period !== params.period) return false
-      if (!(e.entry_date || "").startsWith(todayStr)) return false
-      const notes = e.notes || ""
-      return notes.includes("[PENDANT]")
-    })
-
-    if (pendantEntries.length === 0) return null
-
-    pendantEntries.sort((a: any, b: any) => {
-      const ta = new Date(a.entry_date || a.created_at || 0).getTime()
-      const tb = new Date(b.entry_date || b.created_at || 0).getTime()
-      return tb - ta
-    })
-
-    return pendantEntries[0]
-  } catch {
-    return null
-  }
+export function requiresClosingCashCount(period: Period, subPeriod: SubPeriod): boolean {
+  if (period === "journee") return true
+  return subPeriod === "fin"
 }
 
 /**
- * Persist a [FIN_PERIODE] cash entry derived from the latest [PENDANT] entry of the day.
- * Used to flag the official period-end count for admin recap.
+ * Persist the [FIN_PERIODE] cash entry from the closing count filled in by the employee.
+ *
+ * Le comptage de caisse se fait à l'ouverture et à la fermeture uniquement : entre les deux, ce
+ * sont les ventes qui tracent les mouvements d'argent. Cette fonction enregistre le comptage de
+ * fermeture, qui sert de référence au récap admin.
  */
 export async function persistFinPeriodeEntry(params: {
   period: Period
   gymId?: string | null
-  source: LatestCashEntry
+  cashData: any
 }): Promise<boolean> {
   const userId = getUserId()
   const userEmail = getUserEmail()
   const userName = getUserName()
   if (!userId || !userEmail) return false
 
-  const sourceNotes = (params.source.notes || "").replace(/\[PENDANT\]/g, "").trim()
-  const mergedNotes = ["[FIN_PERIODE]", sourceNotes].filter(Boolean).join(" ").trim()
+  const cashData = params.cashData || {}
+  const mergedNotes = ["[FIN_PERIODE]", cashData.notes || ""].filter(Boolean).join(" ").trim()
+
+  // Les champs personnalisés de la fiche de caisse arrivent à plat dans cashData : tout ce qui
+  // n'est pas un champ standard est un champ personnalisé et doit être conservé tel quel.
+  const customValues: Record<string, any> = {
+    ...Object.fromEntries(
+      Object.entries(cashData).filter(([key]) =>
+        !["cash_amount", "total_register", "coins_detail", "notes", "_coinCounts"].includes(key)
+      )
+    ),
+    // Clé canonique du détail des pièces, celle que relisent les écrans de récap.
+    ...(cashData._coinCounts ? { __coinCounts: cashData._coinCounts } : {}),
+  }
 
   const response = await fetch("/api/db/cash-register-entries", {
     method: "POST",
@@ -87,11 +59,11 @@ export async function persistFinPeriodeEntry(params: {
       gymId: params.gymId || null,
       userEmail,
       userName,
-      totalRegister: Number(params.source.total_register || 0),
-      cashAmount: Number(params.source.cash_amount || 0),
-      coinsDetail: params.source.coins_detail || "",
+      totalRegister: Number(cashData.total_register || 0),
+      cashAmount: Number(cashData.cash_amount || 0),
+      coinsDetail: cashData.coins_detail || "",
       notes: mergedNotes,
-      customValues: params.source.custom_values || {},
+      customValues,
     }),
   })
 
@@ -105,7 +77,9 @@ export async function persistFinPeriodeEntry(params: {
 export async function endWorkPeriod(params: {
   period: Period
   gymId?: string | null
-  cashTotal: number
+  // null quand le créneau n'impose pas de comptage de fermeture : le récap n'affiche alors
+  // aucun montant plutôt qu'un trompeur 0,00 EUR.
+  cashTotal?: number | null
   tasksCompleted: number
   totalTasks: number
 }): Promise<void> {
@@ -152,8 +126,9 @@ export async function endWorkPeriod(params: {
           hour: "2-digit",
           minute: "2-digit",
         })
-        const cashMarker = ` | [CASH_REGISTER_DONE:${gymKey}:${today}]`
-        const cashSummary = ` | Caisse: ${params.cashTotal.toFixed(2)} EUR`
+        const hasCashCount = params.cashTotal !== null && params.cashTotal !== undefined
+        const cashMarker = hasCashCount ? ` | [CASH_REGISTER_DONE:${gymKey}:${today}]` : ""
+        const cashSummary = hasCashCount ? ` | Caisse: ${Number(params.cashTotal).toFixed(2)} EUR` : ""
         const updatedNotes = `${activeSchedule.notes || ""} | Pause: ${totalBreakTime} min${cashMarker}${cashSummary}`
 
         await fetch(`/api/db/work_schedules/${activeSchedule.id}`, {
@@ -184,7 +159,7 @@ export async function endWorkPeriod(params: {
               breakDuration: totalBreakTime,
               tasksCompleted: params.tasksCompleted,
               totalTasks: params.totalTasks,
-              cashTotal: params.cashTotal,
+              cashTotal: hasCashCount ? Number(params.cashTotal) : undefined,
             },
           }),
         }).catch(() => { /* non-blocking */ })

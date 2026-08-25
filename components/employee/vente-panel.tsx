@@ -8,8 +8,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import {
   ShoppingCart, Plus, Minus, Trash2, CheckCircle, Package, Search,
-  AlertTriangle, Loader2, ShoppingBag, Gift, Tag,
+  AlertTriangle, Loader2, ShoppingBag, Gift, Tag, PlusCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { applyPromotions, type PromotionRule } from "@/lib/promotions"
@@ -26,6 +30,17 @@ interface Product {
 
 interface CartItem {
   product: Product
+  quantity: number
+}
+
+// Article vendu sans fiche produit au catalogue ("vente spécifique") : l'employé saisit lui-même
+// le libellé et le prix. Pas de stock ni de promotion associés — la vente est enregistrée telle
+// quelle, sans productId.
+interface CustomItem {
+  id: string
+  name: string
+  price: number
+  category: string | null
   quantity: number
 }
 
@@ -77,6 +92,20 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
       return {}
     }
   })
+  // Articles hors catalogue saisis à la volée, conservés avec le panier.
+  const [customItems, setCustomItems] = useState<CustomItem[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const raw = window.sessionStorage.getItem(cartStorageKey(userEmail, period, gymId))
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      return parsed && !Array.isArray(parsed) && Array.isArray(parsed.customItems) ? parsed.customItems : []
+    } catch {
+      return []
+    }
+  })
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customForm, setCustomForm] = useState({ name: "", price: "", category: "" })
   const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -85,15 +114,15 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
   useEffect(() => {
     const key = cartStorageKey(userEmail, period, gymId)
     try {
-      if (cart.length > 0) {
-        window.sessionStorage.setItem(key, JSON.stringify({ cart, declinedGifts }))
+      if (cart.length > 0 || customItems.length > 0) {
+        window.sessionStorage.setItem(key, JSON.stringify({ cart, declinedGifts, customItems }))
       } else {
         window.sessionStorage.removeItem(key)
       }
     } catch {
       // Stockage indisponible (mode privé, quota…) : le panier reste fonctionnel en mémoire.
     }
-  }, [cart, declinedGifts, userEmail, period, gymId])
+  }, [cart, declinedGifts, customItems, userEmail, period, gymId])
 
   useEffect(() => {
     const load = async () => {
@@ -195,8 +224,10 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
     ),
     [cart, promotions, products, gymId, declinedGifts]
   )
-  const cartTotal = promoResult.total
-  const cartCount = cart.reduce((a, item) => a + item.quantity, 0)
+  const customTotal = customItems.reduce((a, i) => a + i.price * i.quantity, 0)
+  const cartTotal = promoResult.total + customTotal
+  const cartCount =
+    cart.reduce((a, item) => a + item.quantity, 0) + customItems.reduce((a, i) => a + i.quantity, 0)
 
   // Un refus d'article offert n'a de sens que pour le "cycle" d'achat en cours : si l'article
   // acheté correspondant repasse à 0 (retiré ligne par ligne, sans forcément faire "Vider"), on
@@ -323,6 +354,44 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
     setCart((prev) => prev.filter((i) => i.product.id !== productId))
   }
 
+  const addCustomItem = () => {
+    const name = customForm.name.trim()
+    if (!name) {
+      toast.error("Le nom de l'article est obligatoire")
+      return
+    }
+    // La virgule décimale est le réflexe naturel sur un pavé numérique français.
+    const price = Number(customForm.price.trim().replace(",", "."))
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error("Prix invalide")
+      return
+    }
+    const category = customForm.category.trim()
+    setCustomItems((prev) => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        price,
+        category: category || null,
+        quantity: 1,
+      },
+    ])
+    setCustomForm({ name: "", price: "", category: "" })
+    setCustomOpen(false)
+    toast.success(`« ${name} » ajouté au panier`)
+  }
+
+  const updateCustomQty = (id: string, delta: number) => {
+    setCustomItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, quantity: i.quantity + delta } : i)).filter((i) => i.quantity > 0)
+    )
+  }
+
+  const removeCustomItem = (id: string) => {
+    setCustomItems((prev) => prev.filter((i) => i.id !== id))
+  }
+
   const renderProductTile = (product: Product) => {
     const inCart = cart.find((i) => i.product.id === product.id)
     const outOfStock = isOutOfStock(product)
@@ -423,7 +492,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
   }
 
   const handleSubmit = async () => {
-    if (cart.length === 0) return
+    if (cart.length === 0 && customItems.length === 0) return
     setSubmitting(true)
 
     try {
@@ -432,6 +501,12 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+          customItems: customItems.map((i) => ({
+            name: i.name,
+            price: i.price,
+            category: i.category,
+            quantity: i.quantity,
+          })),
           userEmail,
           userName,
           gymId: gymId || null,
@@ -444,9 +519,10 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
         throw new Error(errJson?.error || "La vente n'a pas pu être enregistrée")
       }
       const json = await res.json()
-      const count = Array.isArray(json?.data?.sales) ? json.data.sales.length : cart.length
+      const count = Array.isArray(json?.data?.sales) ? json.data.sales.length : cart.length + customItems.length
       setCart([])
       setDeclinedGifts({})
+      setCustomItems([])
       setSuccessCount((c) => c + count)
       toast.success(`Vente enregistrée avec succès (${count} ligne(s))`)
       // Rafraîchir le stock
@@ -494,7 +570,18 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
       ) : products.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center">
           <Package className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          <p className="text-sm text-gray-500">Aucun article disponible à la vente.</p>
+          <p className="text-sm text-gray-500 mb-3">Aucun article disponible à la vente.</p>
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCustomOpen(true)}
+              className="rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Vente spécifique
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -509,18 +596,29 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
             />
           </div>
 
-          {/* Filtre par catégorie */}
-          {categories.length > 1 && (
-            <Select value={selectedCategory || "_all"} onValueChange={(v) => setSelectedCategory(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-full sm:w-56 rounded-xl">
-                <SelectValue placeholder="Toutes les catégories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">Toutes les catégories</SelectItem>
-                {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
+          {/* Filtre par catégorie + vente d'un article hors catalogue */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            {categories.length > 1 && (
+              <Select value={selectedCategory || "_all"} onValueChange={(v) => setSelectedCategory(v === "_all" ? "" : v)}>
+                <SelectTrigger className="w-full sm:w-56 rounded-xl">
+                  <SelectValue placeholder="Toutes les catégories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Toutes les catégories</SelectItem>
+                  {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCustomOpen(true)}
+              className="rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Vente spécifique
+            </Button>
+          </div>
 
           {/* Catalogue */}
           {grouped.length === 0 ? (
@@ -553,7 +651,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
       )}
 
       {/* Panier */}
-      {cart.length > 0 && (
+      {(cart.length > 0 || customItems.length > 0) && (
         <div className="rounded-xl border border-red-200 bg-red-50/40 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -561,7 +659,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
               <span className="font-semibold text-gray-900 text-sm">Panier ({cartCount} article{cartCount > 1 ? "s" : ""})</span>
             </div>
             <button
-              onClick={() => { setCart([]); setDeclinedGifts({}) }}
+              onClick={() => { setCart([]); setDeclinedGifts({}); setCustomItems([]) }}
               className="text-xs text-gray-400 hover:text-red-600 transition-colors"
             >
               Vider
@@ -590,6 +688,33 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="font-semibold text-gray-900">{fmt(item.product.price * item.quantity)}</span>
                   <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-600 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </li>
+            ))}
+            {/* Articles hors catalogue saisis par l'employé : ni stock ni promotion, on affiche
+                simplement le libellé, le prix saisi et la catégorie éventuelle. */}
+            {customItems.map((item) => (
+              <li key={item.id} className="flex items-center justify-between text-sm gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => updateCustomQty(item.id, -1)} className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center hover:bg-white">
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="w-5 text-center font-bold text-gray-900">{item.quantity}</span>
+                    <button onClick={() => updateCustomQty(item.id, 1)} className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center hover:bg-white">
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <span className="truncate text-gray-800">{item.name}</span>
+                  <Badge variant="outline" className="text-[10px] flex-shrink-0">
+                    {item.category ? `Hors catalogue · ${item.category}` : "Hors catalogue"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="font-semibold text-gray-900">{fmt(item.price * item.quantity)}</span>
+                  <button onClick={() => removeCustomItem(item.id)} className="text-gray-300 hover:text-red-600 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -654,7 +779,7 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
             <div>
               <p className="text-xs text-gray-500">Total</p>
               {promoResult.totalDiscount > 0 && (
-                <p className="text-xs text-gray-400 line-through">{fmt(promoResult.subtotal)}</p>
+                <p className="text-xs text-gray-400 line-through">{fmt(promoResult.subtotal + customTotal)}</p>
               )}
               <p className="text-lg font-bold text-red-600">{fmt(cartTotal)}</p>
             </div>
@@ -673,6 +798,65 @@ export function VentePanel({ period, gymId, gymName, userEmail, userName }: Vent
           </div>
         </div>
       )}
+
+      {/* Vente spécifique : article absent du catalogue, saisi à la volée */}
+      <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vente spécifique</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => { e.preventDefault(); addCustomItem() }}
+          >
+            <p className="text-xs text-gray-500">
+              Pour un article qui n'existe pas encore au catalogue. Il sera enregistré dans la vente
+              sans toucher au stock.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-name">Nom de l'article *</Label>
+              <Input
+                id="custom-name"
+                autoFocus
+                value={customForm.name}
+                onChange={(e) => setCustomForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Ex : Bouteille d'eau"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-price">Prix (EUR) *</Label>
+              <Input
+                id="custom-price"
+                inputMode="decimal"
+                value={customForm.price}
+                onChange={(e) => setCustomForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="Ex : 2,50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-category">Catégorie (facultatif)</Label>
+              <Input
+                id="custom-category"
+                value={customForm.category}
+                onChange={(e) => setCustomForm((f) => ({ ...f, category: e.target.value }))}
+                placeholder="Ex : Boissons"
+                list="vente-custom-categories"
+              />
+              <datalist id="vente-custom-categories">
+                {categories.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>
+                Annuler
+              </Button>
+              <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white">
+                Ajouter au panier
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

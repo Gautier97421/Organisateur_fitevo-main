@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress"
 import { Lock, CheckCircle, XCircle, Pause, BarChart3, FileText, PartyPopper, List as ListIcon, Hourglass, DollarSign, AlertTriangle } from "lucide-react"
 import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 import { getUserId, getUserEmail, getUserName } from "@/lib/current-user"
+import { requiresClosingCashCount } from "@/lib/end-of-period"
 import { toast } from "sonner"
 import { CashRegisterForm } from "./cash-register-form"
 import { RecurringTodoList } from "./recurring-todo-list"
@@ -524,23 +525,23 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     setTaskToValidate(null)
   }
 
-  const isFirstWorkSessionOfDay = async (): Promise<boolean> => {
-    const userId = getUserId() || ""
-    if (!userId) return false
-
+  // Le comptage d'ouverture est fait UNE fois par jour et par salle : si un·e collègue l'a déjà
+  // saisi ce matin, les périodes suivantes n'ont pas à le refaire. Entre l'ouverture et la
+  // fermeture, ce sont les ventes qui tracent les mouvements d'argent.
+  const isOpeningCashCountNeeded = async (): Promise<boolean> => {
     const today = new Date().toISOString().split('T')[0]
-    const url = `/api/db/work_schedules?user_id=${userId}&work_date=${today}&type=work`
+    const qs = new URLSearchParams({ date: today })
+    if (gymId) qs.set("gym_id", gymId)
 
-    const response = await fetch(url)
-    if (!response.ok) {
-      return false
-    }
+    const response = await fetch(`/api/db/cash-register-entries/opening-status?${qs.toString()}`, {
+      credentials: "same-origin",
+    })
+    // En cas d'échec on ne redemande pas le comptage : mieux vaut une ouverture manquée qu'un
+    // double comptage qui fausserait le récap.
+    if (!response.ok) return false
 
     const data = await response.json()
-    const schedules = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-    const workSessions = schedules.filter((schedule: any) => (schedule.notes || "").includes("Période:"))
-
-    return workSessions.length <= 1
+    return data?.data?.done !== true
   }
 
   const finalizeSession = async (cashData?: any, markCashRegisterDone?: boolean) => {
@@ -731,14 +732,23 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
       return
     }
 
+    await closePeriod()
+  }
+
+  // Seul le créneau de fermeture compte la caisse en fin de période ; pour les autres, la
+  // to-do list se clôture directement.
+  const closePeriod = async () => {
+    if (!requiresClosingCashCount(period, subPeriod)) {
+      await finalizeSession()
+      return
+    }
     setCashFormMode("end")
     setShowCashRegisterForm(true)
   }
 
   const continueToCashRegisterAfterWarning = () => {
     setShowOptionalTextWarningDialog(false)
-    setCashFormMode("end")
-    setShowCashRegisterForm(true)
+    void closePeriod()
   }
 
   const cancelCashRegisterAfterWarning = () => {
@@ -766,7 +776,7 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
 
       try {
         setIsCheckingCashStatus(true)
-        const shouldOpen = await isFirstWorkSessionOfDay()
+        const shouldOpen = await isOpeningCashCountNeeded()
         if (shouldOpen) {
           setCashFormMode("start")
           setShowCashRegisterForm(true)

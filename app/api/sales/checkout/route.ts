@@ -9,6 +9,9 @@ import logger from "@/lib/logger"
  * Reçoit le panier brut { items: [{productId, quantity}], userEmail, userName, gymId, period, notes }.
  * Recharge produits + promotions actives depuis la base et calcule les lignes cadeaux / remises
  * côté serveur (source de vérité), puis crée toutes les ventes et décrémente les stocks en une transaction.
+ *
+ * customItems: [{name, price, quantity, category}] = "ventes spécifiques" pour un article absent du
+ * catalogue. Enregistrées sans productId (donc sans stock ni promotion), avec le prix saisi.
  */
 export async function POST(request: NextRequest) {
   const userId = await verifyAuth(request)
@@ -16,18 +19,33 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { items, userEmail, userName, gymId, period, notes, declinedGifts } = body
+    const { items, customItems, userEmail, userName, gymId, period, notes, declinedGifts } = body
 
-    if (!Array.isArray(items) || items.length === 0 || !userEmail) {
+    const rawItems: any[] = Array.isArray(items) ? items : []
+    const rawCustomItems: any[] = Array.isArray(customItems) ? customItems : []
+
+    if ((rawItems.length === 0 && rawCustomItems.length === 0) || !userEmail) {
       return NextResponse.json({ error: "items et userEmail sont obligatoires" }, { status: 400 })
     }
 
-    const requestedIds = [...new Set(items.map((i: any) => String(i.productId)))]
+    // Ventes spécifiques : le libellé et le prix viennent de l'employé, on les valide strictement
+    // puisqu'aucune fiche produit ne sert de garde-fou.
+    const customLines = rawCustomItems.map((i: any) => ({
+      name: String(i?.name ?? "").trim(),
+      price: Number(i?.price),
+      quantity: Math.max(1, Math.floor(Number(i?.quantity) || 1)),
+      category: typeof i?.category === "string" && i.category.trim() ? i.category.trim() : null,
+    }))
+    if (customLines.some((l) => !l.name || !Number.isFinite(l.price) || l.price < 0)) {
+      return NextResponse.json({ error: "Vente spécifique invalide : nom et prix sont obligatoires" }, { status: 400 })
+    }
+
+    const requestedIds = [...new Set(rawItems.map((i: any) => String(i.productId)))]
     const products = await prisma.product.findMany({ where: { id: { in: requestedIds } } })
     const productsById = new Map(products.map((p) => [p.id, p]))
 
     const cart: CartLine[] = []
-    for (const item of items) {
+    for (const item of rawItems) {
       const product = productsById.get(String(item.productId))
       const quantity = Math.max(1, Number(item.quantity))
       if (!product) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
@@ -52,6 +70,7 @@ export async function POST(request: NextRequest) {
       declinedGifts && typeof declinedGifts === "object" ? declinedGifts : undefined
 
     const result = applyPromotions(cart, promotions as PromotionRule[], catalog, gymId || null, declinedGiftQuantities)
+    const customTotal = customLines.reduce((sum, l) => sum + l.price * l.quantity, 0)
 
     const now = new Date()
     const saleMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -99,6 +118,31 @@ export async function POST(request: NextRequest) {
         created.push(sale)
       }
 
+      // Ventes spécifiques : aucun productId (l'article n'existe pas au catalogue) et aucun stock à
+      // décrémenter. La catégorie éventuelle est conservée dans les notes, faute de colonne dédiée.
+      for (const line of customLines) {
+        const noteParts = ["Vente spécifique (hors catalogue)"]
+        if (line.category) noteParts.push(`Catégorie : ${line.category}`)
+        if (notes?.trim()) noteParts.push(notes.trim())
+        const sale = await tx.sale.create({
+          data: {
+            productId: null,
+            productName: line.name,
+            quantity: line.quantity,
+            unitPrice: line.price,
+            total: line.price * line.quantity,
+            userEmail,
+            userName: userName || userEmail,
+            gymId: gymId || null,
+            period: period || null,
+            saleDate: now,
+            saleMonth,
+            notes: noteParts.join(" · "),
+          },
+        })
+        created.push(sale)
+      }
+
       for (const [productId, qty] of stockDeltas) {
         const fresh = freshProducts.get(productId)
         if (fresh && fresh.trackStock) {
@@ -112,9 +156,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       data: {
         sales,
-        subtotal: result.subtotal,
+        subtotal: result.subtotal + customTotal,
         totalDiscount: result.totalDiscount,
-        total: result.total,
+        total: result.total + customTotal,
         appliedPromotions: result.appliedPromotions,
       },
     }, { status: 201 })

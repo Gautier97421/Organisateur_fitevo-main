@@ -9,7 +9,6 @@ import { EmergencyButton } from "@/components/employee/emergency-button"
 import { CalendarView } from "@/components/employee/calendar-view"
 import { SimpleTimeTracker } from "@/components/employee/simple-time-tracker"
 import { WorkScheduleCalendar } from "@/components/employee/work-schedule-calendar"
-import { CashRegisterBlotter } from "@/components/employee/cash-register-blotter"
 import { ExtraInfoPanel } from "@/components/employee/extra-info-panel"
 import { VentePanel } from "@/components/employee/vente-panel"
 import { VentesStockManager } from "@/components/admin/ventes-stock-manager"
@@ -63,7 +62,7 @@ export default function EmployeePage() {
   const [hasWorkPeriodAccess, setHasWorkPeriodAccess] = useState(false)
   const [hasManagerAccess, setHasManagerAccess] = useState(false)
   const [hasUserManagementAccess, setHasUserManagementAccess] = useState(false)
-  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "caisse" | "infos" | "vente" | "settings" | "ventes-stock" | "tableau-bord" | "champs-caisse" | "taches-manager" | "utilisateurs">("menu")
+  const [currentView, setCurrentView] = useState<"menu" | "tasks" | "calendar" | "schedule" | "infos" | "vente" | "settings" | "ventes-stock" | "tableau-bord" | "champs-caisse" | "taches-manager" | "utilisateurs">("menu")
   const [endPeriodDialogOpen, setEndPeriodDialogOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<"matin" | "aprem" | "journee" | null>(null)
   const [selectedSubPeriod, setSelectedSubPeriod] = useState<"debut" | "milieu" | "fin" | null>(null)
@@ -183,7 +182,7 @@ export default function EmployeePage() {
 
       // Toujours restaurer la dernière vue depuis localStorage
       const savedView = localStorage.getItem("employeeCurrentView")
-      const sessionOnlyViews = ["tasks", "caisse", "infos", "vente"]
+      const sessionOnlyViews = ["tasks", "infos", "vente"]
       const allRestorableViews = [...sessionOnlyViews, "calendar", "schedule", "ventes-stock", "tableau-bord", "champs-caisse", "taches-manager"]
 
       if (savedView && allRestorableViews.includes(savedView)) {
@@ -806,7 +805,6 @@ setHasCalendarAccess(data.has_calendar_access !== false)
       { id: "tableau-bord", label: "Tableau de bord",  active: currentView === "tableau-bord" },
       { id: "champs-caisse",label: "Infos supp",    active: currentView === "champs-caisse" },
       { id: "utilisateurs", label: "Utilisateurs",   active: currentView === "utilisateurs" },
-      { id: "caisse",       label: "Caisse",           active: currentView === "caisse" },
       { id: "infos",        label: "Informations",     active: currentView === "infos" },
       { id: "vente",        label: "Vente",            active: currentView === "vente" },
       { id: "settings",     label: "Paramètres",       active: currentView === "settings" },
@@ -943,7 +941,6 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                 const workItems = [
                   { id: "home", label: "Accueil", icon: Home, active: currentView === "menu" || currentView === "tasks", onClick: () => { setMobileOpen(false); if (selectedPeriod) setCurrentView("tasks"); else setCurrentView("menu") } },
                   ...(selectedPeriod ? [
-                    { id: "caisse", label: "Caisse", icon: Banknote, active: currentView === "caisse", onClick: () => { setCurrentView("caisse"); setMobileOpen(false) } },
                     { id: "infos", label: "Informations", icon: ClipboardList, active: currentView === "infos", onClick: () => { setCurrentView("infos"); setMobileOpen(false) } },
                     { id: "vente", label: "Vente", icon: ShoppingBag, active: currentView === "vente", onClick: () => { setCurrentView("vente"); setMobileOpen(false) } },
                   ] : []),
@@ -1235,21 +1232,6 @@ setHasCalendarAccess(data.has_calendar_access !== false)
                     hasWorkScheduleAccess={false}
                     hasCalendarAccess={hasCalendarAccess}
                     isManager={hasManagerAccess}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ── VUE CAISSE (comptage de caisse, pendant une période) ─── */}
-            {currentView === "caisse" && selectedPeriod && (
-              <div className="px-4 pt-4 pb-6 sm:px-6 sm:pt-5">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6">
-                  <CashRegisterBlotter
-                    period={selectedPeriod}
-                    gymId={selectedGym?.id}
-                    gymName={selectedGym?.name}
-                    userEmail={userEmail}
-                    userName={userName}
                   />
                 </div>
               </div>

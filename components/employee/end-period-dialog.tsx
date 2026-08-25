@@ -10,14 +10,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { CheckCircle2, XCircle, AlertTriangle, Loader2, Power } from "lucide-react"
+import { CheckCircle2, XCircle, AlertTriangle, Loader2, Power, Calculator } from "lucide-react"
 import { toast } from "sonner"
 import {
   endWorkPeriod,
-  fetchLatestPendantEntry,
   persistFinPeriodeEntry,
+  requiresClosingCashCount,
   type Period,
 } from "@/lib/end-of-period"
+import { CashRegisterForm } from "./cash-register-form"
 import { getUserId } from "@/lib/current-user"
 
 interface EndPeriodDialogProps {
@@ -34,8 +35,6 @@ interface CheckState {
   loading: boolean
   requiredTasksOk: boolean
   requiredMissingCount: number
-  cashOk: boolean
-  latestCash: any | null
   totalTasks: number
   completedTasks: number
 }
@@ -44,8 +43,6 @@ const initialState: CheckState = {
   loading: true,
   requiredTasksOk: false,
   requiredMissingCount: 0,
-  cashOk: false,
-  latestCash: null,
   totalTasks: 0,
   completedTasks: 0,
 }
@@ -61,6 +58,9 @@ export function EndPeriodDialog({
 }: EndPeriodDialogProps) {
   const [state, setState] = useState<CheckState>(initialState)
   const [submitting, setSubmitting] = useState(false)
+  // Le comptage de caisse de fermeture est saisi ici même : il n'y a plus de recomptage en cours
+  // de période dont on pourrait le déduire.
+  const [cashFormOpen, setCashFormOpen] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -127,16 +127,11 @@ export function EndPeriodDialog({
         const missingRequired = requiredTemplates.filter((t: any) => !isCompleted(t))
         const completedCount = templates.filter((t: any) => isCompleted(t)).length
 
-        // 3. Latest [PENDANT] cash entry today
-        const latest = await fetchLatestPendantEntry({ period, gymId: gymId || null })
-
         if (cancelled) return
         setState({
           loading: false,
           requiredTasksOk: missingRequired.length === 0,
           requiredMissingCount: missingRequired.length,
-          cashOk: !!latest,
-          latestCash: latest,
           totalTasks: templates.length,
           completedTasks: completedCount,
         })
@@ -153,32 +148,27 @@ export function EndPeriodDialog({
     }
   }, [isOpen, period, subPeriod, gymId, roleId])
 
-  const canConfirm = !state.loading && state.requiredTasksOk && state.cashOk && !submitting
+  const canConfirm = !state.loading && state.requiredTasksOk && !submitting
+  const needsClosingCash = requiresClosingCashCount(period, subPeriod)
 
+  // Étape 1 : les conditions sont réunies. Seul le créneau de fermeture compte la caisse ;
+  // les autres clôturent directement.
   const handleConfirm = async () => {
-    if (!canConfirm || !state.latestCash) return
+    if (!canConfirm) return
+    if (needsClosingCash) {
+      setCashFormOpen(true)
+      return
+    }
 
     setSubmitting(true)
     try {
-      const persisted = await persistFinPeriodeEntry({
-        period,
-        gymId: gymId || null,
-        source: state.latestCash,
-      })
-      if (!persisted) {
-        toast.error("Impossible d'enregistrer la fin de caisse.")
-        setSubmitting(false)
-        return
-      }
-
       await endWorkPeriod({
         period,
         gymId: gymId || null,
-        cashTotal: Number(state.latestCash.total_register || 0),
+        cashTotal: null,
         tasksCompleted: state.completedTasks,
         totalTasks: state.totalTasks,
       })
-
       toast.success("Période de travail terminée.")
       onConfirmed()
       onClose()
@@ -189,8 +179,42 @@ export function EndPeriodDialog({
     }
   }
 
+  // Étape 2 : le comptage de fermeture est saisi → on l'enregistre et on clôture la période.
+  const handleCashSubmit = async (cashData: any) => {
+    setSubmitting(true)
+    try {
+      const persisted = await persistFinPeriodeEntry({
+        period,
+        gymId: gymId || null,
+        cashData,
+      })
+      if (!persisted) {
+        toast.error("Impossible d'enregistrer la caisse de fermeture.")
+        return
+      }
+
+      await endWorkPeriod({
+        period,
+        gymId: gymId || null,
+        cashTotal: Number(cashData?.total_register || 0),
+        tasksCompleted: state.completedTasks,
+        totalTasks: state.totalTasks,
+      })
+
+      toast.success("Période de travail terminée.")
+      setCashFormOpen(false)
+      onConfirmed()
+      onClose()
+    } catch {
+      toast.error("Erreur lors de la clôture de la période.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && !submitting && onClose()}>
+    <>
+    <Dialog open={isOpen && !cashFormOpen} onOpenChange={(open) => !open && !submitting && onClose()}>
       <DialogContent className="sm:max-w-md bg-white">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2 text-gray-900">
@@ -237,28 +261,14 @@ export function EndPeriodDialog({
                 </div>
               </div>
 
-              <div
-                className={`flex items-start gap-3 rounded-lg border p-3 ${
-                  state.cashOk ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"
-                }`}
-              >
-                {state.cashOk ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                )}
+              <div className="flex items-start gap-3 rounded-lg border border-blue-300 bg-blue-50 p-3">
+                <Calculator className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm">
-                  <div
-                    className={`font-medium ${state.cashOk ? "text-green-800" : "text-red-800"}`}
-                  >
-                    Comptage de caisse
-                  </div>
-                  <div className={state.cashOk ? "text-green-700" : "text-red-700"}>
-                    {state.cashOk
-                      ? `Dernier comptage enregistré : ${Number(
-                          state.latestCash?.total_register || 0
-                        ).toFixed(2)} €.`
-                      : "Aucun comptage de caisse enregistré. Effectuez un comptage depuis la rubrique Caisse."}
+                  <div className="font-medium text-blue-800">Comptage de caisse de fermeture</div>
+                  <div className="text-blue-700">
+                    {needsClosingCash
+                      ? "La fiche de caisse s'ouvrira à l'étape suivante : comptez la caisse pour clôturer la période."
+                      : "Votre créneau n'est pas celui de la fermeture : aucun comptage ne vous est demandé. Les ventes tracent déjà les mouvements d'argent."}
                   </div>
                 </div>
               </div>
@@ -288,11 +298,21 @@ export function EndPeriodDialog({
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Validation…
               </>
             ) : (
-              "Valider la fin de période"
+              needsClosingCash ? "Compter la caisse et clôturer" : "Valider la fin de période"
             )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <CashRegisterForm
+      isOpen={cashFormOpen}
+      onClose={() => { if (!submitting) setCashFormOpen(false) }}
+      onSubmit={handleCashSubmit}
+      period={period}
+      gymId={gymId || undefined}
+      mode="end"
+    />
+    </>
   )
 }

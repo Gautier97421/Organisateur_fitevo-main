@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { FileText, XCircle, CheckCircle, AlertTriangle, Minus, Plus } from "lucide-react"
+import { FileText, XCircle, CheckCircle, Minus, Plus } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,14 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-interface CashRegisterField {
-  id: string
-  label: string
-  fieldType: string
-  isRequired: boolean
-  orderIndex: number
-}
 
 interface CashRegisterData {
   cash_amount: number
@@ -39,28 +30,16 @@ interface CashRegisterFormProps {
   onSubmit: (data: CashRegisterData) => void
   period: "matin" | "aprem" | "journee"
   gymId?: string
-  mode?: "start" | "end" | "during"
-  initialData?: {
-    coinCounts?: Record<string, number>
-    customFieldValues?: Record<string, any>
-    notes?: string
-  } | null
+  mode?: "start" | "end"
 }
 
-export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mode = "end", initialData = null }: CashRegisterFormProps) {
+export function CashRegisterForm({ isOpen, onClose, onSubmit, period, mode = "end" }: CashRegisterFormProps) {
   const [formData, setFormData] = useState<CashRegisterData>({
     cash_amount: 0,
     total_register: 0,
     coins_detail: "",
     notes: "",
   })
-
-  const [customFields, setCustomFields] = useState<CashRegisterField[]>([])
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({})
-  // Dernières valeurs connues, pour repérer une éventuelle baisse (un champ numérique ne
-  // devrait normalement jamais diminuer, sauf erreur de saisie de l'employé).
-  const [initialFieldValues, setInitialFieldValues] = useState<Record<string, any>>({})
-  const [isLoadingFields, setIsLoadingFields] = useState(true)
 
   const [coinCounts, setCoinCounts] = useState({
     "0.01": 0,
@@ -79,51 +58,6 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
     "200.00": 0,
     "500.00": 0,
   })
-
-  // Charger les champs personnalisés
-  useEffect(() => {
-    const loadCustomFields = async () => {
-      try {
-        let url = "/api/db/cash-register-fields?period=" + period
-        if (gymId) {
-          url += "&gym_id=" + gymId
-        }
-        const response = await fetch(url)
-        if (response.ok) {
-          const data = await response.json()
-          const fields = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
-          setCustomFields(fields)
-
-          // Initialiser les valeurs des champs personnalisés
-          const initialValues: Record<string, any> = {}
-          fields.forEach((field: CashRegisterField) => {
-            const preset = initialData?.customFieldValues?.[field.id]
-            if (preset !== undefined) {
-              initialValues[field.id] = preset
-            } else {
-              initialValues[field.id] = field.fieldType === "checkbox" ? false : ""
-            }
-          })
-          setCustomFieldValues(initialValues)
-          setInitialFieldValues({ ...initialValues })
-        }
-      } catch (error) {
-      } finally {
-        setIsLoadingFields(false)
-      }
-    }
-
-    if (isOpen) {
-      loadCustomFields()
-      // Préremplir coins et notes depuis initialData (mode "during")
-      if (initialData?.coinCounts) {
-        setCoinCounts((prev) => ({ ...prev, ...initialData.coinCounts }))
-      }
-      if (initialData?.notes !== undefined) {
-        setFormData((prev) => ({ ...prev, notes: initialData.notes || "" }))
-      }
-    }
-  }, [isOpen, period, gymId, initialData])
 
   const coinLabels = {
     "0.01": "1 centime",
@@ -159,20 +93,6 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
   const handleSubmit = () => {
     const computedTotal = calculateTotal()
 
-    // Sécuriser les champs numériques personnalisés: jamais de valeur négative.
-    const sanitizedCustomValues: Record<string, any> = { ...customFieldValues }
-    customFields.forEach((field) => {
-      if (field.fieldType === "number") {
-        const raw = sanitizedCustomValues[field.id]
-        if (raw === "" || raw === null || raw === undefined) {
-          sanitizedCustomValues[field.id] = ""
-        } else {
-          const parsed = Number(raw)
-          sanitizedCustomValues[field.id] = Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
-        }
-      }
-    })
-
     const finalData = {
       ...formData,
       cash_amount: computedTotal,
@@ -183,7 +103,6 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
         .join(", "),
       // Conserve aussi les coinCounts bruts pour permettre la modification ultérieure
       _coinCounts: { ...coinCounts },
-      ...(isStartMode || isDuringMode ? {} : sanitizedCustomValues),
       notes: isStartMode ? "" : formData.notes,
     }
     onSubmit(finalData)
@@ -202,25 +121,16 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
 
   const total = calculateTotal()
   const isStartMode = mode === "start"
-  const isDuringMode = mode === "during"
 
   const dialogTitle = isStartMode
     ? "Comptage de caisse d'ouverture"
-    : isDuringMode
-      ? "Comptage de caisse - " + getPeriodText()
-      : "Fiche de Caisse - " + getPeriodText()
+    : "Fiche de Caisse - " + getPeriodText()
 
   const dialogDescription = isStartMode
-    ? "Première connexion du jour: veuillez compter la caisse d'ouverture avant de commencer."
-    : isDuringMode
-      ? "Comptage de caisse pendant votre période de travail. Vous pouvez le modifier à tout moment."
-      : "Veuillez remplir le détail de la caisse avant d'envoyer votre to-do list."
+    ? "Ouverture du jour : la caisse n'a pas encore été comptée aujourd'hui, comptez-la avant de commencer."
+    : "Comptage de caisse de fermeture : remplissez le détail de la caisse pour clôturer votre période."
 
-  const submitLabel = isStartMode
-    ? "Valider l'ouverture"
-    : isDuringMode
-      ? "Enregistrer"
-      : "Valider et Envoyer"
+  const submitLabel = isStartMode ? "Valider l'ouverture" : "Valider et Envoyer"
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -267,103 +177,6 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, gymId, mod
               </div>
             </CardContent>
           </Card>
-
-          {/* Champs personnalisés de caisse (uniquement en validation fin de période) */}
-          {!isStartMode && !isDuringMode && !isLoadingFields && customFields.length > 0 && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-gray-900">📋 Informations supplémentaires</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {customFields.map((field) => (
-                  <div key={field.id} className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-900">
-                      {field.label}
-                      {field.isRequired && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {field.fieldType === "checkbox" ? (
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={customFieldValues[field.id] || false}
-                          onCheckedChange={(checked) =>
-                            setCustomFieldValues({
-                              ...customFieldValues,
-                              [field.id]: checked
-                            })
-                          }
-                        />
-                        <span className="text-sm text-gray-600">{field.label}</span>
-                      </div>
-                    ) : field.fieldType === "number" ? (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCustomFieldValues({
-                              ...customFieldValues,
-                              [field.id]: Math.max(0, (Number(customFieldValues[field.id]) || 0) - 1)
-                            })}
-                            disabled={(Number(customFieldValues[field.id]) || 0) <= 0}
-                            className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                          >
-                            <Minus className="w-4 h-4 text-gray-700" />
-                          </button>
-                          <Input
-                            type="number"
-                            value={customFieldValues[field.id] || ""}
-                            min={0}
-                            onChange={(e) => {
-                              if (e.target.value === "") {
-                                setCustomFieldValues({ ...customFieldValues, [field.id]: "" })
-                                return
-                              }
-                              const parsed = Number(e.target.value)
-                              setCustomFieldValues({
-                                ...customFieldValues,
-                                [field.id]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
-                              })
-                            }}
-                            className="text-lg border-2 rounded-xl bg-white text-gray-900 text-center w-28"
-                            placeholder={field.label}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setCustomFieldValues({
-                              ...customFieldValues,
-                              [field.id]: (Number(customFieldValues[field.id]) || 0) + 1
-                            })}
-                            className="w-9 h-9 flex-shrink-0 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center hover:bg-gray-50"
-                          >
-                            <Plus className="w-4 h-4 text-gray-700" />
-                          </button>
-                        </div>
-                        {initialFieldValues[field.id] !== undefined
-                          && initialFieldValues[field.id] !== ""
-                          && customFieldValues[field.id] !== ""
-                          && Number(customFieldValues[field.id]) < Number(initialFieldValues[field.id]) && (
-                          <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                            En baisse par rapport au dernier enregistrement ({initialFieldValues[field.id]}) — vérifiez qu'il ne s'agit pas d'une erreur.
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <Input
-                        type="text"
-                        value={customFieldValues[field.id] || ""}
-                        onChange={(e) => setCustomFieldValues({
-                          ...customFieldValues,
-                          [field.id]: e.target.value
-                        })}
-                        className="text-lg border-2 rounded-xl bg-white text-gray-900"
-                        placeholder={field.label}
-                      />
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
 
           {/* Notes */}
           {!isStartMode && (
