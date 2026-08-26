@@ -3,13 +3,18 @@ import type { Metadata } from "next"
 import { headers } from "next/headers"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { AuthInterceptor } from "@/components/auth/auth-interceptor"
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
-  title: "Gestionnaire Salle de Sport",
-  description: "Système de gestion pour salles de sport",
+  title: {
+    default: "FitEvo",
+    template: "%s | FitEvo",
+  },
+  description: "Gestion des salles, du personnel et de la caisse",
+  applicationName: "FitEvo",
+  // Outil interne : rien à faire dans un index de moteur de recherche.
+  robots: { index: false, follow: false },
   icons: {
     icon: [
       { url: '/favicon_io/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
@@ -32,7 +37,6 @@ export default async function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className="font-sans bg-gray-50">
-        <AuthInterceptor />
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange nonce={nonce}>
           {children}
           <Toaster />

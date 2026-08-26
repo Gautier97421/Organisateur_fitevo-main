@@ -8,6 +8,7 @@
  * manager, etc.) sur un compte qui n'est pas le sien.
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 // Source unique de vérité pour le mapping table client -> modèle Prisma.
@@ -37,6 +38,44 @@ export function isKnownTable(table: string): boolean {
 
 export function resolvePrismaModel(table: string): string {
   return DB_TABLE_MODEL[table]
+}
+
+/**
+ * Champs jamais filtrables/triables depuis le client, même s'ils existent dans le modèle.
+ * `password` en particulier : la construction du `where` accepte `_gte`/`_lte`, ce qui
+ * transforme un filtre sur le hash en oracle de comparaison — on extrait alors le hash
+ * bcrypt de n'importe quel compte caractère par caractère, sans jamais le lire.
+ */
+const NON_FILTERABLE_FIELDS = new Set(['password'])
+
+/** Champs scalaires réellement déclarés par le modèle Prisma, mis en cache. */
+const scalarFieldCache = new Map<string, Set<string>>()
+
+function scalarFieldsOf(prismaModel: string): Set<string> {
+  const cached = scalarFieldCache.get(prismaModel)
+  if (cached) return cached
+
+  const modelName = prismaModel.charAt(0).toUpperCase() + prismaModel.slice(1)
+  const model = Prisma.dmmf.datamodel.models.find((m) => m.name === modelName)
+  const fields = new Set(
+    (model?.fields ?? [])
+      .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
+      .map((f) => f.name)
+  )
+  scalarFieldCache.set(prismaModel, fields)
+  return fields
+}
+
+/**
+ * Un nom de colonne fourni par le client est-il utilisable dans un `where`/`orderBy` ?
+ * Le nom de table et de colonne viennent tous deux de la requête : sans ce garde-fou,
+ * n'importe quel champ du modèle devient interrogeable.
+ */
+export function isQueryableField(table: string, field: string): boolean {
+  if (NON_FILTERABLE_FIELDS.has(field)) return false
+  const prismaModel = resolvePrismaModel(table)
+  if (!prismaModel) return false
+  return scalarFieldsOf(prismaModel).has(field)
 }
 
 // Tables gérant des comptes utilisateurs — écriture réservée aux admins (voir requireAdminForTable).

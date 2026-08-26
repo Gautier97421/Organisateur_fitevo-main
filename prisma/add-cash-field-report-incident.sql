@@ -1,1 +1,0 @@
-ALTER TABLE cash_register_fields ADD COLUMN IF NOT EXISTS report_incident BOOLEAN NOT NULL DEFAULT FALSE;

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/password-utils'
-import { getSessionSecret } from '@/lib/session-secret'
+import { SESSION_TTL_SECONDS, signSessionCookie } from '@/lib/session'
 import logger from '@/lib/logger'
 import { isValidEmail, isValidString } from '@/lib/validation'
 
@@ -10,6 +9,9 @@ import { isValidEmail, isValidString } from '@/lib/validation'
 // Les compteurs sont perdus au redémarrage, ce qui est acceptable
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>()
 const MAX_ATTEMPTS = 5
+// Une même adresse IP peut légitimement servir plusieurs employés (salle, NAT) :
+// le plafond est plus haut que par identifiant, mais il existe.
+const MAX_ATTEMPTS_PER_IP = 30
 const LOCKOUT_TIME = 15 * 60 * 1000 // 15 minutes
 const CLEANUP_INTERVAL = 60 * 60 * 1000 // 1 heure
 
@@ -23,7 +25,7 @@ setInterval(() => {
   }
 }, CLEANUP_INTERVAL)
 
-function checkRateLimit(identifier: string): { allowed: boolean; remainingTime?: number } {
+function checkRateLimit(identifier: string, max: number = MAX_ATTEMPTS): { allowed: boolean; remainingTime?: number } {
   const now = Date.now()
   const attempts = loginAttempts.get(identifier)
   
@@ -34,13 +36,24 @@ function checkRateLimit(identifier: string): { allowed: boolean; remainingTime?:
       return { allowed: true }
     }
     
-    if (attempts.count >= MAX_ATTEMPTS) {
+    if (attempts.count >= max) {
       const remainingTime = Math.ceil((LOCKOUT_TIME - (now - attempts.lastAttempt)) / 1000)
       return { allowed: false, remainingTime }
     }
   }
   
   return { allowed: true }
+}
+
+/**
+ * Adresse de l'appelant, telle que vue derrière le reverse proxy.
+ * Sert de seconde clé de comptage : le verrou par identifiant seul laissait passer
+ * le « password spraying » (un essai sur des centaines de comptes différents).
+ */
+function clientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return request.headers.get('x-real-ip') || 'inconnu'
 }
 
 function recordLoginAttempt(identifier: string, success: boolean) {
@@ -85,11 +98,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Vérifier le rate limiting
+    // Vérifier le rate limiting (par identifiant ET par adresse IP)
+    const ipKey = `ip:${clientIp(request)}`
     const rateLimit = checkRateLimit(identifier)
-    if (!rateLimit.allowed) {
+    const ipRateLimit = checkRateLimit(ipKey, MAX_ATTEMPTS_PER_IP)
+    if (!rateLimit.allowed || !ipRateLimit.allowed) {
+      const remaining = rateLimit.allowed ? ipRateLimit.remainingTime : rateLimit.remainingTime
       return NextResponse.json(
-        { error: `Trop de tentatives. Réessayez dans ${rateLimit.remainingTime} secondes.` },
+        { error: `Trop de tentatives. Réessayez dans ${remaining} secondes.` },
         { status: 429 }
       )
     }
@@ -106,22 +122,22 @@ export async function POST(request: NextRequest) {
 
     if (!user || !user.active) {
       recordLoginAttempt(identifier, false)
+      recordLoginAttempt(ipKey, false)
       return NextResponse.json(
         { error: 'Identifiants incorrects' },
         { status: 401 }
       )
     }
 
-    // Si c'est la première connexion, rediriger vers la page de configuration
+    // Si c'est la première connexion, rediriger vers la page de configuration.
+    // L'e-mail n'est renvoyé que si c'est lui qui a été saisi : se connecter avec le
+    // pseudo de quelqu'un d'autre ne doit pas révéler son adresse.
     if (user.isFirstLogin) {
+      const identifierIsEmail = identifier.toLowerCase() === user.email.toLowerCase()
       return NextResponse.json(
-        { 
+        {
           isFirstLogin: true,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name
-          }
+          user: { email: identifierIsEmail ? user.email : null },
         },
         { status: 200 }
       )
@@ -147,6 +163,7 @@ export async function POST(request: NextRequest) {
     
     if (!isPasswordValid) {
       recordLoginAttempt(identifier, false)
+      recordLoginAttempt(ipKey, false)
       return NextResponse.json(
         { error: 'Identifiants incorrects' },
         { status: 401 }
@@ -155,6 +172,7 @@ export async function POST(request: NextRequest) {
 
     // Succès - enregistrer et retourner les informations
     recordLoginAttempt(identifier, true)
+    recordLoginAttempt(ipKey, true)
     
     // RGPD: ne pas journaliser de données personnelles (email). On utilise l'id interne.
     logger.info('Connexion réussie pour l’utilisateur:', user.id)
@@ -170,19 +188,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Créer un cookie de session signé (HttpOnly, Secure)
-    const secret = getSessionSecret()
-    if (!secret) {
+    // Créer un cookie de session signé (HttpOnly, Secure), expiration incluse dans la signature
+    const cookieValue = signSessionCookie(user.id, user.role)
+    if (!cookieValue) {
       logger.critical('SESSION_SECRET non configuré', new Error('Missing SESSION_SECRET env var'))
       return NextResponse.json(
         { error: 'Erreur de configuration serveur' },
         { status: 500 }
       )
     }
-    const payloadStr = JSON.stringify({ id: user.id, role: user.role })
-    const hexPayload = Buffer.from(payloadStr).toString('hex')
-    const hmac = createHmac('sha256', secret).update(hexPayload).digest('hex')
-    const cookieValue = `${hexPayload}:${hmac}`
 
     const response = NextResponse.json({
       user: {
@@ -197,7 +211,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 60 * 60 * 8, // 8 heures
+      maxAge: SESSION_TTL_SECONDS,
       path: '/',
     })
     return response

@@ -18,6 +18,7 @@ import {
   PROTECTED_EVENT_FIELDS,
   isAdminRole,
   isManagerTier,
+  isQueryableField,
   stripFields,
   omitPassword,
   findAssignedEventConflict,
@@ -344,8 +345,17 @@ export async function GET(
     // Convertir snake_case vers camelCase pour les noms de colonnes
     const snakeToCamel = (str: string) => str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
 
-    // Construire les filtres
+    // Construire les filtres.
+    // Le nom de colonne vient du client : chaque champ résolu est confronté au modèle
+    // Prisma avant d'entrer dans le `where` (voir isQueryableField). Sans ce contrôle,
+    // `?password_gte=...` transformait la route en oracle de comparaison sur les hash.
     const where: any = {}
+    const rejected: string[] = []
+    const useField = (field: string): boolean => {
+      if (isQueryableField(table, field)) return true
+      rejected.push(field)
+      return false
+    }
     searchParams.forEach((value, key) => {
       if (key !== 'single' && key !== 'orderBy' && key !== 'orderDir') {
         if (key.endsWith('_gte')) {
@@ -358,6 +368,7 @@ export async function GET(
           if (field === 'date' || field === 'eventDate' || field === 'eventEndDate' || field === 'endDate') {
             filterValue = value.includes('T') ? value : `${value}T00:00:00.000Z`
           }
+          if (!useField(field)) return
           const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
           where[field] = { ...currentRange, gte: filterValue }
         } else if (key.endsWith('_lte')) {
@@ -370,10 +381,12 @@ export async function GET(
           if (field === 'date' || field === 'eventDate' || field === 'eventEndDate' || field === 'endDate') {
             filterValue = value.includes('T') ? value : `${value}T23:59:59.999Z`
           }
+          if (!useField(field)) return
           const currentRange = (typeof where[field] === 'object' && where[field] !== null) ? where[field] : {}
           where[field] = { ...currentRange, lte: filterValue }
         } else if (key.endsWith('_neq')) {
           let field = snakeToCamel(key.replace('_neq', ''))
+          if (!useField(field)) return
           where[field] = { not: value }
         } else {
           let field = snakeToCamel(key)
@@ -387,6 +400,7 @@ export async function GET(
           if (field === 'eventDate' && table === 'calendar_events') field = 'eventDate'
           if (field === 'gymId') field = 'gymId'
           if (field === 'userId') field = 'userId'
+          if (!useField(field)) return
           // Convertir les booléens
           if (value === 'true') {
             where[field] = true
@@ -403,6 +417,13 @@ export async function GET(
         }
       }
     })
+
+    if (rejected.length > 0) {
+      return NextResponse.json(
+        { data: null, error: { message: `Filtre non autorisé : ${rejected.join(', ')}` } },
+        { status: 400 }
+      )
+    }
 
     // Ajouter un filtre sur le rôle pour les tables admins et employees
     if (table === 'employees') {
@@ -429,7 +450,13 @@ export async function GET(
       // Mappings spéciaux pour orderBy
       if (field === 'workDate') field = 'date'
       if (field === 'eventDate') field = 'eventDate'
-      orderBy = { [field]: orderByDir || 'asc' }
+      if (!isQueryableField(table, field)) {
+        return NextResponse.json(
+          { data: null, error: { message: 'Tri non autorisé' } },
+          { status: 400 }
+        )
+      }
+      orderBy = { [field]: orderByDir === 'desc' ? 'desc' : 'asc' }
     }
 
     // Préparer l'include pour les relations
@@ -469,8 +496,9 @@ export async function GET(
     }
   } catch (error: any) {
     logger.error('Erreur GET', error)
+    // Message générique : renvoyer error.message exposait des détails du schéma Prisma.
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la récupération des données' } },
+      { data: null, error: { message: 'Erreur lors de la récupération des données' } },
       { status: 500 }
     )
   }
@@ -808,7 +836,7 @@ export async function POST(
     }
     logger.error('Erreur POST', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message || 'Erreur lors de la création' } },
+      { data: null, error: { message: 'Erreur lors de la création' } },
       { status: 500 }
     )
   }
@@ -1197,7 +1225,7 @@ export async function DELETE(
   } catch (error: any) {
     logger.error('Erreur DELETE', error)
     return NextResponse.json(
-      { data: null, error: { message: error.message } },
+      { data: null, error: { message: 'Erreur lors de la suppression' } },
       { status: 500 }
     )
   }

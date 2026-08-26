@@ -56,11 +56,8 @@ export function resolveStoredPath(storedName: string): string | null {
   const dir = getUploadDir()
   // storedName est généré côté serveur (cuid) — on revérifie quand même.
   const safe = path.basename(storedName)
-  const full = path.join(dir, safe)
-  if (!full.startsWith(path.resolve(dir) + path.sep) && full !== path.resolve(dir)) {
-    // path.join avec basename empêche déjà la traversée, ceinture + bretelles
-  }
-  return full
+  // path.basename retire tout composant de chemin : le résultat ne peut pas sortir de `dir`.
+  return path.join(dir, safe)
 }
 
 // ── Autorisations conversations ───────────────────────────────────

@@ -120,12 +120,29 @@ export async function POST(request: NextRequest) {
 
     // Vérifier le jeton d'activation : doit exister, correspondre à ce compte,
     // ne pas être expiré, et ne pas avoir déjà été utilisé.
-    // Sécurité désactivée : un jeton fourni quand même est consommé s'il est valide, mais
-    // un jeton absent/expiré/invalide ne bloque pas l'activation.
+    // Un jeton fourni alors que le réglage est désactivé est quand même consommé s'il est
+    // valide, mais son absence ne bloque pas l'activation.
     const activationToken = token && typeof token === 'string'
       ? await prisma.passwordResetToken.findUnique({ where: { token } })
       : null
 
+    // ────────────────────────────────────────────────────────────────────────────────
+    // RISQUE ASSUMÉ, TEMPORAIRE — à refermer dès que les boîtes mail de l'entreprise
+    // existent.
+    //
+    // Tant que `activationTokenRequired` est désactivé, connaître l'adresse e-mail d'un
+    // compte créé mais pas encore activé suffit à se l'approprier ici : pseudo et mot de
+    // passe se définissent sans preuve de possession de la boîte. C'est une prise de
+    // contrôle de compte, y compris sur un compte administrateur.
+    //
+    // C'est délibéré : les adresses des employés n'étant pas encore créées, les liens
+    // d'activation ne sont distribuables par aucun canal, et exiger le jeton bloquerait
+    // toute mise en service.
+    //
+    // À FAIRE une fois les boîtes en place : Paramètres > Sécurité > activer
+    // « Lien d'activation exigé ». Le reste du flux est déjà prêt — chaque création de
+    // compte génère et envoie un lien à usage unique valable 7 jours.
+    // ────────────────────────────────────────────────────────────────────────────────
     if (activationTokenRequired) {
       if (!activationToken || activationToken.userId !== user.id) {
         recordFirstLoginAttempt(email, false)

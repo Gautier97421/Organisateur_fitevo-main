@@ -189,7 +189,9 @@ export const apiClient = {
     delete: () => ({
       eq: async (column: string, value: any) => {
         try {
-          const response = await fetch(`/api/db/${table}?${column}=${value}`, {
+          // Encodage explicite : une valeur contenant & ou = cassait silencieusement le filtre.
+          const query = new URLSearchParams({ [column]: String(value) }).toString();
+          const response = await fetch(`/api/db/${table}?${query}`, {
             method: 'DELETE',
           });
           
@@ -200,34 +202,7 @@ export const apiClient = {
         }
       },
     }),
-  }),
-  
-  auth: {
-    signInWithPassword: (credentials: any) =>
-      Promise.resolve({
-        data: {
-          user: { id: '1', email: credentials.email || 'admin@fitevo.com' },
-          session: { access_token: 'mock-token' },
-        },
-        error: null,
-      }),
-    signOut: () => Promise.resolve({ error: null }),
-    getSession: () =>
-      Promise.resolve({
-        data: {
-          session: {
-            user: { id: '1', email: 'admin@fitevo.com' },
-            access_token: 'mock-token',
-          },
-        },
-        error: null,
-      }),
-    getUser: () =>
-      Promise.resolve({
-        data: { user: { id: '1', email: 'admin@fitevo.com' } },
-        error: null,
-      }),
-  },
+  })
 };
 
 // Alias pour compatibilité (à supprimer progressivement)

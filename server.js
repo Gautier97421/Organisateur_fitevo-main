@@ -68,6 +68,8 @@ function verifySession(cookieValue) {
 
     const payload = JSON.parse(Buffer.from(hexPayload, 'hex').toString('utf-8'))
     if (!payload || typeof payload.id !== 'string') return null
+    // Expiration signée (cf. lib/session.ts) : un cookie sans `exp` ou périmé est refusé.
+    if (typeof payload.exp !== 'number' || Math.floor(Date.now() / 1000) >= payload.exp) return null
     return { id: payload.id, role: typeof payload.role === 'string' ? payload.role : '' }
   } catch {
     return null
@@ -151,7 +153,6 @@ app.prepare().then(async () => {
     const parsed = parse(req.url || '', true)
     const pathname = parsed.pathname
 
-    console.log(`[WS] upgrade request: ${pathname} | cookie: ${req.headers.cookie ? 'présent' : 'absent'}`)
 
     // ── Collaboration documents (Yjs) ──────────────────────────────
     // Le client y-websocket place le nom de salle dans le chemin : /api/collab/<docId>
@@ -187,7 +188,6 @@ app.prepare().then(async () => {
 
     const session = verifySession(extractSessionCookie(req.headers.cookie))
     if (!session) {
-      console.log(`[WS] rejeté: session invalide (secret configuré: ${!!getSessionSecret()})`)
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
       return

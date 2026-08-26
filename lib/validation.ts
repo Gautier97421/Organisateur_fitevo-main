@@ -86,10 +86,12 @@ export function validateUserFields(data: any): { valid: boolean; errors: string[
     }
   }
   
-  // Password: minimum 6 caractères
+  // Password: aligné sur validatePassword() (first-login / reset) — 8 caractères minimum.
+  // Deux seuils différents laissaient créer par l'API des comptes plus faibles que ce que
+  // l'utilisateur lui-même a le droit de choisir.
   if (data.password !== undefined) {
-    if (!isValidString(data.password, 6, 255)) {
-      errors.push('Mot de passe invalide (minimum 6 caractères)')
+    if (!isValidString(data.password, 8, 255)) {
+      errors.push('Mot de passe invalide (minimum 8 caractères)')
     }
   }
   

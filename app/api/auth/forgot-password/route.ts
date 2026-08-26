@@ -84,7 +84,11 @@ export async function POST(request: NextRequest) {
 
     const resetUrl = `${getAppBaseUrl()}/reset-password?token=${token}`
 
-    await sendPasswordResetEmail(user.email, resetUrl)
+    // Un échec SMTP ne doit pas changer la réponse : un 500 sur une adresse connue et un
+    // 200 sur une adresse inconnue suffisaient à distinguer les comptes existants.
+    await sendPasswordResetEmail(user.email, resetUrl).catch((error) => {
+      logger.error("Echec envoi email de reinitialisation", error)
+    })
 
     return genericResponse
   } catch (error) {

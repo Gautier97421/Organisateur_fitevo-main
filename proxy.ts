@@ -120,10 +120,17 @@ export async function proxy(request: NextRequest) {
     return clearSessionAndRedirect(new URL('/', request.url))
   }
 
-  let payload: { id: string; role: string }
+  let payload: { id: string; role: string; exp?: number }
   try {
     payload = JSON.parse(decodeHex(hexPayload))
   } catch {
+    return clearSessionAndRedirect(new URL('/', request.url))
+  }
+
+  // L'expiration fait partie de la charge signée : le `maxAge` du cookie n'engage que
+  // le navigateur, pas quelqu'un qui rejouerait une valeur exfiltrée. Un cookie sans
+  // `exp` est un cookie de l'ancien format — refusé, sinon le contrôle se contourne.
+  if (typeof payload.exp !== 'number' || Math.floor(Date.now() / 1000) >= payload.exp) {
     return clearSessionAndRedirect(new URL('/', request.url))
   }
 

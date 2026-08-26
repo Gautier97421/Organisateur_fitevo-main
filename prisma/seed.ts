@@ -47,6 +47,13 @@ async function createWithActivationLink(email: string, name: string, role: strin
 // Compte de test avec mot de passe déjà défini (pas de lien d'activation à suivre) — pratique
 // pour se connecter immédiatement en dev, à ne jamais utiliser tel quel en production.
 async function createTestAccount(email: string, name: string, role: string, plainPassword: string) {
+  // Refuse categoriquement de s'executer en production : `pnpm docker:prod:seed` creait
+  // sinon un superadmin au mot de passe connu sur l'instance publique.
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`Compte de test ${email} ignore : jamais cree en production`)
+    return null
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
     console.log(`↷ ${email} existe déjà, compte de test non recréé`)
@@ -76,13 +83,17 @@ async function main() {
 
   await createWithActivationLink('gautier.hoarau97421@gmail.com', 'Super Administrateur', 'superadmin')
   await createWithActivationLink('admin@fitevo.com', 'Administrateur', 'admin')
-  await createTestAccount('superadmin@fitevo.fr', 'Super Administrateur (test)', 'superadmin', '123123123')
+  // Mot de passe de test lu dans l'environnement : plus aucun identifiant en clair dans le depot.
+  const testPassword = process.env.SEED_TEST_PASSWORD
+  if (testPassword) {
+    await createTestAccount('superadmin@fitevo.fr', 'Super Administrateur (test)', 'superadmin', testPassword)
+  }
 
   console.log('\n📝 Comptes créés (activation requise via le lien ci-dessus):')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('Super Admin:       gautier.hoarau97421@gmail.com')
   console.log('Admin:             admin@fitevo.com')
-  console.log('Super Admin (test): superadmin@fitevo.fr / 123123123')
+  if (testPassword) console.log('Super Admin (test): superadmin@fitevo.fr (SEED_TEST_PASSWORD)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 }
 

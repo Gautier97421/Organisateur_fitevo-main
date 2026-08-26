@@ -3,6 +3,10 @@ const nextConfig = {
   // Optimisations de production
   poweredByHeader: false,
   compress: true,
+
+  // sharp est un module natif : le laisser externe évite que le traçage des
+  // dépendances remonte tout le projet dans la sortie standalone (image Docker).
+  serverExternalPackages: ['sharp'],
   
   // Optimisation des images
   images: {
@@ -35,8 +39,11 @@ const nextConfig = {
             value: 'nosniff'
           },
           {
+            // Filtre XSS historique des vieux navigateurs : désactivé volontairement.
+            // Le mode "block" a lui-même introduit des failles et est déprécié ; la
+            // protection réelle vient de la CSP à nonce (voir proxy.ts).
             key: 'X-XSS-Protection',
-            value: '1; mode=block'
+            value: '0'
           },
           {
             key: 'Referrer-Policy',

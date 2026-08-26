@@ -69,7 +69,10 @@ export function LoginForm() {
 
       // Si c'est la première connexion, rediriger vers la page de configuration
       if (data.isFirstLogin) {
-        router.push(`/first-login?email=${encodeURIComponent(data.user.email)}`)
+        // L'API ne renvoie l'e-mail que si c'est lui qui a été saisi ; sinon la page
+        // de première connexion le demande (ou il vient du lien d'activation reçu).
+        const emailParam = data.user?.email ? `?email=${encodeURIComponent(data.user.email)}` : ""
+        router.push(`/first-login${emailParam}`)
         return
       }
 
