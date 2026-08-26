@@ -133,8 +133,15 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, mode = "en
   const submitLabel = isStartMode ? "Valider l'ouverture" : "Valider et Envoyer"
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl bg-white max-h-[90vh] overflow-y-auto">
+    // Le comptage d'ouverture est bloquant : tant qu'il n'est pas validé, la caisse du jour n'a
+    // pas de point de départ. Clic à côté, touche Échap et croix de fermeture sont donc neutralisés
+    // dans ce mode — seul « Valider l'ouverture » ferme la fiche.
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isStartMode) onClose() }}>
+      <DialogContent
+        className={`sm:max-w-4xl bg-white max-h-[90vh] overflow-y-auto ${isStartMode ? "[&>button]:hidden" : ""}`}
+        onInteractOutside={(e) => { if (isStartMode) e.preventDefault() }}
+        onEscapeKeyDown={(e) => { if (isStartMode) e.preventDefault() }}
+      >
         <DialogHeader>
           <DialogTitle className="text-lg md:text-2xl flex items-center gap-2 text-gray-900">
             <span className="text-2xl md:text-3xl flex-shrink-0">💰</span>
@@ -196,9 +203,11 @@ export function CashRegisterForm({ isOpen, onClose, onSubmit, period, mode = "en
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <Button variant="outline" onClick={onClose} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2 w-full sm:w-auto">
-            <XCircle className="h-5 w-5" /> Annuler
-          </Button>
+          {!isStartMode && (
+            <Button variant="outline" onClick={onClose} className="text-base md:text-lg px-4 md:px-6 border border-gray-300 hover:bg-gray-50 bg-white flex items-center justify-center gap-2 w-full sm:w-auto">
+              <XCircle className="h-5 w-5" /> Annuler
+            </Button>
+          )}
           <Button
             onClick={handleSubmit}
             disabled={total <= 0}

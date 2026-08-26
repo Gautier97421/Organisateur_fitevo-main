@@ -124,7 +124,8 @@ export function RecurringTodoManager() {
     setIsLoading(true)
     try {
       const [tasksRes, rolesRes, empRes] = await Promise.all([
-        fetch("/api/recurring-tasks?admin=true"),
+        // Les tâches ponctuelles vivent dans la même table mais ont leur propre écran.
+        fetch("/api/recurring-tasks?admin=true&recurrence=recurring"),
         fetch("/api/roles"),
         fetch("/api/db/employees?is_active=true"),
       ])

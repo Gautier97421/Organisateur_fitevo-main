@@ -710,6 +710,15 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
     if (!saved) return
 
     if (cashFormMode === "start") {
+      // L'ouverture est validée : on la mémorise localement pour ne pas réafficher la fiche le
+      // temps que le serveur reflète la nouvelle saisie.
+      try {
+        const userId = getUserId() || ""
+        const today = new Date().toISOString().split('T')[0]
+        if (userId) localStorage.setItem(`cash_start_opened_${userId}_${today}`, '1')
+      } catch {
+        // Stockage indisponible : la vérification serveur suffit.
+      }
       setShowCashRegisterForm(false)
       return
     }
@@ -780,7 +789,9 @@ export function TodoList({ period, subPeriod = null, isBlocked, gymId, roleId, o
         if (shouldOpen) {
           setCashFormMode("start")
           setShowCashRegisterForm(true)
-          localStorage.setItem(sessionKey, '1')
+          // Le repère local n'est posé qu'après validation (voir handleCashRegisterSubmit) :
+          // la fiche d'ouverture étant bloquante, un rechargement de page avant validation doit
+          // la faire réapparaître, pas la faire sauter pour la journée.
         }
       } catch {
         // Erreur silencieuse

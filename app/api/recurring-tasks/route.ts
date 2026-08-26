@@ -15,6 +15,11 @@ function isDueToday(startDate: string, recurrenceType: string, recurrenceInterva
 
   if (today < start) return false
 
+  // Tâche ponctuelle : une seule échéance, mais elle reste due tant qu'elle n'est pas faite —
+  // sinon une tâche oubliée disparaîtrait de la to-do dès le lendemain. Le retrait après
+  // complétion est géré plus bas, à partir de l'historique.
+  if (recurrenceType === "once") return true
+
   if (recurrenceType === "daily") {
     if (excludeWeekends) {
       // Count only working days between start and today
@@ -56,8 +61,16 @@ export async function GET(request: NextRequest) {
     const userRoleId = searchParams.get("role_id")
     const dueTodayOnly = searchParams.get("due_today") === "true"
     const adminMode = searchParams.get("admin") === "true"
+    // "once" = tâches ponctuelles, "recurring" = tout le reste. Les deux écrans d'administration
+    // se partagent la même table mais ne doivent pas afficher les tâches l'un de l'autre.
+    const recurrenceFilter = searchParams.get("recurrence")
 
     const where: any = { isActive: true }
+    if (recurrenceFilter === "once") {
+      where.recurrenceType = "once"
+    } else if (recurrenceFilter === "recurring") {
+      where.recurrenceType = { not: "once" }
+    }
     if (gymId) {
       // Include tasks with this gymId OR global tasks (gymId null = all gyms)
       where.OR = [{ gymId }, { gymId: null }]
@@ -94,12 +107,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Attach completion status for today
-    const result = filtered.map((t) => {
-      const completedToday = t.completions.some(
-        (c) => c.dueDate === today && (userEmail ? c.completedBy === userEmail : true)
-      )
-      return { ...t, completedToday, completions: undefined }
-    })
+    const result = []
+    for (const t of filtered) {
+      const mine = t.completions.filter((c) => (userEmail ? c.completedBy === userEmail : true))
+      const completedToday = mine.some((c) => c.dueDate === today)
+
+      // Une tâche ponctuelle faite ne revient jamais : elle reste visible le jour même (pour
+      // pouvoir être décochée en cas d'erreur), puis disparaît.
+      if (t.recurrenceType === "once" && !completedToday && mine.length > 0) continue
+
+      result.push({ ...t, completedToday, completions: undefined })
+    }
 
     return NextResponse.json({ data: result })
   } catch (error) {
@@ -133,14 +151,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Une tâche ponctuelle n'a ni intervalle ni exclusion de weekend : une seule échéance.
+    const isOnce = recurrenceType === "once"
+
     const task = await prisma.recurringTask.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
         recurrenceType,
-        recurrenceInterval: Number(recurrenceInterval) || 1,
+        recurrenceInterval: isOnce ? 1 : Number(recurrenceInterval) || 1,
         startDate,
-        excludeWeekends: Boolean(excludeWeekends),
+        excludeWeekends: isOnce ? false : Boolean(excludeWeekends),
         assignedRoleIds: Array.isArray(assignedRoleIds) ? assignedRoleIds : [],
         assignedUserEmails: Array.isArray(assignedUserEmails) ? assignedUserEmails : [],
         gymId: gymId || null,

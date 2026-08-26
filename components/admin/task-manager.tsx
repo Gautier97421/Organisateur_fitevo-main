@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil, AlertTriangle, X, RefreshCw } from "lucide-react"
+import { GripVertical, Building, AlertCircle, ListTodo, Plus, CheckSquare2, FileText, List, CheckCircle, XCircle, Trash2, Pencil, AlertTriangle, X, RefreshCw, CalendarCheck } from "lucide-react"
 import { RecurringTodoManager } from "./recurring-todo-manager"
+import { PunctualTodoManager } from "./punctual-todo-manager"
 import {
   Dialog,
   DialogContent,
@@ -438,7 +439,7 @@ function SortableTaskItem({
 }
 
 export function TaskManager() {
-  const [activeTab, setActiveTab] = useState<"general" | "recurrentes">("general")
+  const [activeTab, setActiveTab] = useState<"general" | "recurrentes" | "ponctuelles">("general")
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [gyms, setGyms] = useState<Gym[]>([])
   const [roles, setRoles] = useState<Role[]>([])
@@ -1038,7 +1039,7 @@ export function TaskManager() {
         )}
       </div>
 
-      {/* Onglets Général / Récurrentes */}
+      {/* Onglets Général / Récurrentes / Ponctuelles */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl w-fit">
         <button
           type="button"
@@ -1054,9 +1055,18 @@ export function TaskManager() {
         >
           <RefreshCw className="h-4 w-4" /> Récurrentes
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ponctuelles")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === "ponctuelles" ? "bg-white dark:bg-gray-800 text-red-600 shadow-sm" : "text-gray-600 dark:text-gray-300 hover:bg-white/50"}`}
+        >
+          <CalendarCheck className="h-4 w-4" /> Ponctuelles
+        </button>
       </div>
 
       {activeTab === "recurrentes" && <RecurringTodoManager />}
+
+      {activeTab === "ponctuelles" && <PunctualTodoManager />}
 
       {activeTab === "general" && <>
 

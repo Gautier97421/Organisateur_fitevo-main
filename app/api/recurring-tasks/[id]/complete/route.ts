@@ -43,27 +43,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await verifyAuth(request)
-  if (!userId) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-
-  try {
-    const { id } = await params
-    const { searchParams } = new URL(request.url)
-    const completedBy = searchParams.get("completed_by")
-    const dueDate = searchParams.get("due_date")
-
-    if (!completedBy || !dueDate) {
-      return NextResponse.json({ error: "completed_by et due_date sont requis" }, { status: 400 })
-    }
-
-    await prisma.recurringTaskCompletion.deleteMany({
-      where: { recurringTaskId: id, completedBy, dueDate },
-    })
-
-    return NextResponse.json({ message: "Complétion annulée" })
-  } catch (error) {
-    logger.error("Erreur annulation complétion", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
-  }
-}
+// Pas de DELETE : comme pour les tâches de la to-do list de période, une validation est
+// définitive. L'employé confirme avant de cocher, puis ne peut plus décocher.
