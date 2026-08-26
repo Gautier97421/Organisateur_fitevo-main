@@ -41,7 +41,7 @@ services:
       - 1.1.1.1
     ports:
       # Port hôte 3000 (Docker Desktop WSL2 gère le forwarding IPv4+IPv6)
-      - "3000:3000"
+      - "3000"
     env_file:
       - .env
     environment:
